@@ -28,6 +28,8 @@ import { addPet, addRelative, endRelationship, firstName } from "./social";
 import { startTrial } from "./crime";
 import { exposeAffair } from "./intimacy";
 import { promoteJob } from "./career";
+import { cancelScheduled, emigrate, relativeDies, scheduleAll, takeDueEvents } from "./arcEffects";
+import { fillNpcTokens } from "./npc";
 
 // ---------------------------------------------------------------------------
 // Token substitution: {mother}, {father}, {partner}, {sibling}, {friend}, {child}, {name}
@@ -43,7 +45,7 @@ export function fillTokens(text: string, p: PlayerState): string {
   const sib = find("Sibling");
   const fr = find("Friend");
   const ch = find("Child");
-  return text
+  const out = text
     .replaceAll("{mother}", mother ? firstName(mother) : "your mother")
     .replaceAll("{father}", father ? firstName(father) : "your father")
     .replaceAll("{partner}", partner ? firstName(partner) : "your partner")
@@ -52,6 +54,7 @@ export function fillTokens(text: string, p: PlayerState): string {
     .replaceAll("{child}", ch ? firstName(ch) : "your child")
     .replaceAll("{biz}", p.business?.name ?? "your business")
     .replaceAll("{name}", p.firstName);
+  return fillNpcTokens(out, p);
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +103,11 @@ export function isEligible(p: PlayerState, e: LifeEvent): boolean {
   return meetsRequirements(p, e.requires);
 }
 
+/** The gates that even a `force` event respects. */
+function canShow(p: PlayerState, e: LifeEvent): boolean {
+  return !!e.prisonOnly === p.isInPrison && !(e.mature && (!p.matureContent || p.age < 18));
+}
+
 export function eventWeight(e: LifeEvent): number {
   const span = e.maxAge - e.minAge;
   const boost = span <= 2 ? 5 : span <= 6 ? 1.6 : 1;
@@ -115,10 +123,14 @@ export function selectEvents(p: PlayerState, rng: Rng): LifeEvent[] {
     const e = EVENT_BY_ID[id];
     if (e) picked.push(e);
   }
+  // Storyline beats that have come due (multi-year arcs).
+  for (const e of takeDueEvents(p, (x) => isEligible(p, x), (x) => canShow(p, x))) {
+    if (!picked.some((x) => x.id === e.id)) picked.push(e);
+  }
   const wanted = picked.length === 0 ? (rng.chance(0.5) ? 2 : 1) : rng.chance(0.2) ? 1 : 0;
   const recent = p.recentCats ?? [];
   for (let i = 0; i < wanted; i++) {
-    const pool = LIFE_EVENTS.filter((e) => isEligible(p, e) && !picked.some((x) => x.id === e.id));
+    const pool = LIFE_EVENTS.filter((e) => !e.scheduledOnly && isEligible(p, e) && !picked.some((x) => x.id === e.id));
     // Keep years varied: categories that just happened are less likely to repeat.
     const choice = rng.weighted(pool, (e) => eventWeight(e) * (recent.slice(-2).includes(e.category) || picked.some((x) => x.category === e.category) ? 0.45 : 1));
     if (choice) picked.push(choice);
@@ -209,12 +221,17 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng): string
       p.queuedEvents.push("wedding_day");
     }
   }
-  if (e.endRelationship) endRelationship(p, e.endRelationship);
+  if (e.endRelationship) endRelationship(p, e.endRelationship === "auto" ? (getPartner(p)?.partnerStatus === "married" ? "divorce" : "breakup") : e.endRelationship);
   if (e.addRelative) {
     // A new partner replaces nothing; guard against double partners.
     if (e.addRelative.relation !== "Partner" || !getPartner(p)) addRelative(p, e.addRelative, rng);
   }
   if (e.queueEvent) p.queuedEvents.push(e.queueEvent);
+  if (e.queueAfter) scheduleAll(p, e.queueAfter, rng);
+  if (e.cancelScheduled) cancelScheduled(p, e.cancelScheduled);
+  if (e.relativeDies) relativeDies(p, e.relativeDies);
+  if (e.emigrate) emigrate(p, e.emigrate, rng);
+  if (e.setEffort) p.effort = e.setEffort;
   if (e.salaryPct && p.currentJob) {
     p.currentJob.salary = Math.round(p.currentJob.salary * (1 + e.salaryPct / 100));
     p.annualSalary = p.currentJob.salary;

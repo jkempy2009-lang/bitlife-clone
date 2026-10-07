@@ -6,7 +6,7 @@ import type {
 } from "./lifeEventsEngine";
 
 type Extra = Partial<
-  Pick<LifeEvent, "weight" | "once" | "cooldown" | "requires" | "prisonOnly" | "mature">
+  Pick<LifeEvent, "weight" | "once" | "cooldown" | "requires" | "prisonOnly" | "mature" | "arc" | "scheduledOnly" | "force">
 >;
 
 /** Effects helper: `fx("log text", { happinessDelta: 5 })`. */

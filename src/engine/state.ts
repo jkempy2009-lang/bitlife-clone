@@ -367,6 +367,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     flags,
     annual: {},
     queuedEvents: [],
+    scheduled: [],
     seenEvents: {},
     lifeLog: [],
     stats: {

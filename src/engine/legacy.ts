@@ -15,6 +15,7 @@ import {
   makeRelativeBase,
   netWorth,
 } from "./state";
+import { applyFamilyLegacy } from "./generations";
 
 export interface DeathSummary {
   highestCareer: string;
@@ -200,5 +201,6 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
   if (bizHeir.business) next.flags.push("business_owner");
   if (bizHeir.note) addLog(next, bizHeir.note);
   if (royalHeir) addLog(next, royalHeir.log);
+  applyFamilyLegacy(next, old, child, rng); // family continuity: upbringing, reputation, traits, flags, opening events
   return next;
 }
