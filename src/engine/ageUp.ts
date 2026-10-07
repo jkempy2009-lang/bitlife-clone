@@ -541,16 +541,32 @@ function processJustice(p: PlayerState, rng: Rng, notices: Notices) {
   }
 }
 
-function processMilestones(p: PlayerState) {
+const MILESTONES: Record<number, { title: string; body: string }> = {
+  5: { title: "First day of school", body: "School begins. Grades and friendships you build now will echo for years." },
+  13: { title: "Teenager", body: "You're a teenager now. Expect dramas, crushes and bad ideas." },
+  16: { title: "Sweet sixteen", body: "You're old enough for a driver's licence and a part-time job. Check the Career tab." },
+  18: { title: "Adulthood", body: "You're an adult: you can leave home, go to university, work full time, and make your own mistakes." },
+  30: { title: "Thirty", body: "A new decade. Your looks and metabolism are starting to notice the calendar." },
+  40: { title: "Forty", body: "Midlife. Health checkups are worth taking seriously from here." },
+  60: { title: "Retirement age", body: "You're eligible to retire. See the Career tab. Your pension depends on how long you worked." },
+  80: { title: "Eighty", body: "Every year from here is a gift. Make them count." },
+};
+
+export const isMilestoneAge = (age: number) => age in MILESTONES;
+
+function processMilestones(p: PlayerState, notices: Notices) {
   if (p.age === 18) {
     addLog(p, "You are now an adult.");
     if (hasFlag(p, "trust_fund")) {
       p.bankBalance += 250_000;
       addLog(p, "Your family's trust fund released $250,000 to you.");
+      notices.push(info("Trust fund released", "Your family's trust fund released $250,000 to you.", "jackpot"));
     }
   }
   if (p.age === 16) addLog(p, "You're old enough to get a driver's licence and a part-time job.");
   if (p.age === 60) addLog(p, "You're eligible for retirement. Check the Career tab.");
+  const m = MILESTONES[p.age];
+  if (m) notices.push(info(m.title, m.body, "neutral"));
 }
 
 function driftStats(p: PlayerState, rng: Rng) {
@@ -570,6 +586,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   if (!p0.alive || p0.pendingTrial) return { player: p0 };
   const p = clone(p0);
   const notices: Notices = [];
+  const before = { happiness: p.happiness, health: p.health, smarts: p.smarts, looks: p.looks, money: p.bankBalance, netWorth: netWorth(p) };
 
   // 1. Age & timeline
   p.age += 1;
@@ -592,12 +609,22 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
     processEntertainment(p);
     processRoyalty(p, rng, notices);
     processJustice(p, rng, notices);
-    processMilestones(p);
+    processMilestones(p, notices);
     driftStats(p, rng);
   }
 
   finalize(p, notices);
-  p.history.push({ age: p.age, netWorth: netWorth(p), happiness: Math.round(p.happiness), health: Math.round(p.health) });
+  const nw = netWorth(p);
+  p.history.push({ age: p.age, netWorth: nw, happiness: Math.round(p.happiness), health: Math.round(p.health) });
+  p.lastYear = {
+    age: p.age,
+    happiness: Math.round(p.happiness - before.happiness),
+    health: Math.round(p.health - before.health),
+    smarts: Math.round(p.smarts - before.smarts),
+    looks: Math.round(p.looks - before.looks),
+    money: Math.round(p.bankBalance - before.money),
+    netWorth: Math.round(nw - before.netWorth),
+  };
 
   // 6. Event selection matrix (skipped when dead)
   if (p.alive) {

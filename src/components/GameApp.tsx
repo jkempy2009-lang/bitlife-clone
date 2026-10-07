@@ -83,7 +83,7 @@ function Banner() {
 }
 
 function Shell() {
-  const { state, player: p, setTab, ageUp } = useGame();
+  const { state, player: p, setTab, ageUp, fastForward } = useGame();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const trial = !!p.pendingTrial;
   const locked = trial || !p.alive;
@@ -127,14 +127,24 @@ function Shell() {
 
       {/* Dominant Age Up + navigation */}
       <footer className="border-t border-slate-800 bg-slate-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-        <div className="px-3 pt-2.5">
+        <div className="flex gap-2 px-3 pt-2.5">
           <button
             type="button"
             onClick={ageUp}
             disabled={locked || noticesPending}
-            className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-lg font-extrabold tracking-wide text-slate-950 shadow-lg shadow-emerald-900/40 transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex-1 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-lg font-extrabold tracking-wide text-slate-950 shadow-lg shadow-emerald-900/40 transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
             ⏳ Age Up · {p.age} → {p.age + 1}
+          </button>
+          <button
+            type="button"
+            onClick={fastForward}
+            disabled={locked || noticesPending}
+            title="Skip ahead until something happens (up to 10 years)"
+            aria-label="Skip ahead until something happens"
+            className="w-16 rounded-2xl border border-emerald-500/40 bg-slate-800 text-xs font-bold leading-tight text-emerald-300 transition-all hover:bg-slate-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ⏩<br />Skip
           </button>
         </div>
         <nav className="mt-1 grid grid-cols-6" aria-label="Main navigation">

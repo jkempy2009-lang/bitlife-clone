@@ -115,11 +115,14 @@ export function selectEvents(p: PlayerState, rng: Rng): LifeEvent[] {
     if (e) picked.push(e);
   }
   const wanted = picked.length === 0 ? (rng.chance(0.5) ? 2 : 1) : rng.chance(0.2) ? 1 : 0;
+  const recent = p.recentCats ?? [];
   for (let i = 0; i < wanted; i++) {
     const pool = LIFE_EVENTS.filter((e) => isEligible(p, e) && !picked.some((x) => x.id === e.id));
-    const choice = rng.weighted(pool, eventWeight);
+    // Keep years varied: categories that just happened are less likely to repeat.
+    const choice = rng.weighted(pool, (e) => eventWeight(e) * (recent.slice(-2).includes(e.category) || picked.some((x) => x.category === e.category) ? 0.45 : 1));
     if (choice) picked.push(choice);
   }
+  p.recentCats = [...recent, ...picked.map((e) => e.category)].slice(-6);
   return picked;
 }
 

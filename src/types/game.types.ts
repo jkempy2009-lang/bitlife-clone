@@ -246,6 +246,16 @@ export interface LifetimeStats {
   hookups: number;
 }
 
+export interface YearSummary {
+  age: number;
+  happiness: number;
+  health: number;
+  smarts: number;
+  looks: number;
+  money: number;
+  netWorth: number;
+}
+
 export interface HistoryPoint {
   age: number;
   netWorth: number;
@@ -328,6 +338,11 @@ export interface PlayerState {
 
   // Engine bookkeeping
   achievements: string[];
+  goalsDone: string[];
+  /** What changed during the last Age Up (before you made any choices). */
+  lastYear: YearSummary | null;
+  /** Categories of the last few events, used to keep years varied. */
+  recentCats: string[];
   history: HistoryPoint[];
   flags: string[];
   /** Per-year action counters (reset on Age Up). */

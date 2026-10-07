@@ -7,6 +7,7 @@ import { netWorth, playerTitle } from "@/engine/state";
 import { Card, Pill, SectionTitle, StatBar } from "./ui";
 import { ACHIEVEMENTS } from "@/data/achievements";
 import { AchievementGrid } from "./HallOfLives";
+import { suggestTips } from "@/lib/tips";
 
 interface YearGroup {
   header: string;
@@ -23,8 +24,34 @@ function groupLog(log: string[]): YearGroup[] {
   return groups.reverse();
 }
 
+function Delta({ label, v, isMoney }: { label: string; v: number; isMoney?: boolean }) {
+  if (v === 0) return null;
+  const good = v > 0;
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${good ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}>
+      {label} {good ? "+" : "−"}{isMoney ? money(Math.abs(v)) : Math.abs(v)}
+    </span>
+  );
+}
+
+function LastYear({ y }: { y: NonNullable<ReturnType<typeof useGame>["player"]["lastYear"]> }) {
+  const any = y.happiness || y.health || y.smarts || y.looks || y.money;
+  if (!any) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-1">
+      <span className="text-[11px] uppercase tracking-wider text-slate-500">Over the past year</span>
+      <Delta label="😊" v={y.happiness} />
+      <Delta label="❤️" v={y.health} />
+      <Delta label="🧠" v={y.smarts} />
+      <Delta label="✨" v={y.looks} />
+      <Delta label="💰" v={y.money} isMoney />
+    </div>
+  );
+}
+
 export default function DashboardTab() {
-  const { player: p } = useGame();
+  const { player: p, setTab } = useGame();
+  const tips = suggestTips(p);
   const groups = useMemo(() => groupLog(p.lifeLog), [p.lifeLog]);
   const nw = netWorth(p);
   const showFame = p.fame > 0 || p.specialCareers.length > 0 || p.royalRank !== "none";
@@ -82,6 +109,8 @@ export default function DashboardTab() {
         <StatBar label="☯️ Karma" value={p.karma} color="slate" compact />
       </Card>
 
+      {p.lastYear && p.lastYear.age === p.age && <LastYear y={p.lastYear} />}
+
       <div className="grid grid-cols-3 gap-2 text-center">
         <Card className="p-3">
           <div className="text-[11px] uppercase text-slate-400">Cash</div>
@@ -96,6 +125,23 @@ export default function DashboardTab() {
           <div className="text-sm font-bold tabular-nums">{p.creditScore}</div>
         </Card>
       </div>
+
+      {tips.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {tips.map((t) => (
+            <button
+              key={t.text}
+              type="button"
+              onClick={() => setTab(t.tab)}
+              className="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-left text-sm text-sky-100 transition-colors hover:bg-sky-500/20"
+            >
+              <span className="text-lg">{t.emoji}</span>
+              <span className="flex-1">{t.text}</span>
+              <span className="text-xs text-sky-300">Go →</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <details className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3">
         <summary className="cursor-pointer text-sm font-semibold text-slate-300">

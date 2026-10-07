@@ -26,6 +26,7 @@ interface GameContextValue {
   hasSave: boolean;
   act: (run: (p: PlayerState, rng: Rng) => ActionResult) => void;
   ageUp: () => void;
+  fastForward: () => void;
   setTab: (tab: TabId) => void;
   resolveEvent: (noticeId: string, optionIndex: number) => void;
   dismissNotice: (id: string) => void;
@@ -75,6 +76,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       hasSave,
       act,
       ageUp: () => dispatch({ type: "AGE_UP" }),
+      fastForward: () => dispatch({ type: "FAST_FORWARD" }),
       setTab: (tab) => dispatch({ type: "SET_TAB", tab }),
       resolveEvent: (noticeId, optionIndex) => dispatch({ type: "RESOLVE_EVENT", noticeId, optionIndex }),
       dismissNotice: (id) => dispatch({ type: "DISMISS_NOTICE", id }),

@@ -1,6 +1,8 @@
 import type { PlayerState } from "@/types/game.types";
 
 const KEY = "lifeline-save-v1";
+const PREV_KEY = "lifeline-save-prev";
+let lastSaved: { id: string; age: number } | null = null;
 
 export interface SaveData {
   v: 1;
@@ -22,6 +24,12 @@ export const hasSaveSnapshot = () => loadGame() !== null;
 export function saveGame(player: PlayerState, rngState: number) {
   try {
     const data: SaveData = { v: 1, player, rngState };
+    // Rolling backup: when the year (or life) changes, the previous year's save becomes the backup.
+    if (lastSaved && (lastSaved.age !== player.age || lastSaved.id !== player.id)) {
+      const existing = localStorage.getItem(KEY);
+      if (existing) localStorage.setItem(PREV_KEY, existing);
+    }
+    lastSaved = { id: player.id, age: player.age };
     localStorage.setItem(KEY, JSON.stringify(data));
     notify();
   } catch {
@@ -30,8 +38,17 @@ export function saveGame(player: PlayerState, rngState: number) {
 }
 
 export function loadGame(): SaveData | null {
+  return readSlot(KEY);
+}
+
+/** The save from one year ago, for recovering from a bad decision or a crash. */
+export function loadPreviousGame(): SaveData | null {
+  return readSlot(PREV_KEY);
+}
+
+function readSlot(key: string): SaveData | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const data = JSON.parse(raw) as SaveData;
     if (data.v !== 1 || typeof data.player?.age !== "number" || !Array.isArray(data.player.relatives)) return null;
@@ -61,6 +78,9 @@ function hydrate(p: PlayerState): PlayerState {
     business: p.business ? { ...p.business, staff: p.business.staff ?? 0, locations: p.business.locations ?? 1 } : null,
     achievements: p.achievements ?? [],
     history: p.history ?? [],
+    goalsDone: p.goalsDone ?? [],
+    lastYear: p.lastYear ?? null,
+    recentCats: p.recentCats ?? [],
     stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0, kills: p.stats.kills ?? 0, affairs: p.stats.affairs ?? 0, hookups: p.stats.hookups ?? 0 },
   };
 }
@@ -90,9 +110,24 @@ export function exportShareCode(player: PlayerState, rngState: number): string {
   return btoa(unescape(encodeURIComponent(exportSave(player, rngState))));
 }
 
+export function restorePrevious(): boolean {
+  try {
+    const raw = localStorage.getItem(PREV_KEY);
+    if (!raw || !readSlot(PREV_KEY)) return false;
+    localStorage.setItem(KEY, raw);
+    lastSaved = null;
+    notify();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function clearSave() {
   try {
     localStorage.removeItem(KEY);
+    localStorage.removeItem(PREV_KEY);
+    lastSaved = null;
     notify();
   } catch {
     /* ignore */
