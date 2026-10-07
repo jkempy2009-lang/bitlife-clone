@@ -72,7 +72,7 @@ export default function ModalManager() {
           <div className={`rounded-3xl border bg-slate-800 p-5 shadow-2xl ${TONE_STYLES[notice.tone].ring}`}>
             <div className="mb-1 text-3xl">{TONE_STYLES[notice.tone].emoji}</div>
             <h2 className={`text-xl font-bold ${TONE_STYLES[notice.tone].title}`}>{notice.title}</h2>
-            <p className="mb-4 mt-2 text-[15px] leading-relaxed text-slate-300">{notice.body}</p>
+            <p className="mb-4 mt-2 whitespace-pre-line text-[15px] leading-relaxed text-slate-300">{notice.body}</p>
             {notice.chips && notice.chips.length > 0 && (
               <div className="mb-4 flex flex-wrap gap-1.5">
                 {notice.chips.map((c) => (

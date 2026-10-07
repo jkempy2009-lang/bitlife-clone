@@ -1,3 +1,4 @@
+import { autoChoices } from "../autopilot";
 import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
@@ -37,16 +38,36 @@ describe("intro", () => {
 });
 
 describe("fast forward", () => {
-  it("skips quiet years and stops at an event, milestone or death", () => {
-    let s = newGame();
-    s = { ...s, player: { ...s.player!, age: 21 } };
-    const next = reducer(s, { type: "FAST_FORWARD", years: 10 });
-    expect(next.player!.age).toBeGreaterThan(21);
-    expect(next.player!.age).toBeLessThanOrEqual(31);
-    const hasEvent = next.notices.some((n) => n.kind === "event");
-    const stoppedEarly = next.player!.age < 31;
-    // Either it ran the full ten years or it stopped for a reason.
-    expect(!stoppedEarly || hasEvent || !next.player!.alive || next.player!.age === 30 || next.player!.isInPrison !== s.player!.isInPrison || next.player!.pendingTrial !== null).toBe(true);
+  it("skips ten full years on autopilot, leaving no decisions pending", () => {
+    let full = 0;
+    for (let seed = 1; seed <= 10; seed++) {
+      let s = newGame(seed);
+      s = { ...s, player: { ...s.player!, age: 21 } };
+      const next = reducer(s, { type: "FAST_FORWARD", years: 10 });
+      const p = next.player!;
+      expect(next.notices.some((n) => n.kind === "event")).toBe(false);
+      expect(next.notices).toHaveLength(1);
+      const stopped = !p.alive || p.pendingTrial !== null || p.isInPrison !== s.player!.isInPrison;
+      if (!stopped) {
+        expect(p.age).toBe(31);
+        full++;
+      }
+    }
+    expect(full).toBeGreaterThanOrEqual(8);
+  });
+
+  it("autopilot avoids reckless options", () => {
+    const rng = makeRng(3);
+    const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
+    const event = {
+      id: "t", title: "Temptation", description: "", minAge: 0, maxAge: 99, category: "general" as const,
+      options: [
+        { text: "Rob", effects: { logText: "", bankBalanceDelta: 500, arrest: "robbery" as never } },
+        { text: "Walk away", effects: { logText: "", happinessDelta: 1 } },
+        { text: "Too dear", effects: { logText: "", happinessDelta: 50, bankBalanceDelta: -1e9 } },
+      ],
+    };
+    expect(autoChoices(p, event)).toEqual([1, 0]);
   });
 
   it("does nothing while notices are pending", () => {

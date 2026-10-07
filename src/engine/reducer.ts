@@ -1,6 +1,7 @@
 import type { ActionResult, GameState, Notice, PlayerState, TabId } from "@/types/game.types";
 import { makeRng, type Rng } from "@/lib/rng";
-import { ageUp, finalize, isMilestoneAge } from "./ageUp";
+import { ageUp, finalize } from "./ageUp";
+import { skipYears } from "./skip";
 import { addLog, createNewPlayer, type NewLifeOptions } from "./state";
 import { resolveEvent } from "./events";
 import { continueAsChild } from "./legacy";
@@ -73,25 +74,13 @@ export function reducer(state: GameState, action: Action): GameState {
       return { ...state, player: result.player, notices: withIds(rng, result.notices), rngState: rng.state(), tab: result.player.isInPrison ? "prison" : state.tab === "prison" ? "dashboard" : state.tab };
     }
     case "FAST_FORWARD": {
-      // Skip quiet years: stops at the first event, milestone, trial, death or prison term.
+      // Live several years in one go; autopilot handles the decisions (see skip.ts).
       if (!state.player || state.notices.length > 0) return state;
       const rng = makeRng(state.rngState);
-      let player = state.player;
-      const kept: ActionResult["notices"] = [];
-      const max = Math.min(action.years ?? 10, 25);
-      for (let i = 0; i < max; i++) {
-        const wasPrison = player.isInPrison;
-        const result = ageUp(player, rng);
-        if (result.player === player) break;
-        player = result.player;
-        const ns = result.notices ?? [];
-        kept.push(...ns.filter((n) => n.kind === "event" || ("tone" in n && n.tone !== "neutral") || isMilestoneAge(player.age)));
-        if (ns.some((n) => n.kind === "event") || !player.alive || player.pendingTrial || player.isInPrison !== wasPrison || isMilestoneAge(player.age)) break;
-      }
-      // Keep the notice stack readable: events last (they need a decision), cap the info notices.
-      const events = kept.filter((n) => n.kind === "event");
-      const infos = kept.filter((n) => n.kind !== "event").slice(-8);
-      return { ...state, player, notices: withIds(rng, [...infos, ...events]), rngState: rng.state(), tab: player.isInPrison ? "prison" : state.tab === "prison" ? "dashboard" : state.tab };
+      const result = skipYears(state.player, rng, action.years ?? 10);
+      if (result.years === 0) return state;
+      const player = result.player;
+      return { ...state, player, notices: withIds(rng, result.notices), rngState: rng.state(), tab: player.isInPrison ? "prison" : state.tab === "prison" ? "dashboard" : state.tab };
     }
     case "RUN": {
       if (!state.player) return state;

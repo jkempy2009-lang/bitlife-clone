@@ -153,11 +153,11 @@ function Shell() {
             type="button"
             onClick={fastForward}
             disabled={locked || noticesPending}
-            title="Skip ahead until something happens (up to 10 years)"
-            aria-label="Skip ahead until something happens"
+            title="Live the next 10 years on autopilot (stops for death, a trial or prison)"
+            aria-label="Skip ahead 10 years"
             className="w-16 rounded-2xl border border-emerald-500/40 bg-slate-800 text-xs font-bold leading-tight text-emerald-300 transition-all hover:bg-slate-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            ⏩<br />Skip
+            ⏩<br />10 yrs
           </button>
         </div>
         <nav className="mt-1 grid grid-cols-6" aria-label="Main navigation">
