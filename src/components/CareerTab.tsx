@@ -1,39 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import {
-  ALBUM_RATINGS,
   CAREER_LINES,
   DECREES,
-  MUSIC_GENRES,
   PROGRAMS,
   UNIVERSITY_MAJORS,
 } from "@/data/careersRegistry";
 import {
-  FAMOUS_FAME,
   applyForJob,
-  auditionContract,
-  auditionForLead,
   dropOut,
   enrollProgram,
   executeCitizen,
-  formBand,
+  goFullTime,
+  goPartTime,
+  pensionFor,
   holdGala,
   jobEligibility,
   passDecree,
-  practiceMusic,
   quitJob,
-  recordAlbum,
   retire,
-  shootCommercial,
   studyHarder,
   workHarder,
-  writeMemoir,
 } from "@/engine/career";
 import { isRoyal } from "@/engine/state";
+import { EFFORT_INFO, hasCommitment } from "@/engine/occupation";
 import { money } from "@/lib/format";
 import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
+import { MovieStarSection } from "./career/MovieStarSection";
+import { MusicSection } from "./career/MusicSection";
 import { AdultWorkSection, AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, SpySection, UnderworldSection } from "./CareerPaths";
 
 type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "spy" | "adult" | "stardom" | "music";
@@ -55,6 +51,7 @@ export default function CareerTab() {
   ];
   return (
     <div>
+      <EffortCard />
       <Segmented<Section> value={section} onChange={setSection} options={options} />
       {section === "work" && (royal ? <RoyalDuties /> : <CorporateCareer />)}
       {section === "school" && <Academics />}
@@ -65,8 +62,35 @@ export default function CareerTab() {
       {section === "underworld" && <UnderworldSection />}
       {section === "spy" && <SpySection />}
       {section === "adult" && <AdultWorkSection />}
-      {section === "stardom" && <MovieStar />}
-      {section === "music" && <RockStar />}
+      {section === "stardom" && <MovieStarSection />}
+      {section === "music" && <MusicSection />}
+    </div>
+  );
+}
+
+function EffortCard() {
+  const { player: p, act } = useGame();
+  if (!hasCommitment(p) || p.age < 14) return null;
+  const e = p.effort;
+  return (
+    <div className="mb-3 rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-sm font-semibold">How hard are you pushing?</span>
+        <span className="text-xs text-slate-500">applies to work, study, business</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {(Object.keys(EFFORT_INFO) as (keyof typeof EFFORT_INFO)[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => act((pl) => ({ player: { ...pl, effort: k } }))}
+            className={`rounded-xl px-2 py-2 text-sm font-semibold transition-colors ${e === k ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+          >
+            {EFFORT_INFO[k].emoji} {EFFORT_INFO[k].label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-xs text-slate-400">{EFFORT_INFO[e].blurb}</p>
     </div>
   );
 }
@@ -188,19 +212,25 @@ function CorporateCareer() {
         <>
           <SectionTitle>Current Job</SectionTitle>
           <Card>
-            <div className="text-lg font-bold">{job.title}</div>
-            <div className="text-sm text-slate-400">{job.company}</div>
+            <div className="text-lg font-bold">{job.title}{job.partTime ? " (part-time)" : ""}</div>
+            <div className="text-sm text-slate-400">{job.company} · {Math.round(p.stats.yearsWorked)} years worked in total</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-emerald-300">{money(job.salary)}<span className="text-sm font-normal text-slate-400"> / year</span></div>
             <div className="mt-3">
-              <StatBar label="Performance (85+ earns a promotion offer)" value={job.performance} color="green" />
+              <StatBar label={job.partTime ? "Performance (no promotions while part-time)" : "Performance (85+ earns a promotion offer)"} value={job.performance} color="green" />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="primary" onClick={() => act((pl, rng) => workHarder(pl, rng))} disabled={(p.annual.work ?? 0) >= 1}>
                 💪 {(p.annual.work ?? 0) >= 1 ? "Worked hard" : "Work Harder"}
               </Button>
               <Button variant="ghost" onClick={() => act((pl) => quitJob(pl))}>Quit Job</Button>
+              {!job.partTime && !CAREER_LINES.find((l) => l.id === job.lineId)?.pack && (
+                <Button variant="secondary" onClick={() => act((pl) => goPartTime(pl))}>⏱️ Go Part-Time</Button>
+              )}
+              {job.partTime && (
+                <Button variant="secondary" onClick={() => act((pl) => goFullTime(pl))}>⏱️ Go Full-Time</Button>
+              )}
               {p.age >= 60 && (
-                <Button variant="gold" className="col-span-2" onClick={() => act((pl) => retire(pl))}>🏖️ Retire</Button>
+                <Button variant="gold" className="col-span-2" onClick={() => act((pl) => retire(pl))}>🏖️ Retire (pension ≈ {money(pensionFor(p))}/yr)</Button>
               )}
             </div>
           </Card>
@@ -231,6 +261,7 @@ function CorporateCareer() {
                         Needs {line.requirements.degrees?.length ? "degree, " : ""}{line.requirements.minSmarts}+ Smarts{line.requirements.minLooks ? `, ${line.requirements.minLooks}+ Looks` : ""}, age {line.minAge}+
                       </div>
                       {!elig.ok && <div className="mt-1 text-xs font-medium text-rose-300">🔒 {elig.reason}</div>}
+                      {elig.ok && elig.partTime && <div className="mt-1 text-xs font-medium text-sky-300">⏱️ Part-time while you study (about {money(Math.round(line.ladder[0].salary * 0.45))}/yr)</div>}
                     </div>
                     <Button variant="primary" className="shrink-0 px-3 py-1.5" disabled={!elig.ok || applied} onClick={() => act((pl, rng) => applyForJob(pl, line.id, rng))}>
                       {applied ? "Applied" : "Apply"}
@@ -299,219 +330,3 @@ function RoyalDuties() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Movie Star pack
-// ---------------------------------------------------------------------------
-
-function MovieStar() {
-  const { player: p, act } = useGame();
-  const line = CAREER_LINES.find((l) => l.id === "actor")!;
-  const job = p.currentJob?.lineId === "actor" ? p.currentJob : null;
-  const elig = jobEligibility(p, line);
-  const famous = p.fame >= FAMOUS_FAME;
-
-  return (
-    <div className="flex flex-col gap-3">
-      <SectionTitle>Movie Star</SectionTitle>
-      <Card>
-        <StatBar label="🌟 Fame" value={p.fame} color="amber" />
-        {job ? (
-          <>
-            <div className="text-lg font-bold">{job.title}</div>
-            <div className="mb-2 text-sm text-slate-400">{job.company} · {money(job.salary)}/yr</div>
-            <StatBar label="Performance" value={job.performance} color="green" />
-            <Button
-              variant="gold"
-              className="w-full"
-              disabled={(p.annual.audition ?? 0) >= 1 || job.tier >= 3}
-              onClick={() => act((pl, rng) => auditionForLead(pl, rng))}
-            >
-              {job.tier >= 3 ? "You're at the top!" : "🎭 Audition for Lead Role"}
-            </Button>
-            <p className="mt-2 text-xs text-slate-500">Success odds scale with Looks × Performance.</p>
-          </>
-        ) : (
-          <>
-            <p className="mb-2 text-sm text-slate-300">Start at the bottom: a Background Actor needs Looks above 70.</p>
-            {!elig.ok && <p className="mb-2 text-xs font-medium text-rose-300">🔒 {elig.reason}</p>}
-            <Button variant="primary" className="w-full" disabled={!elig.ok || (p.annual["apply:actor"] ?? 0) >= 1} onClick={() => act((pl, rng) => applyForJob(pl, "actor", rng))}>
-              🎬 Become a Background Actor
-            </Button>
-          </>
-        )}
-      </Card>
-
-      <SectionTitle hint={famous ? "unlocked" : `unlocks at ${FAMOUS_FAME} Fame`}>Celebrity Activities</SectionTitle>
-      <div className="grid grid-cols-1 gap-2">
-        <Button variant="primary" disabled={!famous || (p.annual.commercial ?? 0) >= 1} onClick={() => act((pl) => shootCommercial(pl))}>
-          📺 Shoot a Commercial (+$50,000, +5 Fame)
-        </Button>
-        <Button variant="primary" disabled={!famous || (p.annual.memoir ?? 0) >= 1} onClick={() => act((pl, rng) => writeMemoir(pl, rng))}>
-          📖 Write a Memoir (pays ≈ {money(p.fame * 25_000)})
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Rock Star pack
-// ---------------------------------------------------------------------------
-
-function RhythmCheck({ onScore }: { onScore: (score: number) => void }) {
-  const [running, setRunning] = useState(false);
-  const [taps, setTaps] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(5);
-  const [score, setScore] = useState<number | null>(null);
-  const tapsRef = useRef(0);
-
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(id);
-          setRunning(false);
-          const s = Math.min(100, tapsRef.current * 5);
-          setScore(s);
-          onScore(s);
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [running, onScore]);
-
-  const start = () => {
-    tapsRef.current = 0;
-    setTaps(0);
-    setTimeLeft(5);
-    setScore(null);
-    setRunning(true);
-  };
-
-  return (
-    <div className="rounded-xl bg-slate-900/60 p-3">
-      <div className="mb-2 text-sm font-semibold">🥁 Rhythm Check</div>
-      {!running ? (
-        <>
-          <p className="mb-2 text-xs text-slate-400">Tap the drum as fast as you can for 5 seconds (20 taps = perfect). {score !== null && <strong className="text-amber-300">Last score: {score}</strong>}</p>
-          <Button variant="secondary" className="w-full" onClick={start}>Start</Button>
-        </>
-      ) : (
-        <>
-          <div className="mb-2 flex justify-between text-sm tabular-nums"><span>⏱ {timeLeft}s</span><span>Taps: {taps}</span></div>
-          <button
-            type="button"
-            onPointerDown={() => {
-              tapsRef.current += 1;
-              setTaps(tapsRef.current);
-            }}
-            className="h-24 w-full select-none rounded-2xl bg-amber-500 text-4xl font-bold text-slate-900 active:scale-95 active:bg-amber-400"
-          >
-            🥁 TAP
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-function RockStar() {
-  const { player: p, act } = useGame();
-  const [tap, setTap] = useState(0);
-  const [genre, setGenre] = useState<string>(MUSIC_GENRES[0]);
-  const [title, setTitle] = useState("");
-  const m = p.music;
-  const auditioned = (p.annual.audition_music ?? 0) >= 1;
-
-  return (
-    <div className="flex flex-col gap-3">
-      <SectionTitle>Rock Star</SectionTitle>
-      <Card>
-        <StatBar label="🎵 Music Skill" value={p.skills.music} color="purple" />
-        <StatBar label="🌟 Fame" value={p.fame} color="amber" />
-        <div className="mb-2 flex gap-1.5">
-          <Pill tone={m.signed ? "green" : "slate"}>{m.signed ? (m.status === "band" ? "Signed band" : "Signed solo artist") : m.status === "band" ? "Unsigned band" : "No band"}</Pill>
-        </div>
-        <Button variant="secondary" className="w-full" onClick={() => act((pl, rng) => practiceMusic(pl, rng))} disabled={(p.annual.practice ?? 0) >= 1}>
-          🎸 Practise ({(p.annual.practice ?? 0) >= 1 ? "done" : "+3–6 skill"})
-        </Button>
-      </Card>
-
-      {!m.signed && (
-        <>
-          <SectionTitle>Break into the Industry</SectionTitle>
-          <Card>
-            <RhythmCheck onScore={setTap} />
-            <div className="mt-2 text-xs text-slate-400">Beat score: <strong>{tap}</strong> — success depends on your music skill and beat score (labels require age 18+).</div>
-            <div className="mt-3 grid grid-cols-1 gap-2">
-              {m.status === "none" && (
-                <Button variant="primary" disabled={auditioned || p.age < 14} onClick={() => act((pl) => formBand(pl, tap))}>
-                  👥 Form a Band
-                </Button>
-              )}
-              {m.status === "band" && (
-                <Button variant="gold" disabled={auditioned || p.age < 18} onClick={() => act((pl, rng) => auditionContract(pl, "band", tap, rng))}>
-                  📝 Audition for a Band Contract
-                </Button>
-              )}
-              <Button variant="gold" disabled={auditioned || p.age < 18} onClick={() => act((pl, rng) => auditionContract(pl, "solo", tap, rng))}>
-                🎤 Audition for a Solo Contract
-              </Button>
-            </div>
-          </Card>
-        </>
-      )}
-
-      {m.signed && (
-        <>
-          <SectionTitle hint="released when you age up">Record an Album</SectionTitle>
-          <Card>
-            {m.pendingAlbum ? (
-              <p className="text-sm text-slate-300">💿 "{m.pendingAlbum.title}" ({m.pendingAlbum.genre}) is in post-production. Age up to see how it sells!</p>
-            ) : (
-              <>
-                <label className="mb-1 block text-xs text-slate-400" htmlFor="genre">Genre</label>
-                <select id="genre" value={genre} onChange={(e) => setGenre(e.target.value)} className="mb-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm">
-                  {MUSIC_GENRES.map((g) => <option key={g}>{g}</option>)}
-                </select>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  maxLength={40}
-                  placeholder="Album title (optional)"
-                  className="mb-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
-                <Button variant="primary" className="w-full" disabled={(p.annual.album ?? 0) >= 1} onClick={() => act((pl) => recordAlbum(pl, genre, title))}>
-                  🎙️ Record Album
-                </Button>
-              </>
-            )}
-            <p className="mt-2 text-xs text-slate-500">Ratings: {ALBUM_RATINGS.map((r) => r.rating).join(" → ")}. Fame improves your odds.</p>
-          </Card>
-        </>
-      )}
-
-      {m.albums.length > 0 && (
-        <>
-          <SectionTitle>Discography</SectionTitle>
-          <div className="flex flex-col gap-2">
-            {[...m.albums].reverse().map((a, i) => (
-              <Card key={i} className="p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold">💿 {a.title}</div>
-                    <div className="text-xs text-slate-400">{a.genre} · {a.year} · {a.sales.toLocaleString()} sold</div>
-                  </div>
-                  <Pill tone={a.rating === "Flop" ? "red" : a.rating === "Diamond" || a.rating === "Platinum" ? "amber" : "green"}>{a.rating}</Pill>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}

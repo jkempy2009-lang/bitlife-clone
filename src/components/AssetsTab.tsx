@@ -7,7 +7,7 @@ import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/
 import { money } from "@/lib/format";
 import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
 import { COUNTRIES } from "@/data/countries";
-import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, RENT_TIERS, divest, invest, portfolioValue, relocate, setRentTier } from "@/engine/world";
+import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, LIFESTYLES, RENT_TIERS, divest, invest, portfolioValue, relocate, setLifestyle, setRentTier } from "@/engine/world";
 
 type Panel = "cars" | "homes" | "living" | "invest" | "bank";
 
@@ -74,6 +74,23 @@ function Living() {
           ))}
         </>
       )}
+
+      <SectionTitle hint="what you spend day to day">Lifestyle</SectionTitle>
+      {LIFESTYLES.map((t, i) => (
+        <button
+          key={t.name}
+          type="button"
+          disabled={i === p.lifestyle || p.age < 18}
+          onClick={() => act((pl) => setLifestyle(pl, i))}
+          className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors disabled:cursor-default ${i === p.lifestyle ? "border-emerald-500 bg-emerald-950/40" : "border-slate-700/60 bg-slate-800/70 hover:border-emerald-500/60"}`}
+        >
+          <span className="text-2xl">{t.emoji}</span>
+          <span className="flex-1">
+            <span className="block font-semibold">{t.name}</span>
+            <span className="text-xs text-slate-400">{t.blurb}</span>
+          </span>
+        </button>
+      ))}
 
       <SectionTitle hint="you'll leave your job behind">Relocate</SectionTitle>
       <Card>

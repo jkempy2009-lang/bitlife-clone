@@ -5,6 +5,7 @@ import { clamp, money } from "@/lib/format";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { addLog, changeStat, clone, hasFlag, isRoyal } from "./state";
 import { makeJob } from "./career";
+import { blockerFor } from "./occupation";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
@@ -74,6 +75,8 @@ export function canRun(p: PlayerState): { ok: boolean; reason?: string } {
   if (isRoyal(p)) return { ok: false, reason: "Royals don't stand for election." };
   if (p.isInPrison || p.isFugitive) return { ok: false, reason: "Not while you're on the wrong side of the law." };
   if (p.age < MIN_AGE[tier]) return { ok: false, reason: `Candidates for ${line().ladder[tier].title} must be ${MIN_AGE[tier]}+.` };
+  const blocked = blockerFor(p, "office");
+  if (blocked) return { ok: false, reason: blocked };
   if (p.smarts < 45) return { ok: false, reason: "You need 45+ Smarts to run a credible campaign." };
   if (p.bankBalance < CAMPAIGN_COST[tier]) return { ok: false, reason: `You need ${money(CAMPAIGN_COST[tier])} for a campaign.` };
   return { ok: true };
@@ -116,6 +119,7 @@ export function runForOffice(p0: PlayerState, rng: Rng): ActionResult {
   p.bankBalance -= CAMPAIGN_COST[tier];
   const title = line().ladder[tier].title;
   if (rng.chance(electionChance(p, tier))) {
+    if (p.currentJob && p.currentJob.lineId !== "politics") addLog(p, `You resigned from your job as a ${p.currentJob.title} to serve.`);
     p.currentJob = makeJob(line(), tier, rng);
     p.annualSalary = p.currentJob.salary;
     p.politics.yearsInOffice = 0;

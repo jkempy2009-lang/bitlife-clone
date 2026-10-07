@@ -86,7 +86,12 @@ export interface Job {
   lineId: string;
   /** Years spent at the current rung (gates promotion offers). */
   yearsInRole?: number;
+  /** Reduced hours: lower pay, no promotions, but leaves room to study. */
+  partTime?: boolean;
 }
+
+/** How hard you push at work / training / study. Persists until changed. */
+export type Effort = "coast" | "steady" | "grind";
 
 export type SpecialCareerPath = "none" | "royalty" | "actor" | "musician";
 export type RoyalRank = "none" | "Prince" | "Princess" | "King" | "Queen";
@@ -244,6 +249,8 @@ export interface LifetimeStats {
   kills: number;
   affairs: number;
   hookups: number;
+  /** Years in paid work (part-time counts half). Drives pension. */
+  yearsWorked: number;
 }
 
 export interface YearSummary {
@@ -323,6 +330,9 @@ export interface PlayerState {
   matureContent: boolean;
 
   // World & lifestyle
+  effort: Effort;
+  /** Living standard: 0 frugal, 1 comfortable, 2 lavish. */
+  lifestyle: number;
   economy: EconomyState;
   residence: Residence;
   investments: Record<string, Holding>;

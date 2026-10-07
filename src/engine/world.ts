@@ -153,6 +153,22 @@ export const RENT_TIERS = [
   { name: "Luxury Rental", emoji: "🏙️", rent: 55_000, happiness: 2, blurb: "Doorman, skyline, and a monthly bill that makes you wince." },
 ] as const;
 
+/** Living standard: what you spend on food, clothes, nights out, holidays and gadgets. */
+export const LIFESTYLES = [
+  { name: "Frugal", emoji: "🥫", base: 0.65, slope: 0.1, mood: -5, blurb: "Cook at home, buy second-hand, skip the holidays. Your savings grow; your joy shrinks." },
+  { name: "Comfortable", emoji: "🛋️", base: 1, slope: 0.28, mood: 0, blurb: "Eat out sometimes, a holiday each year, no stress at the till." },
+  { name: "Lavish", emoji: "🥂", base: 1.8, slope: 0.55, mood: 6, blurb: "Designer everything, first-class travel, parties. Joyful, but money evaporates." },
+] as const;
+
+export function setLifestyle(p0: PlayerState, level: number): ActionResult {
+  const p = clone(p0);
+  if (level < 0 || level >= LIFESTYLES.length || level === p.lifestyle) return { player: p0 };
+  p.lifestyle = level;
+  const body = `You switched to a ${LIFESTYLES[level].name.toLowerCase()} lifestyle.`;
+  addLog(p, body);
+  return { player: p, notices: [info("New Lifestyle", body, "neutral")] };
+}
+
 export const BASE_LIVING = 9_000;
 /** Yearly cost of raising each minor child. */
 export const CHILD_COST = 3_500;

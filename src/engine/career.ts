@@ -12,6 +12,7 @@ import {
 } from "@/data/careersRegistry";
 import { addLog, changeStat, clone, hasAnyDegree, hasFlag, isRoyal, setFlag } from "./state";
 import { hiringModifier } from "./world";
+import { PART_TIME_FACTOR, blockerFor, isStudying, partTimeFriendly } from "./occupation";
 
 // ---------------------------------------------------------------------------
 // Corporate career
@@ -39,13 +40,27 @@ function recordCareerPeak(p: PlayerState) {
   p.stats.highestCareerTier = j.tier;
 }
 
-export function jobEligibility(p: PlayerState, line: CareerLine): { ok: boolean; reason?: string } {
+export interface Eligibility {
+  ok: boolean;
+  reason?: string;
+  /** The only way you can take this right now is part-time (you're studying). */
+  partTime?: boolean;
+}
+
+export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
   if (line.pack === "adult" && (!p.matureContent || p.age < 18)) return { ok: false, reason: "Mature content is off" };
   if (isRoyal(p)) return { ok: false, reason: "Royals can't hold ordinary jobs" };
   if (p.isInPrison) return { ok: false, reason: "You're in prison" };
   if (p.isFugitive) return { ok: false, reason: "Fugitives can't get hired" };
   if (p.currentJob) return { ok: false, reason: "Quit your current job first" };
   if (p.age < line.minAge) return { ok: false, reason: `Must be ${line.minAge}+` };
+  const blocked = line.pack === "politics" ? null : blockerFor(p, "job");
+  if (blocked) return { ok: false, reason: blocked };
+  let partTime = false;
+  if (isStudying(p)) {
+    if (!partTimeFriendly(line)) return { ok: false, reason: "You're studying. Only part-time work fits around classes." };
+    partTime = true;
+  }
   if (!hasAnyDegree(p, line.requirements.degrees)) {
     return { ok: false, reason: `Needs ${line.requirements.degrees?.map(degreeName).join(" or ")}` };
   }
@@ -61,7 +76,7 @@ export function jobEligibility(p: PlayerState, line: CareerLine): { ok: boolean;
       return { ok: false, reason: `Needs ${min}+ ${skill[0].toUpperCase() + skill.slice(1)} skill` };
     }
   }
-  return { ok: true };
+  return { ok: true, partTime };
 }
 
 export function degreeName(id: string): string {
@@ -102,6 +117,10 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
     return { player: p, notices: [{ kind: "info", title: "Rejected", body, tone: "bad" }] };
   }
   const job = makeJob(line, 0, rng);
+  if (elig.partTime) {
+    job.partTime = true;
+    job.salary = Math.round(job.salary * PART_TIME_FACTOR);
+  }
   p.currentJob = job;
   p.annualSalary = job.salary;
   if (line.pack === "actor") {
@@ -112,7 +131,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   }
   if (line.id === "military") setFlag(p, "veteran");
   recordCareerPeak(p);
-  const body = `You got a job as a ${job.title} at ${job.company}, earning ${money(job.salary)} a year!`;
+  const body = `You got a ${job.partTime ? "part-time " : ""}job as a ${job.title} at ${job.company}, earning ${money(job.salary)} a year!`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "You're Hired!", body, tone: "good" }] };
 }
@@ -143,18 +162,61 @@ export function quitJob(p0: PlayerState): ActionResult {
   return { player: p, notices: [{ kind: "info", title: "You Quit", body, tone: "neutral" }] };
 }
 
+/** State + occupational pension: scales with the years you actually worked. */
+export function pensionFor(p: PlayerState): number {
+  const years = p.stats.yearsWorked;
+  const base = Math.max(p.currentJob?.salary ?? 0, Math.round(p.stats.highestSalary * 0.75));
+  const rate = Math.min(0.65, years * 0.0165);
+  const floor = years >= 10 ? 14_000 : years >= 3 ? 10_000 : 6_000;
+  return Math.max(p.pension, floor, Math.round(base * rate));
+}
+
 export function retire(p0: PlayerState): ActionResult {
   const p = clone(p0);
   if (p.age < 60) {
     return { player: p0, notices: [{ kind: "info", title: "Too Young", body: "You can retire from age 60.", tone: "neutral" }] };
   }
-  const salary = p.currentJob?.salary ?? 0;
-  p.pension = Math.max(p.pension, Math.round(salary * 0.45), 12_000);
-  const body = `You retired${p.currentJob ? ` from your job as a ${p.currentJob.title}` : ""}. Your pension is ${money(p.pension)} a year.`;
+  p.pension = pensionFor(p);
+  const body = `You retired${p.currentJob ? ` from your job as a ${p.currentJob.title}` : ""} after about ${Math.round(p.stats.yearsWorked)} years of work. Your pension is ${money(p.pension)} a year.`;
   p.currentJob = null;
   p.annualSalary = 0;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Happy Retirement!", body, tone: "good" }] };
+}
+
+/** Cut to reduced hours: half pay, no promotions, room to study. */
+export function goPartTime(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  const job = p.currentJob;
+  if (!job || job.partTime || CAREER_BY_ID[job.lineId]?.pack) return { player: p0 };
+  job.partTime = true;
+  job.salary = Math.round(job.salary * 0.5);
+  p.annualSalary = job.salary;
+  const body = `You cut your hours at ${job.company}. Pay is now ${money(job.salary)} a year, and there will be no promotions while you're part-time.`;
+  addLog(p, body);
+  return { player: p, notices: [{ kind: "info", title: "Part-Time", body, tone: "neutral" }] };
+}
+
+/** Mutating helper shared by the button and graduation. Returns the log line, or null if nothing changed. */
+export function convertToFullTime(p: PlayerState): string | null {
+  const job = p.currentJob;
+  if (!job || !job.partTime) return null;
+  const line = CAREER_BY_ID[job.lineId];
+  job.partTime = false;
+  job.salary = Math.max(Math.round(job.salary / PART_TIME_FACTOR), line ? line.ladder[job.tier].salary : 0);
+  p.annualSalary = job.salary;
+  return `You went back to full-time hours at ${job.company}: ${money(job.salary)} a year.`;
+}
+
+export function goFullTime(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  if (!p.currentJob?.partTime) return { player: p0 };
+  if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") {
+    return { player: p0, notices: [{ kind: "info", title: "Still Studying", body: "You can't work full time while enrolled.", tone: "bad" }] };
+  }
+  const body = convertToFullTime(p)!;
+  addLog(p, body);
+  return { player: p, notices: [{ kind: "info", title: "Full-Time", body, tone: "good" }] };
 }
 
 /** Promote the player one rung up their ladder. */
@@ -242,6 +304,8 @@ export function enrollProgram(
   const reject = (body: string): ActionResult => ({ player: p0, notices: [{ kind: "info", title: "Can't Enroll", body, tone: "bad" }] });
   if (p.education.stage !== "None") return reject("You're already studying.");
   if (p.isInPrison) return reject("You're in prison.");
+  const blocked = blockerFor(p, "study");
+  if (blocked) return reject(blocked);
   if (stage === "University" && !p.education.degrees.includes("highschool")) return reject("You need a high school diploma.");
   if (stage !== "University" && !p.education.degrees.some((d) => d.startsWith("bachelor:"))) return reject("You need a Bachelor's degree first.");
   if (stage === "MedicalSchool" && p.education.degrees.includes("md")) return reject("You're already a doctor.");
@@ -375,6 +439,8 @@ export function auditionContract(p0: PlayerState, kind: "solo" | "band", tapScor
     return { player: p0, notices: [{ kind: "info", title: "Too Young", body: "Record labels only sign artists who are 18 or older.", tone: "neutral" }] };
   }
   if (p.music.signed) return { player: p0 };
+  const blocked = blockerFor(p, "music");
+  if (blocked) return { player: p0, notices: [{ kind: "info", title: "Can't Sign", body: blocked, tone: "bad" }] };
   if (kind === "band" && p.music.status !== "band") return { player: p0 };
   if ((p.annual.audition_music ?? 0) >= 1) {
     return { player: p0, notices: [{ kind: "info", title: "Try Next Year", body: "You've already auditioned this year.", tone: "neutral" }] };
@@ -397,6 +463,20 @@ export function auditionContract(p0: PlayerState, kind: "solo" | "band", tapScor
   const body = `The label passed. Your audition scored ${Math.round(rating)} (needed ${needed}). Practise and try again.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Audition Failed", body, tone: "bad" }] };
+}
+
+/** Walk away from your label (and its yearly advance). */
+export function leaveLabel(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  if (!p.music.signed) return { player: p0 };
+  p.music.signed = false;
+  p.music.status = "none";
+  p.music.pendingAlbum = null;
+  if (p.specialCareerPath === "musician") p.specialCareerPath = "none";
+  changeStat(p, "happiness", -3);
+  const body = "You left your record label. Your back catalogue still earns royalties, but the yearly advance is gone.";
+  addLog(p, body);
+  return { player: p, notices: [{ kind: "info", title: "Left the Label", body, tone: "neutral" }] };
 }
 
 export function recordAlbum(p0: PlayerState, genre: string, title: string): ActionResult {

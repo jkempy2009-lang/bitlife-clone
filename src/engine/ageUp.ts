@@ -26,7 +26,7 @@ import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
 import { startTrial } from "./crime";
 import { selectEvents } from "./events";
-import { albumRating, maybeCoup, promotionEvent } from "./career";
+import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
 import { checkAchievements } from "./achievements";
 import { processVices } from "./vices";
 import { escortIsIllegal, processAdultWork, processIntimacy } from "./intimacy";
@@ -34,7 +34,8 @@ import { processPolitics } from "./politics";
 import { processMob } from "./underworld";
 import { hobbyIncome, processHobbies } from "./hobbies";
 import { processAthlete, processBusiness, processInfluencer } from "./paths";
-import { RENT_TIERS, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
+import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
+import { LIFESTYLES, RENT_TIERS, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -244,7 +245,8 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   if (adult && !p.isInPrison && !isRoyal(p) && !parentSupport) {
     // Lifestyle inflation: the more you earn, the more you spend.
     const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
-    living = BASE_LIVING + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross - 45_000) * 0.28;
+    const ls = LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1];
+    living = BASE_LIVING * ls.base + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross - 45_000) * ls.slope;
   }
   living = Math.round(living);
   p.bankBalance -= living;
@@ -345,6 +347,7 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
     e.studyEffort = Math.max(0, e.studyEffort * 0.5);
     return;
   }
+  if (p.age >= 8) e.studyEffort = Math.min(8, e.studyEffort + EFFORT_STUDY[p.effort]);
   e.grades = clamp(Math.round(e.grades * 0.5 + 0.5 * (p.smarts * 0.6 + 25 + e.studyEffort * 6 + rng.int(-10, 10))));
   const effort = e.studyEffort;
   e.studyEffort = Math.max(0, e.studyEffort * 0.5);
@@ -386,6 +389,8 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
   if (!e.degrees.includes(degree)) e.degrees.push(degree);
   e.stage = "None";
   e.major = null;
+  const fullTime = convertToFullTime(p);
+  if (fullTime) addLog(p, `With your studies over, ${fullTime.charAt(0).toLowerCase()}${fullTime.slice(1)}`);
   changeStat(p, "happiness", 12);
   const body = `You graduated from ${label}!${degree === "md" ? " You're now Dr. " + p.lastName + "." : ""}`;
   addLog(p, body);
@@ -403,9 +408,10 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   processMob(p, rng, notices);
   const job = p.currentJob;
   if (!job || p.isInPrison) return;
+  p.stats.yearsWorked += job.partTime ? 0.5 : 1;
   // Elected officials answer to voters, not managers.
   if (CAREER_BY_ID[job.lineId]?.pack === "politics") return;
-  job.performance = clamp(job.performance + rng.int(-8, 4) + Math.round((p.smarts - 50) / 25));
+  job.performance = clamp(job.performance + effortPerformanceDelta(job.partTime ? "steady" : p.effort, rng) + Math.round((p.smarts - 50) / 25));
   if (job.performance < 20 && rng.chance(0.4)) {
     const body = `You were fired from your job as a ${job.title} for poor performance.`;
     p.currentJob = null;
@@ -430,14 +436,14 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   }
   p.annualSalary = job.salary;
   if (p.age >= 75) {
-    p.pension = Math.max(p.pension, Math.round(job.salary * 0.45), 12_000);
-    addLog(p, `You retired from your job as a ${job.title} at age ${p.age}.`);
+    p.pension = pensionFor(p);
+    addLog(p, `You retired from your job as a ${job.title} at age ${p.age}. Your pension is ${money(p.pension)} a year.`);
     p.currentJob = null;
     p.annualSalary = 0;
     return;
   }
   job.yearsInRole = (job.yearsInRole ?? 0) + 1;
-  if (job.performance > 85 && job.yearsInRole >= 2 + job.tier) {
+  if (!job.partTime && job.performance > 85 && job.yearsInRole >= 2 + job.tier) {
     const ev = promotionEvent(p);
     if (ev) notices.push({ kind: "event", event: ev });
   }
@@ -573,7 +579,8 @@ function processMilestones(p: PlayerState, notices: Notices) {
 function driftStats(p: PlayerState, rng: Rng) {
   const partner = getPartner(p);
   const rentBonus = p.properties.length === 0 && p.age >= 18 ? RENT_TIERS[p.residence.rentTier].happiness * 2 : 0;
-  const target = 62 + rentBonus + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
+  const moodBonus = p.age >= 18 && !p.isInPrison ? (LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1]).mood : 0;
+  const target = 62 + moodBonus + rentBonus + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
   p.happiness += Math.round((target - p.happiness) * 0.1) + rng.int(-2, 2);
   if (p.age >= 40) p.looks -= rng.int(0, p.age >= 60 ? 3 : 2);
   if (p.age >= 70) p.smarts -= rng.int(0, 1);
@@ -607,6 +614,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   if (p.alive) {
     processEducation(p, rng, notices);
     processCareer(p, rng, notices);
+    applyEffortCosts(p, rng, notices);
     processEntertainment(p);
     processRoyalty(p, rng, notices);
     processJustice(p, rng, notices);

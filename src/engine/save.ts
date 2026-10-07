@@ -75,13 +75,15 @@ function hydrate(p: PlayerState): PlayerState {
     pregnancy: p.pregnancy ?? null,
     blackjack: p.blackjack ?? null,
     matureContent: p.matureContent ?? true,
+    effort: p.effort ?? "steady",
+    lifestyle: p.lifestyle ?? 1,
     business: p.business ? { ...p.business, staff: p.business.staff ?? 0, locations: p.business.locations ?? 1 } : null,
     achievements: p.achievements ?? [],
     history: p.history ?? [],
     goalsDone: p.goalsDone ?? [],
     lastYear: p.lastYear ?? null,
     recentCats: p.recentCats ?? [],
-    stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0, kills: p.stats.kills ?? 0, affairs: p.stats.affairs ?? 0, hookups: p.stats.hookups ?? 0 },
+    stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0, kills: p.stats.kills ?? 0, affairs: p.stats.affairs ?? 0, hookups: p.stats.hookups ?? 0, yearsWorked: p.stats.yearsWorked ?? Math.max(0, p.age - 22) },
   };
 }
 
