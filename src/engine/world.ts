@@ -95,7 +95,7 @@ export function processInvestments(p: PlayerState, rng: Rng, notices: Notices) {
   const before = portfolioValue(p);
   if (before <= 0) return;
   for (const [id, h] of Object.entries(p.investments)) {
-    h.value = Math.max(0, Math.round(h.value * (1 + yearReturn(id, p.economy.climate, rng))));
+    h.value = Math.max(0, Math.round(h.value * (1 + yearReturn(id, p.economy.climate, rng) + (p.talents.moneySense - 50) / 1000)));
     if (h.value === 0 && h.basis === 0) delete p.investments[id];
   }
   const after = portfolioValue(p);

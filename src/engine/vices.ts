@@ -21,7 +21,7 @@ export const VICE_INFO: Record<keyof Vices, { label: string; emoji: string }> = 
 export const REHAB_COST = 5_000;
 
 export function addVice(p: PlayerState, key: keyof Vices, delta: number) {
-  p.vices[key] = clamp(Math.round(p.vices[key] + delta));
+  p.vices[key] = clamp(Math.round(p.vices[key] + (delta > 0 ? delta * (1 + (p.talents.addictive - 50) / 100) : delta)));
 }
 
 export const hasAnyVice = (p: PlayerState) => Object.values(p.vices).some((v) => v > 0);

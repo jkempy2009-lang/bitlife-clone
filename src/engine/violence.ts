@@ -155,7 +155,7 @@ export function assault(p0: PlayerState, targetId: string, rng: Rng): ActionResu
   addHeat(p, 8);
   changeStat(p, "karma", -10);
   const notices: Notices = [];
-  const win = rng.chance(clamp(0.4 + (p.health - 50) / 200 + p.skills.athletics / 300, 0.15, 0.85));
+  const win = rng.chance(clamp(0.4 + (p.health - 50) / 200 + p.skills.athletics / 300 + ((p.talents?.courage ?? 50) - 50) / 250, 0.15, 0.85));
   let body: string;
   if (win) {
     if (target.rel) target.rel.relationshipBar = clamp(target.rel.relationshipBar - 45);

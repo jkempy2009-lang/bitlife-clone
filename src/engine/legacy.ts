@@ -89,8 +89,9 @@ export const heirs = (p: PlayerState): Relative[] =>
   p.relatives.filter((r) => r.relation === "Child" && r.alive);
 
 function blendTalents(a: PlayerState["talents"], b: PlayerState["talents"]): PlayerState["talents"] {
-  const mix = (x: number, y: number) => Math.round((x + y) / 2);
-  return { athletic: mix(a.athletic, b.athletic), musical: mix(a.musical, b.musical), acting: mix(a.acting, b.acting), charisma: mix(a.charisma, b.charisma), business: mix(a.business, b.business), discipline: mix(a.discipline, b.discipline) };
+  const out = { ...b };
+  for (const k of Object.keys(b) as (keyof typeof b)[]) out[k] = Math.round(((a[k] ?? b[k]) + b[k]) / 2);
+  return out;
 }
 
 export function continueAsChild(old: PlayerState, childId: string, rng: Rng): PlayerState | null {

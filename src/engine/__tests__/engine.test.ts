@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { ageUp, finalize } from "../ageUp";
@@ -15,13 +16,13 @@ import type { PlayerState, Notice } from "@/types/game.types";
 
 function newPlayer(seed = 1, scenario: "random" | "royal" | "wealthy" = "average" as never) {
   const rng = makeRng(seed);
-  return { rng, p: createNewPlayer({ scenario: scenario as never, startYear: 2026 }, rng) };
+  return { rng, p: createNewPlayer({ scenario: scenario as never, startYear: 2026, talents: NEUTRAL }, rng) };
 }
 
 /** Auto-plays a life: random option on every event. */
 function simulateLife(seed: number): PlayerState {
   const rng = makeRng(seed);
-  let p = createNewPlayer({ scenario: "random", startYear: 2026 }, rng);
+  let p = createNewPlayer({ scenario: "random", startYear: 2026, talents: NEUTRAL }, rng);
   for (let guard = 0; guard < 200 && p.alive; guard++) {
     if (p.pendingTrial) {
       const r = resolveTrial(p, "public", rng);

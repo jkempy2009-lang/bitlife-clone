@@ -325,7 +325,7 @@ export function tryForBaby(p0: PlayerState, rng: Rng): ActionResult {
   if (p.pregnancy) {
     return { player: p0, notices: [{ kind: "info", title: "Already Expecting", body: "A baby is already on the way.", tone: "neutral" }] };
   }
-  if (rng.chance(0.4)) {
+  if (rng.chance(0.4 * (0.6 + (p.talents.fertility / 100) * 0.8))) {
     const carrier = p.gender === "Female" ? "self" : partner.gender === "Female" ? partner.id : rng.chance(0.5) ? "self" : partner.id;
     p.pregnancy = { carrier, other: partner.name };
     changeStat(p, "happiness", 12);
@@ -399,7 +399,7 @@ export function meetSomeone(p0: PlayerState, kind: "friend" | "date", rng: Rng):
           addRelative: { relation: spec.relation, prebuilt: candidate, partnerStatus: spec.partnerStatus },
         },
         chance: {
-          p: clamp(0.45 + (kind === "date" ? (p.looks - 50) / 200 + p.skills.charisma / 250 : 0.25), 0.15, 0.9),
+          p: clamp(0.45 + (kind === "date" ? (p.looks - 50) / 200 + p.skills.charisma / 250 + (p.talents.romance - 50) / 300 : 0.25), 0.15, 0.9),
           failure: { logText: `You and ${candidate.name} didn't click. It happens.`, happinessDelta: -3 },
         },
       },

@@ -118,7 +118,7 @@ export function applyEffortCosts(p: PlayerState, rng: Rng, notices: NonNullable<
   const partner = getPartner(p);
   const family = [...(partner ? [partner] : []), ...livingRelatives(p, "Child").filter((c) => c.age < 18)];
   if (p.effort === "grind") {
-    changeStat(p, "health", p.age > 45 ? -3 : -2);
+    changeStat(p, "health", -Math.max(0, (p.age > 45 ? 3 : 2) - Math.round((p.talents.stamina - 50) / 30)));
     changeStat(p, "happiness", -2);
     for (const r of family) r.relationshipBar = Math.max(0, r.relationshipBar - 3);
     if (rng.chance((p.age > 45 ? 0.14 : 0.09) * (1.4 - p.talents.discipline / 125))) {

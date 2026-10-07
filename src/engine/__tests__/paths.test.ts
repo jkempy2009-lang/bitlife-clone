@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { createNewPlayer, netWorth } from "../state";
@@ -7,7 +8,7 @@ import { applyForJob, auditionContract, formBand, recordAlbum } from "../career"
 
 const base = (seed: number) => {
   const rng = makeRng(seed);
-  const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
   p.age = 24;
   p.education.degrees = ["highschool"];
   return { rng, p };

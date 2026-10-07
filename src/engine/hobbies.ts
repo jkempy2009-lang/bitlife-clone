@@ -115,7 +115,7 @@ export function practiceHobby(p0: PlayerState, id: string, rng: Rng): ActionResu
   if ((p.annual.hobbies ?? 0) >= MAX_HOBBY_SESSIONS) return { player: p0, notices: [info("Out of Time", `You can only commit to ${MAX_HOBBY_SESSIONS} hobbies per year.`)] };
   p.annual[`hobby:${id}`] = 1;
   p.annual.hobbies = (p.annual.hobbies ?? 0) + 1;
-  const gain = rng.int(5, 10) + Math.floor((p.smarts - 50) / 25);
+  const gain = Math.max(1, Math.round((rng.int(5, 10) + Math.floor((p.smarts - 50) / 25)) * (1 + (p.talents.creativity - 50) / 150)));
   const before = p.hobbies[id] ?? 0;
   p.hobbies[id] = clamp(before + Math.max(3, gain));
   changeStat(p, "happiness", h.stats.happiness ?? 0);

@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { ageUp } from "../ageUp";
@@ -13,7 +14,7 @@ import type { PlayerState } from "@/types/game.types";
 
 function adult(seed: number) {
   const rng = makeRng(seed);
-  const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
   p.age = 25;
   p.education.stage = "None";
   return { rng, p };

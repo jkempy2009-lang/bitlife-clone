@@ -455,15 +455,8 @@ export interface RoyalLife {
   line: number;
 }
 
-/** Hidden gifts (0-100). Never shown in play; they quietly shape what you're good at. */
-export interface Talents {
-  athletic: number;
-  musical: number;
-  acting: number;
-  charisma: number;
-  business: number;
-  discipline: number;
-}
+/** Hidden gifts and tendencies (0-100, 50 typical). Never shown in play; see data/talents.ts. */
+export type Talents = Record<import("../data/talents").TalentKey, number>;
 
 export interface IntimacyPrefs {
   /** Use an age window around your own age instead of fixed limits. */

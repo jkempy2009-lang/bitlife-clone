@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { createNewPlayer, netWorth } from "../state";
@@ -17,7 +18,7 @@ import type { PlayerState } from "@/types/game.types";
 
 const base = (seed = 1) => {
   const rng = makeRng(seed);
-  const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
   p.age = 30;
   p.education.degrees = ["highschool"];
   return { rng, p };
@@ -215,7 +216,7 @@ describe("family depth", () => {
     const rng = makeRng(17);
     let withGp = 0;
     for (let i = 0; i < 20; i++) {
-      const pl = createNewPlayer({ scenario: "average", startYear: 2026 }, makeRng(i + 300));
+      const pl = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, makeRng(i + 300));
       if (pl.relatives.some((r) => r.relation === "Grandparent")) withGp++;
     }
     expect(withGp).toBeGreaterThan(10);

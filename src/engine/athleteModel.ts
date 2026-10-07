@@ -181,7 +181,7 @@ export function injuryChance(p: PlayerState, a: AthleteState, effort: Effort): n
   const info = sportInfo(a.sport);
   const ageMult = p.age < 14 ? 0.5 : p.age <= 29 ? 1 : p.age <= 33 ? 1.25 : 1.5;
   const healthMult = p.health < 55 ? 1.4 : p.health > 85 ? 0.9 : 1;
-  return clamp(info.injury * INJURY_LOAD[effort] * ageMult * healthMult * (a.doping ? 1.2 : 1), 0, 0.6);
+  return clamp(info.injury * INJURY_LOAD[effort] * ageMult * healthMult * (a.doping ? 1.2 : 1) * (1 + ((p.talents?.injuryProne ?? 50) - 50) / 90), 0, 0.6);
 }
 
 export function rollInjury(p: PlayerState, a: AthleteState, effort: Effort, rng: Rng, forceSeverity?: number): AthleteInjury {

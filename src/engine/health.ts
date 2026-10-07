@@ -119,6 +119,7 @@ const CARDIO = new Set(["diabetes", "hypertension", "heart_disease", "stroke", "
 /** How much more (or less) likely this lifestyle makes a given diagnosis. */
 export function riskMultiplier(p: PlayerState, diseaseId: string): number {
   let m = 1;
+  if (!["cold", "flu", "food_poisoning", "broken_bone", "anxiety", "depression"].includes(diseaseId)) m *= 1.3 - p.talents.longevity / 166;
   if (CARDIO.has(diseaseId)) {
     m *= [1.6, 1, 0.6][p.habits.exercise] * [1.4, 1, 0.75][p.habits.diet];
   }
@@ -126,11 +127,11 @@ export function riskMultiplier(p: PlayerState, diseaseId: string): number {
   if (diseaseId === "liver_disease") m *= 1 + p.vices.alcohol / 40;
   if (diseaseId === "anxiety" || diseaseId === "depression") {
     m *= 1 + Math.max(0, 40 - p.happiness) / 50;
-    m *= p.effort === "grind" ? 1.35 : p.effort === "coast" ? 0.85 : 1;
+    m *= (p.effort === "grind" ? 1.35 : p.effort === "coast" ? 0.85 : 1) * (1.4 - p.talents.resilience / 125);
     m *= p.habits.exercise === 2 ? 0.8 : p.habits.exercise === 0 ? 1.2 : 1;
     m *= 1 + p.vices.drugs / 80;
   }
-  if (diseaseId === "broken_bone" && p.habits.exercise === 2) m *= 1.3;
+  if (diseaseId === "broken_bone") m *= (p.habits.exercise === 2 ? 1.3 : 1) * (1 + (p.talents.injuryProne - 50) / 60);
   return m;
 }
 

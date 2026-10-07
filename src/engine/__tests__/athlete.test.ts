@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { upgradeBusiness } from "../business";
 import { describe, expect, it } from "vitest";
 import { makeRng, type Rng } from "@/lib/rng";
@@ -26,7 +27,7 @@ type Notices = NonNullable<ActionResult["notices"]>;
 
 function mk(seed: number, stage: PlayerState["athlete"]["stage"], over: Partial<PlayerState["athlete"]> = {}, age = 20, sport = "Soccer") {
   const rng = makeRng(seed);
-  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: { athletic: 50, musical: 50, acting: 50, charisma: 50, business: 50, discipline: 50 } }, rng);
+  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
   p.age = age;
   p.education = { ...p.education, stage: "None", degrees: ["highschool"], grades: 70 };
   p.smarts = 60;
@@ -185,7 +186,7 @@ describe("stage gates", () => {
   it("a committed grinder can reach the pros; a coaster never does", () => {
     const play = (effort: PlayerState["effort"], seed: number) => {
       const rng = makeRng(seed);
-      let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: { athletic: 50, musical: 50, acting: 50, charisma: 50, business: 50, discipline: 50 } }, rng);
+      let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
       let maxLeague = -1;
       for (let guard = 0; guard < 40 && p.alive; guard++) {
         p = ageUp(p, rng).player;
@@ -685,7 +686,7 @@ describe("achievements, saves and heirs", () => {
 
   it("an heir starts with a clean sporting record", () => {
     const rng = makeRng(98);
-    const old = createNewPlayer({ scenario: "wealthy", startYear: 2026 }, rng);
+    const old = createNewPlayer({ scenario: "wealthy", startYear: 2026, talents: NEUTRAL }, rng);
     old.age = 60;
     old.athlete.stage = "retired";
     old.athlete.sport = "Soccer";
@@ -701,7 +702,7 @@ describe("achievements, saves and heirs", () => {
   it("full years never throw for an athlete bot across many seasons", () => {
     for (let s = 0; s < 12; s++) {
       const rng = makeRng(2000 + s);
-      let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: { athletic: 50, musical: 50, acting: 50, charisma: 50, business: 50, discipline: 50 } }, rng);
+      let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
       for (let g = 0; g < 70 && p.alive; g++) {
         const res = ageUp(p, rng);
         p = res.player;

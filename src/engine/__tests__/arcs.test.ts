@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { ARCS, ARC_EVENTS } from "@/data/events/arcs";
@@ -12,7 +13,7 @@ import { deriveHeirTraits } from "../generations";
 import { activeStorylines } from "../storylines";
 import { playTypicalLife } from "./helpers/arcBot";
 
-const fresh = (seed = 1) => createNewPlayer({ scenario: "average", startYear: 2026 }, makeRng(seed));
+const fresh = (seed = 1) => createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, makeRng(seed));
 
 /** Every effects object an event can apply (success and failure branches). */
 const allEffects = (events: typeof ARC_EVENTS): Array<{ id: string; fx: ChoiceEffects }> =>

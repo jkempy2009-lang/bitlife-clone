@@ -6,7 +6,7 @@ import type {
   RoyalRank,
 } from "@/types/game.types";
 import { clamp } from "@/lib/format";
-import type { Rng } from "@/lib/rng";
+import { makeRng, type Rng } from "@/lib/rng";
 import { COUNTRIES, MONARCHIES, getCountry } from "@/data/countries";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { occupationFor } from "@/data/occupations";
@@ -220,13 +220,16 @@ export function makeRelativeBase(
   return rel;
 }
 
-export const TALENT_KEYS = ["athletic", "musical", "acting", "charisma", "business", "discipline"] as const;
+export { TALENT_KEYS } from "@/data/talents";
+import { TALENT_KEYS as KEYS } from "@/data/talents";
 
 /** Random natural gifts, with anything the player chose taking precedence. */
-export function rollTalents(rng: Rng, chosen?: Partial<import("@/types/game.types").Talents>): import("@/types/game.types").Talents {
+export function rollTalents(main: Rng, chosen?: Partial<import("@/types/game.types").Talents>): import("@/types/game.types").Talents {
+  // A private stream seeded from the main one's state, so the main stream isn't consumed (keeps other rolls stable).
+  const rng = makeRng((main.state() ^ 0x9e3779b9) >>> 0);
   const roll = () => clamp(Math.round((rng.int(5, 95) + rng.int(5, 95) + rng.int(5, 95)) / 3));
   const t = {} as import("@/types/game.types").Talents;
-  for (const k of TALENT_KEYS) {
+  for (const k of KEYS) {
     const r = roll();
     t[k] = chosen?.[k] !== undefined ? clamp(Math.round(chosen[k] as number)) : r;
   }

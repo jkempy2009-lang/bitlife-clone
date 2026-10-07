@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { createNewPlayer } from "../state";
@@ -10,7 +11,7 @@ const newGame = (seed = 5) => reducer(initialState, { type: "NEW_GAME", opts: { 
 describe("year summary & milestones", () => {
   it("records what changed during Age Up", () => {
     const rng = makeRng(3);
-    const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+    const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
     p.age = 30;
     p.bankBalance = 1000;
     const next = ageUp(p, rng).player;
@@ -20,7 +21,7 @@ describe("year summary & milestones", () => {
 
   it("announces key ages", () => {
     const rng = makeRng(4);
-    const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+    const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
     p.age = 17;
     const res = ageUp(p, rng);
     expect(res.notices?.some((n) => "title" in n && n.title === "Adulthood")).toBe(true);
@@ -70,7 +71,7 @@ describe("fast forward", () => {
 describe("event variety", () => {
   it("tracks recent event categories", () => {
     const rng = makeRng(11);
-    let p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+    let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
     for (let i = 0; i < 15; i++) p = ageUp(p, rng).player;
     expect(p.recentCats.length).toBeLessThanOrEqual(6);
     expect(p.recentCats.length).toBeGreaterThan(0);
@@ -80,7 +81,7 @@ describe("event variety", () => {
 describe("tips", () => {
   it("nudges the unemployed adult toward the Career tab and stays quiet in prison", () => {
     const rng = makeRng(2);
-    const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+    const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
     p.age = 30;
     p.currentJob = null;
     p.education.yearsLeft = 0;

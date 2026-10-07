@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng, type Rng } from "@/lib/rng";
 import { ageUp, finalize } from "../ageUp";
@@ -103,7 +104,7 @@ function checkInvariants(p: PlayerState) {
 
 function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): PlayerState {
   const rng = makeRng(seed);
-  let p = createNewPlayer({ scenario, startYear: 2026 }, rng);
+  let p = createNewPlayer({ scenario, startYear: 2026, talents: NEUTRAL }, rng);
   for (let guard = 0; guard < 150 && p.alive; guard++) {
     const res = ageUp(p, rng);
     p = res.player;
@@ -326,7 +327,7 @@ function checkCreative(p: PlayerState) {
 /** A life devoted to fame: commits to a creative path young, then makes random decisions every year. */
 function playCreativeBot(seed: number): PlayerState {
   const rng = makeRng(seed);
-  let p = createNewPlayer({ scenario: "random", startYear: 2026 }, rng);
+  let p = createNewPlayer({ scenario: "random", startYear: 2026, talents: NEUTRAL }, rng);
   for (let guard = 0; guard < 80 && p.alive; guard++) {
     const res = ageUp(p, rng);
     p = res.player;
@@ -354,7 +355,7 @@ function playCreativeBot(seed: number): PlayerState {
 /** A sports-obsessed life: commits young, then makes random career decisions every year. */
 function playAthleteBot(seed: number): PlayerState {
   const rng = makeRng(seed);
-  let p = createNewPlayer({ scenario: "random", startYear: 2026 }, rng);
+  let p = createNewPlayer({ scenario: "random", startYear: 2026, talents: NEUTRAL }, rng);
   for (let guard = 0; guard < 90 && p.alive; guard++) {
     const res = ageUp(p, rng);
     p = res.player;
@@ -420,7 +421,7 @@ describe("fuzz: bot that pokes every system", () => {
 
   it("generations chain: continue as child repeatedly", () => {
     const rng = makeRng(999);
-    let p = createNewPlayer({ scenario: "wealthy", startYear: 2026 }, rng);
+    let p = createNewPlayer({ scenario: "wealthy", startYear: 2026, talents: NEUTRAL }, rng);
     let generations = 0;
     for (let guard = 0; guard < 400 && generations < 3; guard++) {
       if (!p.alive) {

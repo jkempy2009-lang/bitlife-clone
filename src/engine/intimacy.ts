@@ -73,7 +73,7 @@ function maybeConceive(p: PlayerState, other: Relative, protectedSex: boolean, r
   const carrierId = carrierFor(p, other, rng);
   const carrierAge = carrierId === "self" ? p.age : other.age;
   if (carrierAge < 18 || carrierAge > 44) return;
-  if (!rng.chance(protectedSex ? 0.02 : 0.14)) return;
+  if (!rng.chance((protectedSex ? 0.02 : 0.14) * (0.6 + (p.talents.fertility / 100) * 0.8))) return;
   p.pregnancy = { carrier: carrierId, other: other.name };
   const who = carrierId === "self" ? "You're" : `${firstName(other)} is`;
   addLog(p, `${who} expecting a baby!`);

@@ -55,6 +55,7 @@ export function catchChance(p: PlayerState, crimeId: string, opts: CrimeOpts = {
   if (p.probation) c += 0.1;
   c += Math.min(0.12, p.justice.accomplices * 0.02);
   c -= (opts.plan ?? 0) * 0.06 * (0.6 + p.smarts / 250);
+  c -= ((p.talents?.cunning ?? 50) - 50) / 400;
   if (meta.team) c -= (opts.crew ?? 0) * 0.04;
   return clamp(c, 0.02, 0.97);
 }

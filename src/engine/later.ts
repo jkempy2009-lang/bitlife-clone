@@ -29,7 +29,7 @@ export function processLaterLife(p: PlayerState, notices: Notices) {
   if (grief) {
     const since = Number(grief.split(":")[1]);
     if (p.year - since >= 3) p.flags = p.flags.filter((f) => f !== grief);
-    else changeStat(p, "happiness", -3);
+    else changeStat(p, "happiness", -Math.max(1, Math.round(3 * (1.4 - p.talents.resilience / 125))));
   }
   if (p.age < 70) return;
   const cost = careCost(p);

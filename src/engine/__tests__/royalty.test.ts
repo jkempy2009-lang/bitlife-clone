@@ -1,3 +1,4 @@
+import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { createNewPlayer } from "../state";
@@ -11,7 +12,7 @@ const rel = (id: string, relation: Relative["relation"], age: number, gender: st
 
 const royalBorn = (seed: number): PlayerState => {
   for (let s = seed; s < seed + 200; s++) {
-    const p = createNewPlayer({ scenario: "royal", startYear: 2026 }, makeRng(s));
+    const p = createNewPlayer({ scenario: "royal", startYear: 2026, talents: NEUTRAL }, makeRng(s));
     return p;
   }
   throw new Error("unreachable");

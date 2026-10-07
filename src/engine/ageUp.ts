@@ -25,6 +25,7 @@ import {
 import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
 import { processFriendLoans } from "./friends";
+import { processTemper } from "./talentEffects";
 import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
 import { ensureSuccession } from "./royalty";
@@ -113,7 +114,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
       : r.relation === "Friend" ? rng.int(1, 5)
       : r.relation === "Child" ? rng.int(0, 2)
       : rng.int(0, 3);
-    r.relationshipBar = clamp(r.relationshipBar - decay - (p.isInPrison ? 3 : 0));
+    r.relationshipBar = clamp(r.relationshipBar - Math.max(0, Math.round(decay * (1.25 - p.talents.empathy / 200))) - (p.isInPrison ? 3 : 0));
     // Mortality: spec asks for a death roll for the elderly; we use a graded curve so younger deaths are possible but rare.
     if (r.age > 40 && rng.chance(deathChance(r.age, r.health))) {
       r.alive = false;
@@ -250,7 +251,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
     // Lifestyle inflation: the more you earn, the more you spend.
     const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
     const ls = LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1];
-    living = BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope;
+    living = (BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope) * (1 - (p.talents.moneySense - 50) / 700);
     living += childSupportDue(p, gross) + schoolCosts(p);
   }
   living = Math.round(living);
@@ -305,7 +306,7 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
   const lingering = p.diseases.some((d) => d.severity !== "mild");
   if (p.age < 55 && !lingering) p.health += rng.int(1, 4);
   else if (p.age < 55 && p.health < 70) p.health += 1;
-  else if (p.age >= 55) p.health -= rng.int(0, 1) + (p.age >= 75 ? 1 : 0) + (p.age >= 90 ? 1 : 0);
+  else if (p.age >= 55) p.health -= Math.max(0, rng.int(0, 1) + (p.age >= 75 ? 1 : 0) + (p.age >= 90 ? 1 : 0) + (p.talents.longevity < 35 ? 1 : 0) - (p.talents.longevity > 65 && rng.chance(0.5) ? 1 : 0));
 
   for (const d of [...p.diseases]) {
     // Stat impacts are applied every year; mild and chronic conditions are dampened so a life on autopilot stays survivable.
@@ -375,7 +376,7 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
     return;
   }
   if (p.age >= 8) e.studyEffort = Math.min(8, e.studyEffort + EFFORT_STUDY[p.effort]);
-  e.grades = clamp(Math.round(e.grades * 0.5 + 0.5 * (p.smarts * 0.6 + 25 + e.studyEffort * 6 + rng.int(-10, 10))));
+  e.grades = clamp(Math.round(e.grades * 0.5 + 0.5 * (p.smarts * 0.6 + 25 + e.studyEffort * 6 + (p.talents.learner - 50) * 0.25 + rng.int(-10, 10))));
   const effort = e.studyEffort;
   e.studyEffort = Math.max(0, e.studyEffort * 0.5);
   if ((e.scholarship ?? 0) > 0 && e.grades < 70) {
@@ -489,7 +490,7 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   }
   job.yearsInRole = (job.yearsInRole ?? 0) + 1;
   // Promotions need standout performance, time in the role, and an opening: rarer at the top and in a recession.
-  const openingChance = (p.economy.climate === "boom" ? 0.55 : p.economy.climate === "recession" ? 0.2 : 0.4) * Math.max(0.3, 1 - 0.15 * job.tier);
+  const openingChance = (p.economy.climate === "boom" ? 0.55 : p.economy.climate === "recession" ? 0.2 : 0.4) * Math.max(0.3, 1 - 0.15 * job.tier) * (1 + (p.talents.leadership - 50) / 150);
   if (!job.partTime && job.performance > 85 && job.yearsInRole >= 3 + job.tier && rng.chance(openingChance)) {
     const ev = promotionEvent(p);
     if (ev) notices.push({ kind: "event", event: ev });
@@ -560,7 +561,7 @@ function driftStats(p: PlayerState, rng: Rng) {
   const temperament = Math.round(((p.outlook ?? 84) - 84) * 0.3);
   const target = 62 + temperament + moodBonus + rentBonus + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
   p.happiness += Math.round((target - p.happiness) * 0.1) + rng.int(-2, 2);
-  if (p.age >= 40) p.looks -= rng.int(0, p.age >= 60 ? 3 : 2);
+  if (p.age >= 40 && !(p.talents.graceful > 50 && rng.chance((p.talents.graceful - 50) / 130))) p.looks -= rng.int(0, p.age >= 60 ? 3 : 2);
   if (p.age >= 70) p.smarts -= rng.int(0, 1);
 }
 
@@ -584,6 +585,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
 
   processSocial(p, rng, notices); // 2. social graph
   processFriendLoans(p, rng, notices);
+  processTemper(p, rng, notices);
   processChildren(p, rng, notices);
   processIntimacy(p, prevAnnual, rng, notices);
   processAssets(p, rng); // 3. asset economics

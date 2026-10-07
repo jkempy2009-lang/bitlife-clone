@@ -124,6 +124,7 @@ export function electionOdds(p: PlayerState, tier: number, mode: "run" | "reelec
     { label: "Base appeal", value: 0.12 },
     { label: "Popularity", value: p.politics.popularity / 150 },
     { label: "Charisma", value: p.skills.charisma / 320 },
+    { label: "Public speaking", value: (p.talents.speaking - 50) / 500 },
     { label: "Fame", value: p.fame / 450 },
     { label: "Character", value: (p.karma - 50) / 350 },
     { label: "Party brand", value: partyBonus(p) },
@@ -380,7 +381,7 @@ export function giveSpeech(p0: PlayerState, rng: Rng): ActionResult {
   if (p.age < 18) return { player: p0 };
   if ((p.annual.speech ?? 0) >= 1) return { player: p0, notices: [info("Voice Hoarse", "You've already given a major speech this year.")] };
   p.annual.speech = 1;
-  const gain = Math.max(2, Math.round((rng.int(5, 12) + Math.floor(p.skills.charisma / 20)) * (1 - p.politics.popularity / 130)));
+  const gain = Math.max(2, Math.round((rng.int(5, 12) + Math.floor(p.skills.charisma / 20) + Math.round((p.talents.speaking - 50) / 10)) * (1 - p.politics.popularity / 130)));
   p.politics.popularity = clamp(p.politics.popularity + gain);
   p.skills.charisma = clamp(p.skills.charisma + 1);
   changeStat(p, "fame", 1);

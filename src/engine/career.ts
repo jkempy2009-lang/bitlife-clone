@@ -190,7 +190,7 @@ export function askForRaise(p0: PlayerState, rng: Rng): ActionResult {
     return { player: p0, notices: [{ kind: "info", title: "Once Is Enough", body: "You already made your case this year.", tone: "neutral" }] };
   }
   p.annual.raise = 1;
-  const chance = clamp(0.1 + (job.performance - 50) / 100 + (p.skills.charisma - 30) / 400 + (p.economy.climate === "boom" ? 0.1 : p.economy.climate === "recession" ? -0.15 : 0), 0.03, 0.8);
+  const chance = clamp(0.1 + (job.performance - 50) / 100 + (p.skills.charisma - 30) / 400 + (p.talents.speaking - 50) / 500 + (p.economy.climate === "boom" ? 0.1 : p.economy.climate === "recession" ? -0.15 : 0), 0.03, 0.8);
   if (rng.chance(chance)) {
     const pct = rng.int(6, 14);
     job.salary = Math.round(job.salary * (1 + pct / 100));

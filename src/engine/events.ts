@@ -250,7 +250,7 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng): string
 
 function pickBranch(p: PlayerState, option: ChoiceOption, rng: Rng): { fx: ChoiceEffects; success: boolean } {
   if (!option.chance) return { fx: option.effects, success: true };
-  const shift = option.chance.scaleBy ? (p[option.chance.scaleBy] - 50) / 250 : 0;
+  const shift = (option.chance.scaleBy ? (p[option.chance.scaleBy] - 50) / 250 : 0) + (p.talents.luck - 50) / 600;
   const prob = clamp(option.chance.p + shift, 0.02, 0.98);
   const success = rng.chance(prob);
   return { fx: success ? option.effects : option.chance.failure, success };

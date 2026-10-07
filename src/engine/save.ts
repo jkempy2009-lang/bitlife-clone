@@ -1,4 +1,5 @@
-import type { PlayerState } from "@/types/game.types";
+import type { PlayerState, Talents } from "@/types/game.types";
+import { TALENT_KEYS } from "@/data/talents";
 import { hydrateAthlete } from "./athleteState";
 import { upgradeBusiness } from "./business";
 import { hydrateCrimeLife } from "./justiceState";
@@ -63,14 +64,15 @@ function readSlot(key: string): SaveData | null {
 }
 
 /** Stable pseudo-random gifts for saves made before talents existed. */
-function legacyTalents(id: string) {
+function legacyTalents(id: string): Talents {
+  const out = {} as Talents;
   let h = 2166136261;
-  const next = () => {
-    for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619) + 0x9e3779b9;
-    h ^= h >>> 15;
-    return 15 + (Math.abs(h) % 70);
-  };
-  return { athletic: next(), musical: next(), acting: next(), charisma: next(), business: next(), discipline: next() };
+  for (const k of TALENT_KEYS) {
+    for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619) + k.length;
+    h ^= h >>> 13;
+    out[k] = 15 + (Math.abs(h) % 70);
+  }
+  return out;
 }
 
 /** Fill in fields added after a save was written so older saves keep working. */
@@ -96,7 +98,7 @@ export function hydrate(p: PlayerState): PlayerState {
     savingsLevel: p.savingsLevel ?? 1,
     royal: p.royal ?? (p.royalRank === "none" ? null : { crown: p.royalRank === "King" || p.royalRank === "Queen" ? "self" : "parent", hrh: true, peerage: null, line: p.royalRank === "King" || p.royalRank === "Queen" ? 0 : 1 }),
     outlook: p.outlook ?? 84,
-    talents: p.talents ?? legacyTalents(p.id),
+    talents: { ...legacyTalents(p.id), ...(p.talents ?? {}) },
     matureContent: p.matureContent ?? true,
     effort: p.effort ?? "steady",
     habits: p.habits ?? { exercise: 1, diet: 1 },
