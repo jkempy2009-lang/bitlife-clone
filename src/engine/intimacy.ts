@@ -93,7 +93,7 @@ export function exposeAffair(p: PlayerState, rng: Rng, notices: Notices) {
   for (const r of p.relatives) if (r.alive && r.relation === "Child") r.relationshipBar = clamp(r.relationshipBar - 8);
   if (rng.chance(clamp(0.25 + jealousy / 150, 0.1, 0.9))) {
     const name = partner.name;
-    endRelationship(p, married ? "divorce" : "breakup");
+    endRelationship(p, married ? "divorce" : "breakup", true);
     p.flags = p.flags.filter((f) => f !== "open_relationship");
     changeStat(p, "happiness", -12);
     const body = `${name} found out about the affair and ended things${married ? " in divorce court" : ""}.`;
@@ -422,7 +422,7 @@ export function leaveForLover(p0: PlayerState, loverId: string, rng: Rng): Actio
   const partner = getPartner(p);
   if (partner) {
     const married = partner.partnerStatus === "married";
-    endRelationship(p, married ? "divorce" : "breakup");
+    endRelationship(p, married ? "divorce" : "breakup", true);
     changeStat(p, "karma", -4);
   }
   p.flags = p.flags.filter((f) => f !== "open_relationship");

@@ -9,6 +9,7 @@ import { clamp } from "@/lib/format";
 import type { Rng } from "@/lib/rng";
 import { COUNTRIES, MONARCHIES, getCountry } from "@/data/countries";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
+import { occupationFor } from "@/data/occupations";
 
 export const MAX_AGE = 120;
 
@@ -185,7 +186,7 @@ export function makeRelativeBase(
   incomeTier: number,
   bar: number,
 ): Relative {
-  return {
+  const rel: Relative = {
     id: rng.id(),
     relation,
     name,
@@ -199,6 +200,10 @@ export function makeRelativeBase(
     looks: rng.int(20, 90),
     ...rollPersonality(rng),
   };
+  if (age >= 20 && relation !== "Pet" && relation !== "Child" && relation !== "Grandchild" && relation !== "Grandparent") {
+    rel.occupation = age >= 67 ? `Retired ${occupationFor(incomeTier, rng).toLowerCase()}` : occupationFor(incomeTier, rng);
+  }
+  return rel;
 }
 
 export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {

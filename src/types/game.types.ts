@@ -47,6 +47,10 @@ export interface Relative {
   encounters?: number;
   deathAge?: number;
   deathYear?: number;
+  /** Calendar year you married them (partners). */
+  marriedYear?: number;
+  /** Short occupation blurb for flavour ("Nurse", "Electrician"). */
+  occupation?: string;
 }
 
 export interface Property {

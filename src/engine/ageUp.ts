@@ -35,6 +35,7 @@ import { processMob } from "./underworld";
 import { hobbyIncome, processHobbies } from "./hobbies";
 import { processAthlete, processBusiness, processInfluencer } from "./paths";
 import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
+import { SHARED_LIVING_FACTOR, SPOUSE_TAX, childSupportDue, marriedPartner, spouseIncome } from "./household";
 import { LIFESTYLES, RENT_TIERS, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
 type Notices = NonNullable<ActionResult["notices"]>;
@@ -230,7 +231,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   for (const a of p.music.albums) a.royalty = a.royalty < 500 ? 0 : Math.round(a.royalty * 0.55);
 
   const adult = p.age >= 18;
-  if (adult && p.age < 65 && !p.currentJob && !isRoyal(p) && !p.isInPrison && !p.music.signed && p.pension === 0) {
+  if (adult && p.age < 65 && !p.currentJob && !isRoyal(p) && !p.isInPrison && !p.music.signed && p.pension === 0 && !marriedPartner(p)) {
     gross += 11_000;
   }
   const allowance = isRoyal(p) ? Math.round(ROYAL_ALLOWANCE[p.royalRank] * (p.royalRespect < 20 ? 0.5 : 1)) : 0;
@@ -239,6 +240,10 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   const tax = incomeTaxFor(p.residence.country, gross - offBooks);
   p.taxesPaidThisYear = tax;
   p.bankBalance += gross - tax + allowance;
+  // A spouse's earnings join the household pot (taxed at a flat effective rate), and sharing a home costs extra.
+  const spouse = marriedPartner(p);
+  const spouseNet = spouse && !p.isInPrison ? Math.round(spouseIncome(spouse) * (1 - SPOUSE_TAX)) : 0;
+  p.bankBalance += spouseNet;
 
   let living = 0;
   const parentSupport = p.age < 21 && livingRelatives(p, "Parent").length > 0;
@@ -246,7 +251,8 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
     // Lifestyle inflation: the more you earn, the more you spend.
     const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
     const ls = LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1];
-    living = BASE_LIVING * ls.base + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross - 45_000) * ls.slope;
+    living = BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 45_000) * ls.slope;
+    living += childSupportDue(p, gross);
   }
   living = Math.round(living);
   p.bankBalance -= living;

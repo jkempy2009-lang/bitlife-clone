@@ -14,6 +14,7 @@ import {
   randomGender,
   randomName,
 } from "./state";
+import { settleDivorce } from "./household";
 
 export function firstName(r: Relative) {
   return r.name.split(" ")[0];
@@ -40,6 +41,7 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
     const first = randomName(p.birthCountry, gender, rng).first;
     const rel = makeRelativeBase(rng, "Partner", `${first} ${rng.pick(country.lastNames)}`, age, gender, rng.int(1, 5), rng.int(55, 85));
     rel.partnerStatus = spec.partnerStatus ?? "dating";
+    if (rel.partnerStatus === "married") rel.marriedYear = p.year;
     return rel;
   }
   const gender = rng.pick(["Male", "Female"]);
@@ -135,15 +137,13 @@ export function adoptChild(p0: PlayerState, rng: Rng): ActionResult {
   return { player: p, notices: [info("Welcome Home!", body, "good")] };
 }
 
-export function endRelationship(p: PlayerState, how: "breakup" | "divorce") {
+export function endRelationship(p: PlayerState, how: "breakup" | "divorce", atFault = false) {
   const partner = getPartner(p);
   if (!partner) return;
   partner.partnerStatus = "ex";
-  if (how === "divorce" && !p.flags.includes("was_divorced")) p.flags.push("was_divorced");
-  if (how === "divorce" && p.bankBalance > 0) {
-    const lost = Math.round(p.bankBalance * 0.3);
-    p.bankBalance -= lost;
-    addLog(p, `Your divorce from ${partner.name} cost you ${money(lost)}.`);
+  if (how === "divorce") {
+    if (!p.flags.includes("was_divorced")) p.flags.push("was_divorced");
+    addLog(p, settleDivorce(p, partner, atFault));
   }
 }
 
@@ -276,6 +276,7 @@ export function propose(p0: PlayerState, rng: Rng): ActionResult {
   }
   if (rng.chance(clamp(partner.relationshipBar / 110, 0.05, 0.95))) {
     partner.partnerStatus = "married";
+    partner.marriedYear = p.year;
     partner.relationshipBar = clamp(partner.relationshipBar + 15);
     changeStat(p, "happiness", 12);
     p.queuedEvents.push("wedding_day");

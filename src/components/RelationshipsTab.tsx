@@ -34,6 +34,8 @@ import {
   spiceItUp,
   swingerClub,
 } from "@/engine/intimacy";
+import { money } from "@/lib/format";
+import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
 
 const RELATION_ORDER = ["Partner", "Lover", "Parent", "Child", "Grandchild", "Sibling", "Grandparent", "Friend", "Pet"] as const;
@@ -202,7 +204,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
           <div className="text-4xl">{ICONS[rel.relation]}</div>
           <div className="min-w-0">
             <div className="truncate text-lg font-bold">{rel.name}</div>
-            <div className="text-sm text-slate-400">{label(rel)} · {rel.age} years old</div>
+            <div className="text-sm text-slate-400">{label(rel)} · {rel.age} years old{rel.occupation ? ` · ${rel.occupation}` : ""}</div>
           </div>
         </div>
         <div className="mt-3">
@@ -214,7 +216,8 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Pill>Health {Math.round(rel.health)}</Pill>
-          {rel.relation === "Partner" && <Pill tone="blue">{rel.partnerStatus === "married" ? "Married" : "Dating"}</Pill>}
+          {rel.relation === "Partner" && <Pill tone="blue">{rel.partnerStatus === "married" ? `Married${rel.marriedYear ? ` ${Math.max(0, p.year - rel.marriedYear)} yrs` : ""}` : "Dating"}</Pill>}
+          {rel.relation === "Partner" && rel.partnerStatus === "married" && <Pill tone="green">Adds ≈{money(Math.round(spouseIncome(rel) * 0.75))}/yr</Pill>}
           {rel.relation === "Partner" && open && <Pill tone="amber">Open relationship</Pill>}
           {(rel.relation === "Partner" || rel.relation === "Lover" || rel.relation === "Friend") && rel.traits?.map((t) => <Pill key={t} tone="slate">{t}</Pill>)}
         </div>

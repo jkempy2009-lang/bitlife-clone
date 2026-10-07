@@ -203,6 +203,7 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng) {
     const partner = getPartner(p);
     if (partner && partner.partnerStatus !== "married") {
       partner.partnerStatus = "married";
+      partner.marriedYear = p.year;
       p.queuedEvents.push("wedding_day");
     }
   }
