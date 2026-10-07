@@ -10,6 +10,7 @@ import type { Rng } from "@/lib/rng";
 import { COUNTRIES, MONARCHIES, getCountry } from "@/data/countries";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { occupationFor } from "@/data/occupations";
+import { newRoyalLife, royalStyleText } from "./royalty";
 import { newAthleteState } from "./athleteState";
 import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
 
@@ -83,7 +84,7 @@ export function hasAnyDegree(p: PlayerState, reqs: string[] | undefined): boolea
 export function playerTitle(p: PlayerState): string {
   if (!p.alive) return "Deceased";
   if (p.isInPrison) return "Inmate";
-  if (isRoyal(p)) return p.royalRank === "none" ? "" : p.royalRank;
+  if (p.royal) return royalStyleText(p) || (p.royal.peerage ?? "Lord");
   if (p.music.signed) return `${p.music.status === "band" ? "Band Member" : "Recording Artist"}`;
   if (p.currentJob) return p.currentJob.title;
   if (p.business) return "Business Owner";
@@ -256,6 +257,21 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     );
   }
 
+  // Royal families: one parent reigns, and birth order decides whether you are the heir or a younger child.
+  let royalLife: ReturnType<typeof newRoyalLife> | null = null;
+  if (scenario === "royal") {
+    const heir = rng.chance(0.6);
+    if (heir) for (let i = relatives.length - 1; i >= 2; i--) relatives.splice(i, 1);
+    else if (relatives.length === 2) {
+      relatives.push(makeRelativeBase(rng, "Sibling", `${randomName(countryName, "Female", rng).first} ${lastName}`, rng.int(2, 9), "Female", tier, rng.int(40, 85)));
+    }
+    const queenReigns = rng.chance(0.5);
+    relatives[0].royalTitle = queenReigns ? "Queen" : "Queen Consort";
+    relatives[1].royalTitle = queenReigns ? "Prince Consort" : "King";
+    for (const sib of relatives.filter((r) => r.relation === "Sibling")) sib.royalTitle = sib.gender === "Male" ? "Prince" : "Princess";
+    royalLife = newRoyalLife(relatives.filter((r) => r.relation === "Sibling").length);
+  }
+
   // Grandparents: each side may still be alive.
   for (const gender of ["Female", "Male"] as const) {
     if (rng.chance(0.65)) {
@@ -307,6 +323,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     specialCareerPath: royal ? "royalty" : "none",
     specialCareers: [],
     royalRank: royal ? royalRankFor(gender, false) : "none",
+    royal: royalLife,
     royalRespect: royal ? 60 : 50,
     nation: { economy: 50, freedom: 50, military: 50 },
     education: educationForAge(0),

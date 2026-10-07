@@ -19,7 +19,6 @@ import {
   livingRelatives,
   logHeader,
   netWorth,
-  royalRankFor,
   clampAll,
   MAX_AGE,
 } from "./state";
@@ -28,6 +27,7 @@ import { endRelationship, maybeGrandchild } from "./social";
 import { processFriendLoans } from "./friends";
 import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
+import { ensureSuccession } from "./royalty";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
 import { selectEvents } from "./events";
 import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
@@ -534,13 +534,7 @@ function processRoyalty(p: PlayerState, rng: Rng, notices: Notices) {
   for (const k of ["economy", "freedom", "military"] as const) {
     p.nation[k] += p.nation[k] > 50 ? -1 : p.nation[k] < 50 ? 1 : 0;
   }
-  if ((p.royalRank === "Prince" || p.royalRank === "Princess") && livingRelatives(p, "Parent").length === 0) {
-    p.royalRank = royalRankFor(p.gender, true);
-    changeStat(p, "royalRespect", 10);
-    const body = `With your parents gone, you are crowned ${p.royalRank}! The nation holds its breath.`;
-    addLog(p, body);
-    notices.push(info("Long Live the Crown!", body, "jackpot"));
-  }
+  ensureSuccession(p, rng, notices);
 }
 
 const MILESTONES: Record<number, { title: string; body: string }> = {

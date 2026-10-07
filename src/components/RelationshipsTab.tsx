@@ -111,7 +111,7 @@ export default function RelationshipsTab() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate font-semibold">{r.name}</span>
-                    <span className="shrink-0 text-xs text-slate-400">{label(r)} · {r.age}</span>
+                    <span className="shrink-0 text-xs text-slate-400">{label(r)}{r.royalTitle ? ` · ${r.royalTitle}` : ""} · {r.age}</span>
                   </div>
                   <div className="mt-1.5">
                     <MiniBar value={r.relationshipBar} color={barColor(r.relationshipBar)} />
@@ -347,7 +347,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
           <div className="text-4xl">{ICONS[rel.relation]}</div>
           <div className="min-w-0">
             <div className="truncate text-lg font-bold">{rel.name}</div>
-            <div className="text-sm text-slate-400">{label(rel)} · {rel.age} years old{rel.occupation ? ` · ${rel.occupation}` : ""}</div>
+            <div className="text-sm text-slate-400">{label(rel)}{rel.royalTitle ? ` · ${rel.royalTitle}` : ""} · {rel.age} years old{rel.occupation ? ` · ${rel.occupation}` : ""}</div>
           </div>
         </div>
         <div className="mt-3">

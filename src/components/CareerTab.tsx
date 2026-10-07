@@ -28,6 +28,7 @@ import {
   workHarder,
 } from "@/engine/career";
 import { isRoyal } from "@/engine/state";
+import { royalStyleText } from "@/engine/royalty";
 import { EFFORT_INFO, hasCommitment } from "@/engine/occupation";
 import { CERTIFICATES, CERT_BY_ID } from "@/data/certificates";
 import { money } from "@/lib/format";
@@ -337,12 +338,19 @@ function CorporateCareer() {
 function RoyalDuties() {
   const { player: p, act } = useGame();
   const used = (k: string) => (p.annual[k] ?? 0) >= 1;
+  const sovereign = p.royal?.crown === "self" || p.royalRank === "King" || p.royalRank === "Queen";
   return (
     <div className="flex flex-col gap-3">
-      <SectionTitle>Royal Duties</SectionTitle>
+      <SectionTitle>{sovereign ? "Royal Duties" : "Royal Engagements"}</SectionTitle>
       <Card className="border-purple-500/40 bg-gradient-to-br from-purple-950/60 to-slate-800/70">
         <div className="text-xs uppercase tracking-wider text-purple-300">{p.birthCountry}</div>
-        <div className="text-2xl font-bold">{p.royalRank} {p.firstName}</div>
+        <div className="text-2xl font-bold">{royalStyleText(p) || p.royalRank} {p.firstName}</div>
+        {p.royal && !sovereign && (
+          <div className="mt-1 text-sm text-slate-300">
+            {p.royal.line === 1 ? "Heir to the throne" : `Number ${p.royal.line} in the line of succession`}
+            {p.royal.peerage ? ` · ${p.royal.peerage}` : ""}
+          </div>
+        )}
         <div className="mt-3">
           <StatBar label="Royal Respect (0 means a coup)" value={p.royalRespect} color="purple" />
         </div>
@@ -354,32 +362,37 @@ function RoyalDuties() {
       </Card>
 
       <Button variant="gold" onClick={() => act((pl) => holdGala(pl))} disabled={used("gala")}>
-        🎉 Hold a Public Gala (−$100,000, +10 Respect)
+        🎉 {sovereign ? "Hold a Public Gala (−$100,000, +10 Respect)" : "Host a Charity Gala (−$100,000, +10 Respect)"}
       </Button>
-      <Button variant="danger" onClick={() => act((pl, rng) => executeCitizen(pl, rng))} disabled={used("exec")}>
-        🪓 Execute a Citizen (Karma → 0, −30 Respect)
-      </Button>
+      {sovereign ? (
+        <>
+          <Button variant="danger" onClick={() => act((pl, rng) => executeCitizen(pl, rng))} disabled={used("exec")}>
+            🪓 Execute a Citizen (Karma → 0, −30 Respect)
+          </Button>
 
-      <SectionTitle hint="one per year">Pass a Decree</SectionTitle>
-      <div className="flex flex-col gap-2">
-        {DECREES.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            disabled={used("decree")}
-            onClick={() => act((pl) => passDecree(pl, d.id))}
-            className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3 text-left transition-colors hover:border-purple-400/60 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <div className="font-semibold">{d.name}</div>
-            <div className="text-xs text-slate-400">{d.blurb}</div>
-            <div className="mt-1 text-xs text-slate-500">
-              Respect {d.respect >= 0 ? "+" : ""}{d.respect}
-            </div>
-          </button>
-        ))}
-      </div>
+          <SectionTitle hint="one per year">Pass a Decree</SectionTitle>
+          <div className="flex flex-col gap-2">
+            {DECREES.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                disabled={used("decree")}
+                onClick={() => act((pl) => passDecree(pl, d.id))}
+                className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3 text-left transition-colors hover:border-purple-400/60 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <div className="font-semibold">{d.name}</div>
+                <div className="text-xs text-slate-400">{d.blurb}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Respect {d.respect >= 0 ? "+" : ""}{d.respect}
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-slate-500">Only the sovereign sets policy. Princes and princesses carry out engagements, and the crown passes to the eldest child when the sovereign dies. If a sibling is crowned you are created a duke or duchess, and your own children will not be Princes or Princesses.</p>
+      )}
       <p className="text-xs text-slate-500">Royals can't hold ordinary jobs. They receive a state allowance, tax-free.</p>
     </div>
   );
 }
-

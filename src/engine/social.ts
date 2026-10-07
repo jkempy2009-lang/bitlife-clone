@@ -16,6 +16,7 @@ import {
 } from "./state";
 import { settleDivorce } from "./household";
 import { adultSpec } from "./people";
+import { royalStyleForChild } from "./royalty";
 
 export function firstName(r: Relative) {
   return r.name.split(" ")[0];
@@ -55,6 +56,8 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
 
 export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Relative {
   const rel = createRelative(p, spec, rng);
+  if (rel.relation === "Child") rel.royalTitle = royalStyleForChild(p, rel.gender);
+  else if (rel.relation === "Sibling" && p.royal?.crown === "parent") rel.royalTitle = rel.gender === "Male" ? "Prince" : "Princess";
   p.relatives.push(rel);
   if (rel.relation === "Child") {
     p.stats.childrenBorn += 1;

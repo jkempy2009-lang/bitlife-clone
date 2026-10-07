@@ -115,7 +115,7 @@ export default function TombstoneOverlay() {
                     className="rounded-2xl border border-slate-600 bg-slate-800 p-3 text-left hover:border-amber-400"
                   >
                     <div className="font-semibold">{k.name}</div>
-                    <div className="text-xs text-slate-400">Age {k.age} · {k.gender} · Smarts {k.smarts} · Looks {k.looks}</div>
+                    <div className="text-xs text-slate-400">Age {k.age} · {k.gender}{k.royalTitle ? ` · ${k.royalTitle}` : ""} · Smarts {k.smarts} · Looks {k.looks}</div>
                   </button>
                 ))}
               </div>

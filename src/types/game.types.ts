@@ -51,6 +51,8 @@ export interface Relative {
   tastes?: Record<string, "like" | "limit">;
   /** Which tastes the player has discovered. */
   knownTastes?: string[];
+  /** Royal style of this person: "King", "Queen", "Prince", "Princess", "Duke of X", "Lord", "Lady". */
+  royalTitle?: string;
   /** Calendar year you married them (partners). */
   marriedYear?: number;
   /** Short occupation blurb for flavour ("Nurse", "Electrician"). */
@@ -381,6 +383,18 @@ export interface PoliticsState {
   party: string | null;
 }
 
+/** Where you stand in a royal family. Titles follow the British model (absolute primogeniture). */
+export interface RoyalLife {
+  /** Who holds the crown relative to you. */
+  crown: "self" | "parent" | "grandparent" | "sibling" | "other";
+  /** Styled His/Her Royal Highness: only children and grandchildren of the reigning sovereign. */
+  hrh: boolean;
+  /** A dukedom or courtesy title you hold, e.g. "Duke of Kent". */
+  peerage: string | null;
+  /** Position in the line of succession (0 = sovereign, 1 = heir). */
+  line: number;
+}
+
 export interface IntimacyPrefs {
   /** Use an age window around your own age instead of fixed limits. */
   ageAuto: boolean;
@@ -702,6 +716,8 @@ export interface PlayerState {
   specialCareerPath: SpecialCareerPath;
   specialCareers: Array<"actor" | "musician">;
   royalRank: RoyalRank;
+  /** Line of succession, titles and style (null if not from a royal family). */
+  royal: RoyalLife | null;
   royalRespect: number;
   nation: NationState;
   education: EducationState;

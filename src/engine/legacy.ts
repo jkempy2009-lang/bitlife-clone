@@ -3,6 +3,7 @@ import type { Rng } from "@/lib/rng";
 import { money } from "@/lib/format";
 import { newAthleteState } from "./athleteState";
 import { inheritBusiness } from "./business";
+import { inheritRoyalty } from "./royalty";
 import {
   addLog,
   clone,
@@ -12,7 +13,6 @@ import {
   logHeader,
   makeRelativeBase,
   netWorth,
-  royalRankFor,
 } from "./state";
 
 export interface DeathSummary {
@@ -115,8 +115,8 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     relatives.push({ ...gp, id: rng.id(), relation: "Grandparent" });
   }
 
-  const royalParent = isRoyal(old);
-  const crowned = royalParent && !survivingPartner && (old.royalRank === "King" || old.royalRank === "Queen");
+  const royalHeir = inheritRoyalty(old, child, heirsLeft, rng);
+  const royalParent = !!royalHeir || isRoyal(old);
   const next: PlayerState = {
     ...fresh,
     firstName,
@@ -144,9 +144,10 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     properties: clone(old.properties),
     vehicles: clone(old.vehicles),
     currentJob: null,
-    specialCareerPath: royalParent ? "royalty" : "none",
+    specialCareerPath: royalHeir && royalHeir.rank !== "none" ? "royalty" : "none",
     specialCareers: [],
-    royalRank: royalParent ? royalRankFor(child.gender, crowned) : "none",
+    royalRank: royalHeir ? royalHeir.rank : "none",
+    royal: royalHeir ? royalHeir.royal : null,
     royalRespect: royalParent ? 60 : 50,
     nation: royalParent ? { ...old.nation } : { economy: 50, freedom: 50, military: 50 },
     education: educationForAge(child.age),
@@ -195,6 +196,6 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
   }
   if (bizHeir.business) next.flags.push("business_owner");
   if (bizHeir.note) addLog(next, bizHeir.note);
-  if (royalParent) addLog(next, crowned ? `The crown passes to you. Long live the ${next.royalRank}!` : `You remain in the royal line as a ${next.royalRank}.`);
+  if (royalHeir) addLog(next, royalHeir.log);
   return next;
 }

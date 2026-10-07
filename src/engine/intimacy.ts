@@ -12,6 +12,7 @@ import { addDisease } from "./events";
 import { startTrial } from "./crime";
 import { makeRelativeBase, randomGender, randomName } from "./state";
 import { adultSpec, tasteOf } from "./people";
+import { royalStyleForChild } from "./royalty";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
@@ -514,6 +515,7 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
     kid.smarts = clamp(Math.round((p.smarts + 50) / 2 + rng.int(-15, 15)));
     kid.looks = clamp(Math.round((p.looks + 50) / 2 + rng.int(-15, 15)));
     kid.health = rng.int(78, 100);
+    kid.royalTitle = royalStyleForChild(p, gender);
     p.relatives.push(kid);
     p.stats.childrenBorn += 1;
     changeStat(p, "happiness", 12);

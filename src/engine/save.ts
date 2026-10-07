@@ -82,6 +82,7 @@ function hydrate(p: PlayerState): PlayerState {
     intimacy: p.intimacy ?? { ageAuto: true, ageMin: 18, ageMax: 60, genders: [], interests: ["sensual", "playful"] },
     retirementSavings: p.retirementSavings ?? 0,
     savingsLevel: p.savingsLevel ?? 1,
+    royal: p.royal ?? (p.royalRank === "none" ? null : { crown: p.royalRank === "King" || p.royalRank === "Queen" ? "self" : "parent", hrh: true, peerage: null, line: p.royalRank === "King" || p.royalRank === "Queen" ? 0 : 1 }),
     matureContent: p.matureContent ?? true,
     effort: p.effort ?? "steady",
     habits: p.habits ?? { exercise: 1, diet: 1 },
