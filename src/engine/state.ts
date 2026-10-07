@@ -290,6 +290,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     properties: [],
     vehicles: [],
     currentJob: null,
+    careerYears: {},
     specialCareerPath: royal ? "royalty" : "none",
     specialCareers: [],
     royalRank: royal ? royalRankFor(gender, false) : "none",

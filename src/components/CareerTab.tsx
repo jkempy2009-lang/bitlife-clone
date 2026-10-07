@@ -10,6 +10,7 @@ import {
 } from "@/data/careersRegistry";
 import {
   applyForJob,
+  askForRaise,
   dropOut,
   enrollProgram,
   executeCitizen,
@@ -21,6 +22,7 @@ import {
   passDecree,
   quitJob,
   retire,
+  startingTier,
   studyHarder,
   workHarder,
 } from "@/engine/career";
@@ -202,9 +204,45 @@ function Academics() {
 // Corporate career
 // ---------------------------------------------------------------------------
 
+function JobBoard() {
+  const { player: p, act } = useGame();
+  return (
+    <div className="flex flex-col gap-2">
+      {CAREER_LINES.filter((l) => !l.pack).map((line) => {
+        const elig = jobEligibility(p, line);
+        const applied = (p.annual[`apply:${line.id}`] ?? 0) >= 1;
+        const exp = p.careerYears[line.id] ?? 0;
+        const tier = startingTier(p, line);
+        return (
+          <div key={line.id} className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">{line.emoji}</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{line.ladder[tier].title}</div>
+                <div className="text-xs text-slate-400">{line.name} · {money(line.ladder[tier].salary)}/yr → {money(line.ladder[line.ladder.length - 1].salary)}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Needs {line.requirements.degrees?.length ? "degree, " : ""}{line.requirements.minSmarts}+ Smarts{line.requirements.minLooks ? `, ${line.requirements.minLooks}+ Looks` : ""}, age {line.minAge}+
+                </div>
+                {exp >= 1 && <div className="mt-1 text-xs text-emerald-300">🧰 {Math.round(exp)} yrs experience{tier > 0 ? ": you'd skip entry level" : ""}</div>}
+                {!elig.ok && <div className="mt-1 text-xs font-medium text-rose-300">🔒 {elig.reason}</div>}
+                {elig.ok && elig.partTime && <div className="mt-1 text-xs font-medium text-sky-300">⏱️ Part-time while you study (about {money(Math.round(line.ladder[tier].salary * 0.45))}/yr)</div>}
+                {elig.ok && elig.switching && <div className="mt-1 text-xs font-medium text-amber-300">↔️ You'd leave your current job. Failed interviews can get back to your boss.</div>}
+              </div>
+              <Button variant="primary" className="shrink-0 px-3 py-1.5" disabled={!elig.ok || applied} onClick={() => act((pl, rng) => applyForJob(pl, line.id, rng))}>
+                {applied ? "Applied" : "Apply"}
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CorporateCareer() {
   const { player: p, act } = useGame();
   const job = p.currentJob;
+  const experience = Object.entries(p.careerYears).filter(([, y]) => y >= 1).sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -220,15 +258,20 @@ function CorporateCareer() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="primary" onClick={() => act((pl, rng) => workHarder(pl, rng))} disabled={(p.annual.work ?? 0) >= 1}>
-                💪 {(p.annual.work ?? 0) >= 1 ? "Worked hard" : "Work Harder"}
+                💪 {(p.annual.work ?? 0) >= 1 ? "Pushed this year" : "Extra Push"}
               </Button>
-              <Button variant="ghost" onClick={() => act((pl) => quitJob(pl))}>Quit Job</Button>
+              {!CAREER_LINES.find((l) => l.id === job.lineId)?.pack ? (
+                <Button variant="secondary" onClick={() => act((pl, rng) => askForRaise(pl, rng))} disabled={(p.annual.raise ?? 0) >= 1}>
+                  💵 {(p.annual.raise ?? 0) >= 1 ? "Asked already" : "Ask for a Raise"}
+                </Button>
+              ) : <span />}
               {!job.partTime && !CAREER_LINES.find((l) => l.id === job.lineId)?.pack && (
                 <Button variant="secondary" onClick={() => act((pl) => goPartTime(pl))}>⏱️ Go Part-Time</Button>
               )}
               {job.partTime && (
                 <Button variant="secondary" onClick={() => act((pl) => goFullTime(pl))}>⏱️ Go Full-Time</Button>
               )}
+              <Button variant="ghost" onClick={() => act((pl) => quitJob(pl))}>Quit Job</Button>
               {p.age >= 60 && (
                 <Button variant="gold" className="col-span-2" onClick={() => act((pl) => retire(pl))}>🏖️ Retire (pension ≈ {money(pensionFor(p))}/yr)</Button>
               )}
@@ -243,34 +286,30 @@ function CorporateCareer() {
               <div className="text-sm text-slate-400">Pension: {money(p.pension)} / year</div>
             </Card>
           ) : p.age >= 60 ? (
-            <Button variant="gold" onClick={() => act((pl) => retire(pl))}>🏖️ Retire</Button>
+            <Button variant="gold" onClick={() => act((pl) => retire(pl))}>🏖️ Retire (pension ≈ {money(pensionFor(p))}/yr)</Button>
           ) : null}
-          <SectionTitle hint="entry-level postings">Job Board</SectionTitle>
-          <div className="flex flex-col gap-2">
-            {CAREER_LINES.filter((l) => !l.pack).map((line) => {
-              const elig = jobEligibility(p, line);
-              const applied = (p.annual[`apply:${line.id}`] ?? 0) >= 1;
-              return (
-                <div key={line.id} className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{line.emoji}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold">{line.ladder[0].title}</div>
-                      <div className="text-xs text-slate-400">{line.name} · {money(line.ladder[0].salary)}/yr → {money(line.ladder[line.ladder.length - 1].salary)}</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        Needs {line.requirements.degrees?.length ? "degree, " : ""}{line.requirements.minSmarts}+ Smarts{line.requirements.minLooks ? `, ${line.requirements.minLooks}+ Looks` : ""}, age {line.minAge}+
-                      </div>
-                      {!elig.ok && <div className="mt-1 text-xs font-medium text-rose-300">🔒 {elig.reason}</div>}
-                      {elig.ok && elig.partTime && <div className="mt-1 text-xs font-medium text-sky-300">⏱️ Part-time while you study (about {money(Math.round(line.ladder[0].salary * 0.45))}/yr)</div>}
-                    </div>
-                    <Button variant="primary" className="shrink-0 px-3 py-1.5" disabled={!elig.ok || applied} onClick={() => act((pl, rng) => applyForJob(pl, line.id, rng))}>
-                      {applied ? "Applied" : "Apply"}
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+        </>
+      )}
+      {experience.length > 0 && (
+        <Card className="p-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Your experience</div>
+          <div className="flex flex-wrap gap-1.5">
+            {experience.map(([id, y]) => (
+              <Pill key={id} tone="blue">{CAREER_LINES.find((l) => l.id === id)?.name ?? id}: {Math.round(y)} yrs</Pill>
+            ))}
           </div>
+          <p className="mt-1.5 text-xs text-slate-500">Experience improves your hiring odds and lets you skip entry level in the same field.</p>
+        </Card>
+      )}
+      {job ? (
+        <details className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-300">🔍 Look for another job</summary>
+          <div className="mt-3"><JobBoard /></div>
+        </details>
+      ) : (
+        <>
+          <SectionTitle hint="your experience counts">Job Board</SectionTitle>
+          <JobBoard />
         </>
       )}
     </div>

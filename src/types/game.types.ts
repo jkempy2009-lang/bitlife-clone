@@ -311,6 +311,8 @@ export interface PlayerState {
 
   // Career tracking
   currentJob: Job | null;
+  /** Years of experience per career line (drives hiring odds and starting rank). */
+  careerYears: Record<string, number>;
   specialCareerPath: SpecialCareerPath;
   specialCareers: Array<"actor" | "musician">;
   royalRank: RoyalRank;

@@ -45,6 +45,15 @@ export interface Eligibility {
   reason?: string;
   /** The only way you can take this right now is part-time (you're studying). */
   partTime?: boolean;
+  /** You'd be leaving your current job for this one (searching while employed). */
+  switching?: boolean;
+}
+
+/** Entry rank earned by prior years in the same field. */
+export function startingTier(p: PlayerState, line: CareerLine): number {
+  if (line.pack) return 0;
+  const exp = p.careerYears[line.id] ?? 0;
+  return Math.min(line.ladder.length - 1, exp >= 12 ? 3 : exp >= 8 ? 2 : exp >= 4 ? 1 : 0);
 }
 
 export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
@@ -52,7 +61,13 @@ export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
   if (isRoyal(p)) return { ok: false, reason: "Royals can't hold ordinary jobs" };
   if (p.isInPrison) return { ok: false, reason: "You're in prison" };
   if (p.isFugitive) return { ok: false, reason: "Fugitives can't get hired" };
-  if (p.currentJob) return { ok: false, reason: "Quit your current job first" };
+  let switching = false;
+  if (p.currentJob) {
+    const cur = CAREER_BY_ID[p.currentJob.lineId];
+    if (p.currentJob.lineId === line.id) return { ok: false, reason: "You already work in this field" };
+    if (line.pack || cur?.pack) return { ok: false, reason: "Quit your current job first" };
+    switching = true;
+  }
   if (p.age < line.minAge) return { ok: false, reason: `Must be ${line.minAge}+` };
   const blocked = line.pack === "politics" ? null : blockerFor(p, "job");
   if (blocked) return { ok: false, reason: blocked };
@@ -76,7 +91,7 @@ export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
       return { ok: false, reason: `Needs ${min}+ ${skill[0].toUpperCase() + skill.slice(1)} skill` };
     }
   }
-  return { ok: true, partTime };
+  return { ok: true, partTime, switching };
 }
 
 export function degreeName(id: string): string {
@@ -106,17 +121,24 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   }
   p.annual[key] = 1;
   const guaranteed = line.pack === "actor" || line.id === "creator";
+  const exp = p.careerYears[line.id] ?? 0;
   const chance = clamp(
-    0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 - (hasFlag(p, "ex_con") ? 0.25 : 0) + hiringModifier(p.economy.climate),
+    0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - (hasFlag(p, "ex_con") ? 0.25 : 0) + hiringModifier(p.economy.climate),
     0.15,
     0.95,
   );
   if (!guaranteed && !rng.chance(chance)) {
-    const body = `You interviewed for a ${line.ladder[0].title} position but didn't get the job.`;
+    let body = `You interviewed for a ${line.ladder[0].title} position but didn't get the job.`;
+    if (elig.switching && rng.chance(0.15) && p.currentJob) {
+      p.currentJob.performance = clamp(p.currentJob.performance - 8);
+      changeStat(p, "happiness", -2);
+      body += ` Word got back to your boss that you were looking around, and the atmosphere at ${p.currentJob.company} has cooled.`;
+    }
     addLog(p, body);
     return { player: p, notices: [{ kind: "info", title: "Rejected", body, tone: "bad" }] };
   }
-  const job = makeJob(line, 0, rng);
+  const left = elig.switching ? p.currentJob : null;
+  const job = makeJob(line, startingTier(p, line), rng);
   if (elig.partTime) {
     job.partTime = true;
     job.salary = Math.round(job.salary * PART_TIME_FACTOR);
@@ -131,7 +153,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   }
   if (line.id === "military") setFlag(p, "veteran");
   recordCareerPeak(p);
-  const body = `You got a ${job.partTime ? "part-time " : ""}job as a ${job.title} at ${job.company}, earning ${money(job.salary)} a year!`;
+  const body = `You got a ${job.partTime ? "part-time " : ""}job as a ${job.title} at ${job.company}, earning ${money(job.salary)} a year!${left ? ` You handed in your notice at ${left.company}.` : ""}${job.tier > 0 ? ` Your ${Math.round(exp)} years of experience got you in above entry level.` : ""}`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "You're Hired!", body, tone: "good" }] };
 }
@@ -150,6 +172,32 @@ export function workHarder(p0: PlayerState, rng: Rng): ActionResult {
   const body = `You worked extra hard this year. Performance +${gain}.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Hard Work", body, tone: "good" }] };
+}
+
+/** Ask for a raise: depends on performance, tier and the economy. Once a year. */
+export function askForRaise(p0: PlayerState, rng: Rng): ActionResult {
+  const p = clone(p0);
+  const job = p.currentJob;
+  if (!job || CAREER_BY_ID[job.lineId]?.pack) return { player: p0 };
+  if ((p.annual.raise ?? 0) >= 1) {
+    return { player: p0, notices: [{ kind: "info", title: "Once Is Enough", body: "You already made your case this year.", tone: "neutral" }] };
+  }
+  p.annual.raise = 1;
+  const chance = clamp(0.1 + (job.performance - 50) / 100 + (p.skills.charisma - 30) / 400 + (p.economy.climate === "boom" ? 0.1 : p.economy.climate === "recession" ? -0.15 : 0), 0.03, 0.8);
+  if (rng.chance(chance)) {
+    const pct = rng.int(6, 14);
+    job.salary = Math.round(job.salary * (1 + pct / 100));
+    p.annualSalary = job.salary;
+    changeStat(p, "happiness", 6);
+    const body = `Your boss agreed: a ${pct}% raise to ${money(job.salary)}.`;
+    addLog(p, body);
+    return { player: p, notices: [{ kind: "info", title: "Raise Granted", body, tone: "good" }] };
+  }
+  job.performance = clamp(job.performance - (job.performance < 55 ? 12 : 4));
+  changeStat(p, "happiness", -4);
+  const body = job.performance < 45 ? "Your boss laughed. Then suggested you focus on your results first." : "Your boss said the budget isn't there this year.";
+  addLog(p, body);
+  return { player: p, notices: [{ kind: "info", title: "No Raise", body, tone: "bad" }] };
 }
 
 export function quitJob(p0: PlayerState): ActionResult {

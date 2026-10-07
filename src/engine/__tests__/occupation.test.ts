@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { createNewPlayer } from "../state";
 import { ageUp } from "../ageUp";
-import { applyForJob, auditionContract, goFullTime, goPartTime, leaveLabel, pensionFor, quitJob, retire } from "../career";
+import { applyForJob, askForRaise, auditionContract, goFullTime, goPartTime, leaveLabel, pensionFor, quitJob, retire } from "../career";
 import { startBusiness, sellBusiness } from "../paths";
 import { blockerFor } from "../occupation";
 import { setLifestyle } from "../world";
@@ -158,5 +158,45 @@ describe("lifestyle", () => {
     const lavish = run(2);
     expect(frugal.bankBalance).toBeGreaterThan(lavish.bankBalance);
     expect(lavish.happiness).toBeGreaterThan(frugal.happiness);
+  });
+});
+
+describe("career mobility", () => {
+  it("lets you search while employed, and experience in a field skips entry level", () => {
+    const { rng, p } = adult(21);
+    const employed = hire(p, "retail", rng);
+    expect(employed.currentJob!.tier).toBe(0);
+    const switched = hire({ ...employed, annual: {} }, "fast_food", rng);
+    expect(switched.currentJob!.lineId).toBe("fast_food");
+
+    const vet = { ...adult(22).p, careerYears: { retail: 9 } as Record<string, number> };
+    const hired = hire(vet, "retail", makeRng(22)).currentJob!;
+    expect(hired.tier).toBe(2);
+    expect(hired.salary).toBe(CAREER_BY_ID.retail.ladder[2].salary);
+  });
+
+  it("can't 'switch' into the field you already work in", () => {
+    const { rng, p } = adult(23);
+    const employed = hire(p, "retail", rng);
+    expect(applyForJob(employed, "retail", rng).notices?.[0]).toMatchObject({ title: "Can't Apply" });
+  });
+
+  it("asking for a raise helps strong performers more than weak ones, once a year", () => {
+    let strong = 0;
+    let weak = 0;
+    for (let s = 1; s <= 40; s++) {
+      const { rng, p } = adult(100 + s);
+      const j = hire(p, "retail", rng);
+      const a = structuredClone(j);
+      a.currentJob!.performance = 95;
+      const b = structuredClone(j);
+      b.currentJob!.performance = 35;
+      if (askForRaise(a, makeRng(s)).player.currentJob!.salary > a.currentJob!.salary) strong++;
+      if (askForRaise(b, makeRng(s)).player.currentJob!.salary > b.currentJob!.salary) weak++;
+    }
+    expect(strong).toBeGreaterThan(weak + 8);
+    const { rng, p } = adult(150);
+    const once = askForRaise(hire(p, "retail", rng), rng).player;
+    expect(askForRaise(once, rng).notices?.[0]).toMatchObject({ title: "Once Is Enough" });
   });
 });

@@ -409,6 +409,7 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   const job = p.currentJob;
   if (!job || p.isInPrison) return;
   p.stats.yearsWorked += job.partTime ? 0.5 : 1;
+  p.careerYears[job.lineId] = (p.careerYears[job.lineId] ?? 0) + (job.partTime ? 0.5 : 1);
   // Elected officials answer to voters, not managers.
   if (CAREER_BY_ID[job.lineId]?.pack === "politics") return;
   job.performance = clamp(job.performance + effortPerformanceDelta(job.partTime ? "steady" : p.effort, rng) + Math.round((p.smarts - 50) / 25));
@@ -432,7 +433,10 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   if (job.performance >= 50) {
     const line = CAREER_BY_ID[job.lineId];
     const cap = line ? line.ladder[line.ladder.length - 1].salary * 1.6 : Infinity;
-    job.salary = Math.min(Math.round(job.salary * 1.02), Math.round(cap));
+    // Annual raise tracks performance and the economy: ~1% for adequate work, up to ~5% for stars.
+    const climate = p.economy.climate === "boom" ? 1.3 : p.economy.climate === "recession" ? 0.4 : 1;
+    const rate = (0.01 + Math.max(0, job.performance - 50) / 1000) * climate;
+    job.salary = Math.min(Math.round(job.salary * (1 + rate)), Math.round(cap));
   }
   p.annualSalary = job.salary;
   if (p.age >= 75) {
