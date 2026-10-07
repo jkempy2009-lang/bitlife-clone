@@ -89,3 +89,33 @@ describe("family home", () => {
     expect(livesWithParents(home)).toBe(false);
   });
 });
+
+describe("friends and family support", () => {
+  it("a good word boosts the next job application once; loans are repaid or defaulted", async () => {
+    const { supportAction, processFriendLoans } = await import("../friends");
+    const { applyForJob } = await import("../career");
+    const { p } = married(9, 3);
+    p.relatives.push({ id: "F1", relation: "Friend", name: "Frankie Friend", age: 33, relationshipBar: 90, health: 90, alive: true, incomeTier: 2, gender: "Male", smarts: 50, looks: 50 });
+    p.currentJob = null;
+    let got: PlayerState | null = null;
+    for (let s = 1; s <= 20 && !got; s++) {
+      const r = supportAction({ ...structuredClone(p), annual: {} }, "F1", "favor", makeRng(s)).player;
+      if (r.flags.includes("referral")) got = r;
+    }
+    expect(got).not.toBeNull();
+    const applied = applyForJob(got!, "retail", makeRng(3)).player;
+    expect(applied.flags).not.toContain("referral");
+    // lending
+    const lent = supportAction(p, "F1", "lend", makeRng(1), 1_000).player;
+    expect(lent.bankBalance).toBe(p.bankBalance - 1_000);
+    expect(lent.flags.some((f) => f.startsWith("lent:F1"))).toBe(true);
+    let repaid = 0;
+    for (let s = 1; s <= 30; s++) {
+      const q = structuredClone(lent);
+      q.year += 1;
+      processFriendLoans(q, makeRng(s), []);
+      if (q.bankBalance > lent.bankBalance) repaid++;
+    }
+    expect(repaid).toBeGreaterThan(10);
+  });
+});

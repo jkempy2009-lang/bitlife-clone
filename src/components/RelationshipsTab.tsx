@@ -38,6 +38,7 @@ import { EXPERIENCES, INTERESTS, INTEREST_BY_ID } from "@/data/experiences";
 import { discussDesires, knownTastes, setIntimacyPrefs, shareExperience, toggleGender, toggleInterest } from "@/engine/desire";
 import { adultRange } from "@/engine/people";
 import { closeRelationship, type Intent } from "@/engine/intimacy";
+import { supportAction } from "@/engine/friends";
 import { money } from "@/lib/format";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
@@ -377,6 +378,24 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
           </Button>
         )}
       </div>
+
+      {["Friend", "Parent", "Sibling", "Grandparent"].includes(rel.relation) && p.age >= 14 && (
+        <>
+          <SectionTitle hint="favours, loans and care">Support</SectionTitle>
+          <div className="grid grid-cols-2 gap-2">
+            {["Friend", "Parent", "Sibling"].includes(rel.relation) && p.age >= 16 && (
+              <Button variant="secondary" disabled={(p.annual[`support:favor:${rel.id}`] ?? 0) >= 1} onClick={() => act((pl, rng) => supportAction(pl, rel.id, "favor", rng))}>🗝️ Ask for a Good Word</Button>
+            )}
+            <Button variant="secondary" disabled={(p.annual[`support:confide:${rel.id}`] ?? 0) >= 1} onClick={() => act((pl, rng) => supportAction(pl, rel.id, "confide", rng))}>🫂 Confide in Them</Button>
+            {["Friend", "Parent", "Sibling"].includes(rel.relation) && p.age >= 18 && (
+              <Button variant="secondary" disabled={(p.annual[`support:lend:${rel.id}`] ?? 0) >= 1 || p.bankBalance < 1_000} onClick={() => act((pl, rng) => supportAction(pl, rel.id, "lend", rng, 1_000))}>💸 Lend $1,000</Button>
+            )}
+            {["Parent", "Sibling", "Grandparent"].includes(rel.relation) && p.age >= 18 && (
+              <Button variant="secondary" disabled={(p.annual[`support:help:${rel.id}`] ?? 0) >= 1 || p.bankBalance < 1_500} onClick={() => act((pl, rng) => supportAction(pl, rel.id, "help", rng, 1_500))}>🤲 Help with Bills ($1,500)</Button>
+            )}
+          </div>
+        </>
+      )}
 
       {rel.relation === "Partner" && (
         <>

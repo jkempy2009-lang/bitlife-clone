@@ -124,8 +124,10 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   p.annual[key] = 1;
   const guaranteed = line.pack === "actor" || line.id === "creator";
   const exp = p.careerYears[line.id] ?? 0;
+  const referred = p.flags.includes("referral");
+  if (referred) p.flags = p.flags.filter((f) => f !== "referral");
   const chance = clamp(
-    0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - (hasFlag(p, "ex_con") ? 0.25 : 0) + hiringModifier(p.economy.climate),
+    0.55 + (referred ? 0.2 : 0) + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - (hasFlag(p, "ex_con") ? 0.25 : 0) + hiringModifier(p.economy.climate),
     0.15,
     0.95,
   );

@@ -25,6 +25,7 @@ import {
 } from "./state";
 import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
+import { processFriendLoans } from "./friends";
 import { startTrial } from "./crime";
 import { selectEvents } from "./events";
 import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
@@ -660,6 +661,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   advanceClimate(p, rng, notices);
 
   processSocial(p, rng, notices); // 2. social graph
+  processFriendLoans(p, rng, notices);
   processIntimacy(p, prevAnnual, rng, notices);
   processAssets(p, rng); // 3. asset economics
   processFinance(p, rng, notices); // 4. financial balance sheet
