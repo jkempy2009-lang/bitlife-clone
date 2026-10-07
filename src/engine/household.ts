@@ -84,3 +84,11 @@ export function childSupportDue(p: PlayerState, gross: number): number {
   if (married) return 0;
   return Math.round(gross * Math.min(0.25, 0.08 * kids));
 }
+
+/** Income a lender will count: wages, pensions, a share of a spouse's pay and of recent business profit. */
+export function qualifyingIncome(p: PlayerState): number {
+  const spouse = marriedPartner(p);
+  const wages = p.currentJob?.salary ?? 0;
+  const profit = p.business ? Math.max(0, p.business.lastProfit) * 0.7 : 0;
+  return Math.round(wages + p.pension + profit + (spouse ? spouseIncome(spouse) * 0.8 : 0));
+}

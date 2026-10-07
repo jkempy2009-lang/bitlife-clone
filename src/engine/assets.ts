@@ -13,6 +13,7 @@ import {
   type PropertyArchetype,
   type VehicleArchetype,
 } from "@/data/assetsCatalog";
+import { qualifyingIncome } from "./household";
 import { addLog, changeStat, clone } from "./state";
 
 // ---------------------------------------------------------------------------
@@ -128,15 +129,16 @@ export function buyHouse(p0: PlayerState, listing: HouseListing, financed: boole
     down = Math.round(price * 0.2);
     loan = price - down;
     const payment = annualPayment(loan, MORTGAGE_RATE, MORTGAGE_YEARS);
-    const income = (p.currentJob?.salary ?? 0) + p.pension;
+    const income = qualifyingIncome(p);
     if (income > 0 ? payment > income * 0.6 : p.bankBalance < price * 0.5) {
       return { player: p0, notices: [info("Mortgage Denied", "The bank doesn't believe you can afford the payments.", "bad")] };
     }
   }
-  if (p.bankBalance < down) {
-    return { player: p0, notices: [info("Insufficient Funds", `You need ${money(down)} ${financed ? "for the 20% down payment" : "in cash"}.`, "bad")] };
+  const closing = Math.round(price * 0.025);
+  if (p.bankBalance < down + closing) {
+    return { player: p0, notices: [info("Insufficient Funds", `You need ${money(down)} ${financed ? "for the 20% down payment" : "in cash"} plus ${money(closing)} in legal and closing costs.`, "bad")] };
   }
-  p.bankBalance -= down;
+  p.bankBalance -= down + closing;
   const prop: Property = {
     id: rng.id(),
     name: listing.arch.name,
@@ -150,7 +152,7 @@ export function buyHouse(p0: PlayerState, listing: HouseListing, financed: boole
   };
   p.properties.push(prop);
   changeStat(p, "happiness", 8);
-  const body = `You bought a ${prop.name} for ${money(price)}${financed ? ` with a ${MORTGAGE_YEARS}-year mortgage (${money(down)} down)` : " in cash"}.`;
+  const body = `You bought a ${prop.name} for ${money(price)}${financed ? ` with a ${MORTGAGE_YEARS}-year mortgage (${money(down)} down)` : " in cash"}, plus ${money(closing)} in closing costs.`;
   addLog(p, body);
   return { player: p, notices: [info("Home Sweet Home", body, "good")] };
 }
@@ -193,7 +195,7 @@ export function renovate(p0: PlayerState, propId: string): ActionResult {
 
 export function maxLoan(p: PlayerState): number {
   if (p.age < 18 || p.creditScore < 500) return 0;
-  const income = (p.currentJob?.salary ?? 0) + p.pension + (p.royalRank !== "none" ? 400_000 : 0);
+  const income = qualifyingIncome(p) + (p.royalRank !== "none" ? 400_000 : 0);
   const capacity = Math.max(2_000, income * 1.5 + p.bankBalance * 0.2) * ((p.creditScore - 400) / 450);
   return Math.max(0, Math.round((capacity - p.outstandingLoans) / 500) * 500);
 }

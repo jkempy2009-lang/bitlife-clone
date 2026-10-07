@@ -264,8 +264,8 @@ function Homes() {
           <div className="mt-3 flex items-center justify-between">
             <div className="text-lg font-bold tabular-nums text-amber-300">{money(l.price)}</div>
             <div className="flex gap-2">
-              <Button variant="primary" className="px-3 py-1.5" disabled={p.age < 18 || p.bankBalance < l.price} onClick={() => act((pl, rng) => buyHouse(pl, l, false, rng))}>Buy cash</Button>
-              <Button variant="secondary" className="px-3 py-1.5" disabled={p.age < 18 || p.bankBalance < l.price * 0.2} onClick={() => act((pl, rng) => buyHouse(pl, l, true, rng))}>Mortgage</Button>
+              <Button variant="primary" className="px-3 py-1.5" disabled={p.age < 18 || p.bankBalance < l.price * 1.025} onClick={() => act((pl, rng) => buyHouse(pl, l, false, rng))}>Buy cash</Button>
+              <Button variant="secondary" className="px-3 py-1.5" disabled={p.age < 18 || p.bankBalance < l.price * 0.225} onClick={() => act((pl, rng) => buyHouse(pl, l, true, rng))}>Mortgage</Button>
             </div>
           </div>
         </Card>
