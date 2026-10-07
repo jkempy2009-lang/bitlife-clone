@@ -18,10 +18,11 @@ export interface CareerLine {
     degrees?: string[];
     minSmarts: number;
     minLooks?: number;
+    minSkills?: Partial<Record<"acting" | "music" | "charisma" | "athletics", number>>;
   };
   ladder: JobTier[];
   /** Special packs are hidden from the general corporate board. */
-  pack?: "actor";
+  pack?: "actor" | "athlete";
 }
 
 export const CAREER_LINES: CareerLine[] = [
@@ -266,6 +267,19 @@ export const CAREER_LINES: CareerLine[] = [
       { title: "Supporting Actor", salary: 140_000 },
       { title: "Lead Actor", salary: 1_800_000 },
       { title: "A-List Movie Star", salary: 14_000_000 },
+    ],
+  },
+  // ---- Special Job Pack: Professional Athlete ----
+  {
+    id: "athlete", name: "Professional Sports", emoji: "🏅", category: "Sports", blurb: "Train hard, sign with a club, chase glory before your body gives out.",
+    companies: ["Metro Titans", "Harbor Hawks", "Union FC", "Capital Lions", "Pacific Storm"], minAge: 16,
+    requirements: { minSmarts: 0, minSkills: { athletics: 40 } },
+    pack: "athlete",
+    ladder: [
+      { title: "Semi-Pro Player", salary: 38_000 },
+      { title: "Pro Player", salary: 420_000 },
+      { title: "Franchise Player", salary: 3_200_000 },
+      { title: "Hall-of-Fame Legend", salary: 14_000_000 },
     ],
   },
 ];

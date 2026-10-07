@@ -35,10 +35,22 @@ export function loadGame(): SaveData | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as SaveData;
     if (data.v !== 1 || typeof data.player?.age !== "number" || !Array.isArray(data.player.relatives)) return null;
-    return data;
+    return { ...data, player: hydrate(data.player) };
   } catch {
     return null;
   }
+}
+
+/** Fill in fields added after a save was written so older saves keep working. */
+function hydrate(p: PlayerState): PlayerState {
+  return {
+    ...p,
+    skills: { ...p.skills, athletics: p.skills.athletics ?? 0 },
+    business: p.business ?? null,
+    influencer: p.influencer ?? { active: false, followers: 0, lastPostYear: 0 },
+    athlete: p.athlete ?? { sport: null },
+    stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0 },
+  };
 }
 
 export function clearSave() {

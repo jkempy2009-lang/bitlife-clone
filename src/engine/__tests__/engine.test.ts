@@ -62,7 +62,7 @@ describe("event data integrity", () => {
       expect(e.options.length).toBeGreaterThanOrEqual(2);
       expect(e.minAge).toBeLessThanOrEqual(e.maxAge);
     }
-    expect(LIFE_EVENTS.length).toBeGreaterThan(120);
+    expect(LIFE_EVENTS.length).toBeGreaterThan(190);
   });
 });
 

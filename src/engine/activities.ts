@@ -88,6 +88,7 @@ export function doWellness(p0: PlayerState, id: WellnessId): ActionResult {
   if (id === "gym") {
     changeStat(p, "health", 3);
     changeStat(p, "looks", 2);
+    p.skills.athletics = clamp(p.skills.athletics + 1);
     body = "You sweated it out at the gym. +3 Health, +2 Looks.";
   } else if (id === "meditate") {
     changeStat(p, "happiness", 5);

@@ -26,6 +26,7 @@ export function makeJob(line: CareerLine, tier: number, rng: Rng): Job {
     performance: 60,
     tier: t,
     lineId: line.id,
+    yearsInRole: 0,
   };
 }
 
@@ -49,6 +50,11 @@ export function jobEligibility(p: PlayerState, line: CareerLine): { ok: boolean;
   if (p.smarts < line.requirements.minSmarts) return { ok: false, reason: `Needs ${line.requirements.minSmarts}+ Smarts` };
   if (line.requirements.minLooks && p.looks < line.requirements.minLooks) {
     return { ok: false, reason: `Needs ${line.requirements.minLooks}+ Looks` };
+  }
+  for (const [skill, min] of Object.entries(line.requirements.minSkills ?? {})) {
+    if (p.skills[skill as keyof typeof p.skills] < (min ?? 0)) {
+      return { ok: false, reason: `Needs ${min}+ ${skill[0].toUpperCase() + skill.slice(1)} skill` };
+    }
   }
   return { ok: true };
 }
@@ -153,7 +159,8 @@ export function promoteJob(p: PlayerState): boolean {
   j.tier += 1;
   j.title = line.ladder[j.tier].title;
   j.salary = Math.max(Math.round(j.salary * 1.12), line.ladder[j.tier].salary);
-  j.performance = 60;
+  j.performance = 55;
+  j.yearsInRole = 0;
   p.annualSalary = j.salary;
   recordCareerPeak(p);
   return true;

@@ -73,6 +73,8 @@ export interface Job {
   performance: number;
   tier: number;
   lineId: string;
+  /** Years spent at the current rung (gates promotion offers). */
+  yearsInRole?: number;
 }
 
 export type SpecialCareerPath = "none" | "royalty" | "actor" | "musician";
@@ -100,6 +102,27 @@ export interface Skills {
   acting: number;
   music: number;
   charisma: number;
+  athletics: number;
+}
+
+export interface Business {
+  kind: string;
+  name: string;
+  value: number;
+  lastProfit: number;
+  /** Bonus to next year's profit from hands-on work (consumed on Age Up). */
+  boost: number;
+  founded: number;
+}
+
+export interface InfluencerState {
+  active: boolean;
+  followers: number;
+  lastPostYear: number;
+}
+
+export interface AthleteState {
+  sport: string | null;
 }
 
 export interface Album {
@@ -196,6 +219,9 @@ export interface PlayerState {
   education: EducationState;
   skills: Skills;
   music: MusicState;
+  business: Business | null;
+  influencer: InfluencerState;
+  athlete: AthleteState;
 
   // Justice
   isInPrison: boolean;

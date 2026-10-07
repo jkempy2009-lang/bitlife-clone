@@ -48,7 +48,7 @@ export const TEEN_EVENTS: LifeEvent[] = [
     opt("Write angry poetry", "You wrote heartfelt, deeply cringey poems. Art!", { smartsDelta: 2, happinessDelta: 3, skillDeltas: { acting: 1 } }),
   ], { requires: { parentAlive: true }, cooldown: 4 }),
   ev("sports_tryout", "school", 13, 17, "Varsity Tryout", "The varsity coach is watching you at tryouts.", [
-    risk("Give it everything", 0.5, ["You made the varsity team! Teammates are already calling you 'Ace'.", { healthDelta: 5, happinessDelta: 8, fameDelta: 2, looksDelta: 2 }], ["You pulled a hamstring on the first drill.", { healthDelta: -6, happinessDelta: -5 }], "health"),
+    risk("Give it everything", 0.5, ["You made the varsity team! Teammates are already calling you 'Ace'.", { healthDelta: 5, happinessDelta: 8, fameDelta: 2, looksDelta: 2, skillDeltas: { athletics: 8 }, setFlags: ["athlete_dream"] }], ["You pulled a hamstring on the first drill.", { healthDelta: -6, happinessDelta: -5 }], "health"),
     opt("Skip tryouts", "You went home. Maybe next year.", { happinessDelta: -1 }),
   ], { cooldown: 3 }),
   ev("form_band", "fame", 13, 19, "Garage Band", "Your friends want to start a band. You'd play the lead.", [

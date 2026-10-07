@@ -5,12 +5,14 @@ import { useGame } from "@/context/GameStateContext";
 import { buyCar, buyHouse, carInventory, houseInventory, maxLoan, renovate, repayLoan, sellCar, sellHouse, takeLoan } from "@/engine/assets";
 import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/data/assetsCatalog";
 import { money } from "@/lib/format";
-import { Button, Card, MiniBar, Pill, Segmented, SectionTitle } from "./ui";
+import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
 
 type Panel = "cars" | "homes" | "bank";
 
 export default function AssetsTab() {
+  const { player } = useGame();
   const [panel, setPanel] = useState<Panel>("cars");
+  if (player.age < 16) return <TooYoung>Cars and houses can wait. Come back when you're 16 (or inherit a castle).</TooYoung>;
   return (
     <div>
       <Segmented<Panel>

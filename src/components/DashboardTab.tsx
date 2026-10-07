@@ -68,10 +68,12 @@ export default function DashboardTab() {
 
       {/* Status bars */}
       <Card>
-        <StatBar label="😊 Happiness" value={p.happiness} color="green" />
-        <StatBar label="❤️ Health" value={p.health} color="teal" />
-        <StatBar label="🧠 Smarts" value={p.smarts} color="blue" />
-        <StatBar label="✨ Looks" value={p.looks} color="pink" />
+        <div className="grid grid-cols-2 gap-x-4">
+          <StatBar label="😊 Happiness" value={p.happiness} color="green" />
+          <StatBar label="❤️ Health" value={p.health} color="teal" />
+          <StatBar label="🧠 Smarts" value={p.smarts} color="blue" />
+          <StatBar label="✨ Looks" value={p.looks} color="pink" />
+        </div>
         {showFame && <StatBar label="🌟 Fame" value={p.fame} color="amber" />}
         {p.royalRank !== "none" && <StatBar label="👑 Royal Respect" value={p.royalRespect} color="purple" />}
         <StatBar label="☯️ Karma" value={p.karma} color="slate" compact />

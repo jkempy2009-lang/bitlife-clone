@@ -33,18 +33,22 @@ import {
 } from "@/engine/career";
 import { isRoyal } from "@/engine/state";
 import { money } from "@/lib/format";
-import { Button, Card, Pill, Segmented, SectionTitle, StatBar } from "./ui";
+import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
+import { AthleteSection, BusinessSection, InfluencerSection } from "./CareerPaths";
 
-type Section = "work" | "school" | "stardom" | "music";
+type Section = "work" | "school" | "business" | "sports" | "online" | "stardom" | "music";
 
 export default function CareerTab() {
   const { player: p } = useGame();
   const royal = isRoyal(p);
   const [section, setSection] = useState<Section>(royal ? "work" : p.education.stage !== "None" && !p.currentJob ? "school" : "work");
 
+  if (p.age < 5) return <TooYoung>No career yet — your job is to nap, eat, and be adorable.</TooYoung>;
   const options: { id: Section; label: string }[] = [
     { id: "work", label: royal ? "👑 Royal Duties" : "💼 Work" },
     { id: "school", label: "🎓 Academics" },
+    ...(royal ? [] : [{ id: "business" as const, label: "🏢 Business" }, { id: "sports" as const, label: "🏅 Athlete" }]),
+    { id: "online", label: "📱 Influencer" },
     ...(royal ? [] : [{ id: "stardom" as const, label: "🎬 Movie Star" }]),
     { id: "music", label: "🎸 Rock Star" },
   ];
@@ -53,6 +57,9 @@ export default function CareerTab() {
       <Segmented<Section> value={section} onChange={setSection} options={options} />
       {section === "work" && (royal ? <RoyalDuties /> : <CorporateCareer />)}
       {section === "school" && <Academics />}
+      {section === "business" && <BusinessSection />}
+      {section === "sports" && <AthleteSection />}
+      {section === "online" && <InfluencerSection />}
       {section === "stardom" && <MovieStar />}
       {section === "music" && <RockStar />}
     </div>

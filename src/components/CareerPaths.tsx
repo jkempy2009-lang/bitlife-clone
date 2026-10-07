@@ -1,0 +1,164 @@
+"use client";
+
+import { useState } from "react";
+import { useGame } from "@/context/GameStateContext";
+import {
+  BUSINESS_TYPES,
+  SPORTS,
+  brandCollab,
+  investInBusiness,
+  postContent,
+  sellBusiness,
+  signWithClub,
+  startBusiness,
+  startChannel,
+  trainAthletics,
+  workOnBusiness,
+} from "@/engine/paths";
+import { jobEligibility, workHarder, quitJob } from "@/engine/career";
+import { CAREER_BY_ID } from "@/data/careersRegistry";
+import { money } from "@/lib/format";
+import { Button, Card, Pill, SectionTitle, StatBar } from "./ui";
+
+export function BusinessSection() {
+  const { player: p, act } = useGame();
+  const [name, setName] = useState("");
+  const biz = p.business;
+
+  if (biz) {
+    const kind = BUSINESS_TYPES.find((b) => b.id === biz.kind)!;
+    return (
+      <div className="flex flex-col gap-3">
+        <SectionTitle>Your Business</SectionTitle>
+        <Card>
+          <div className="flex items-center gap-3">
+            <span className="text-4xl">{kind.emoji}</span>
+            <div>
+              <div className="text-lg font-bold">{biz.name}</div>
+              <div className="text-xs text-slate-400">{kind.name} · founded {biz.founded}</div>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-center">
+            <div><div className="text-xs text-slate-400">Valuation</div><div className="text-lg font-bold text-amber-300">{money(biz.value)}</div></div>
+            <div><div className="text-xs text-slate-400">Last year's profit</div><div className={`text-lg font-bold ${biz.lastProfit < 0 ? "text-rose-300" : "text-emerald-300"}`}>{money(biz.lastProfit)}</div></div>
+          </div>
+        </Card>
+        <Button variant="primary" disabled={(p.annual.bizwork ?? 0) >= 1} onClick={() => act((pl) => workOnBusiness(pl))}>
+          💪 Work Overtime (+12% profit this year)
+        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="secondary" disabled={p.bankBalance < 25_000} onClick={() => act((pl) => investInBusiness(pl, 25_000))}>Invest $25,000</Button>
+          <Button variant="secondary" disabled={p.bankBalance < 100_000} onClick={() => act((pl) => investInBusiness(pl, 100_000))}>Invest $100,000</Button>
+        </div>
+        <Button variant="ghost" onClick={() => act((pl) => sellBusiness(pl))}>Sell Business ({money(biz.value * 0.9)})</Button>
+        <p className="text-xs text-slate-500">Profit is taxed as income. Risky ventures can go bankrupt; tech startups may get acquired.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionTitle hint="you can hold a job too">Start a Business</SectionTitle>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        maxLength={30}
+        placeholder="Business name (optional)"
+        className="rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+      />
+      {BUSINESS_TYPES.map((b) => (
+        <div key={b.id} className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
+          <span className="text-3xl">{b.emoji}</span>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">{b.name}</div>
+            <div className="text-xs text-slate-400">{b.blurb}</div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <Pill tone={b.vol > 0.5 ? "red" : b.vol > 0.25 ? "amber" : "green"}>{b.vol > 0.5 ? "Wild" : b.vol > 0.25 ? "Volatile" : "Stable"}</Pill>
+              <Pill>{b.minSmarts}+ Smarts</Pill>
+            </div>
+          </div>
+          <Button variant="primary" className="shrink-0 px-3 py-1.5" disabled={p.bankBalance < b.cost || p.smarts < b.minSmarts || p.age < 18} onClick={() => act((pl) => startBusiness(pl, b.id, name))}>
+            {money(b.cost)}
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function AthleteSection() {
+  const { player: p, act } = useGame();
+  const [sport, setSport] = useState<string>(SPORTS[0]);
+  const job = p.currentJob?.lineId === "athlete" ? p.currentJob : null;
+  const line = CAREER_BY_ID.athlete;
+  const elig = jobEligibility(p, line);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionTitle>Professional Sports</SectionTitle>
+      <Card>
+        <StatBar label="🏃 Athletics" value={p.skills.athletics} color="teal" />
+        <StatBar label="❤️ Health" value={p.health} color="green" compact />
+        {job ? (
+          <div className="mt-3">
+            <div className="text-lg font-bold">{job.title}</div>
+            <div className="text-sm text-slate-400">{job.company} · {money(job.salary)}/yr</div>
+            <div className="mt-2"><StatBar label="Performance" value={job.performance} color="green" /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="primary" disabled={(p.annual.work ?? 0) >= 1} onClick={() => act((pl, rng) => workHarder(pl, rng))}>💪 Push Harder</Button>
+              <Button variant="ghost" onClick={() => act((pl) => quitJob(pl))}>Leave Club</Button>
+            </div>
+          </div>
+        ) : null}
+      </Card>
+      <Button variant="secondary" disabled={(p.annual.train ?? 0) >= 1 || p.age < 8} onClick={() => act((pl, rng) => trainAthletics(pl, rng))}>
+        🏋️ Training Camp ({(p.annual.train ?? 0) >= 1 ? "done" : "+4–8 Athletics"})
+      </Button>
+      {!job && (
+        <Card>
+          <div className="mb-1 font-semibold">Sign with a club</div>
+          <p className="mb-2 text-xs text-slate-400">Needs 40+ Athletics and age 16+. Better skill and health mean better odds. Careers end around 36–40, and injuries happen.</p>
+          <select value={sport} onChange={(e) => setSport(e.target.value)} className="mb-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm" aria-label="Sport">
+            {SPORTS.map((s) => <option key={s}>{s}</option>)}
+          </select>
+          {!elig.ok && <p className="mb-2 text-xs font-medium text-rose-300">🔒 {elig.reason}</p>}
+          <Button variant="gold" className="w-full" disabled={!elig.ok || (p.annual["apply:athlete"] ?? 0) >= 1} onClick={() => act((pl, rng) => signWithClub(pl, sport, rng))}>
+            🏅 Try Out
+          </Button>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+export function InfluencerSection() {
+  const { player: p, act } = useGame();
+  const inf = p.influencer;
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionTitle>Online Fame</SectionTitle>
+      {!inf.active ? (
+        <Card>
+          <p className="mb-3 text-sm text-slate-300">Start a channel and grow an audience. Looks and charisma help, and consistent posting keeps followers from drifting away.</p>
+          <Button variant="primary" className="w-full" disabled={p.age < 10} onClick={() => act((pl, rng) => startChannel(pl, rng))}>📱 Launch Your Channel</Button>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <div className="text-center">
+              <div className="text-xs uppercase tracking-wider text-slate-400">Followers</div>
+              <div className="text-3xl font-black tabular-nums text-pink-300">{inf.followers.toLocaleString()}</div>
+              <div className="text-xs text-slate-400">Earning about {money(inf.followers >= 5_000 ? inf.followers * 0.35 : 0)} / year</div>
+            </div>
+            <div className="mt-3"><StatBar label="🌟 Fame" value={p.fame} color="amber" compact /></div>
+          </Card>
+          <div className="grid grid-cols-1 gap-2">
+            <Button variant="primary" disabled={(p.annual.post ?? 0) >= 1} onClick={() => act((pl, rng) => postContent(pl, rng))}>🎥 Post Big Content</Button>
+            <Button variant="gold" disabled={(p.annual.collab ?? 0) >= 1 || inf.followers < 5_000} onClick={() => act((pl) => brandCollab(pl))}>🤝 Brand Collab {inf.followers < 5_000 ? "(5,000 followers)" : `(≈${money(inf.followers * 0.25)})`}</Button>
+          </div>
+          <p className="text-xs text-slate-500">If you skip a year of posting, your audience shrinks by 15%.</p>
+        </>
+      )}
+    </div>
+  );
+}

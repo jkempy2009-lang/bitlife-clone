@@ -133,3 +133,12 @@ export function Segmented<T extends string>({
     </div>
   );
 }
+
+export function TooYoung({ children }: { children: ReactNode }) {
+  return (
+    <Card className="mt-2 text-center">
+      <div className="text-4xl">🧸</div>
+      <p className="mt-2 text-sm text-slate-300">{children}</p>
+    </Card>
+  );
+}

@@ -7,7 +7,7 @@ import {
   CAR_LOAN_RATE,
   MORTGAGE_RATE,
 } from "@/data/assetsCatalog";
-import { PROGRAMS, ROYAL_ALLOWANCE } from "@/data/careersRegistry";
+import { CAREER_BY_ID, PROGRAMS, ROYAL_ALLOWANCE } from "@/data/careersRegistry";
 import {
   addLog,
   changeStat,
@@ -26,6 +26,7 @@ import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship } from "./social";
 import { selectEvents } from "./events";
 import { albumRating, maybeCoup, promotionEvent } from "./career";
+import { processAthlete, processBusiness, processInfluencer } from "./paths";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -191,6 +192,10 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   if (p.pension > 0) gross += p.pension;
   if (p.music.signed) gross += 25_000;
   gross += royalties;
+  gross += processInfluencer(p);
+  const profit = processBusiness(p, rng, notices);
+  if (profit > 0) gross += profit;
+  else p.bankBalance += profit;
   for (const a of p.music.albums) a.royalty = a.royalty < 500 ? 0 : Math.round(a.royalty * 0.55);
 
   const adult = p.age >= 18;
@@ -205,7 +210,11 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
 
   let living = 0;
   const parentSupport = p.age < 21 && livingRelatives(p, "Parent").length > 0;
-  if (adult && !p.isInPrison && !isRoyal(p) && !parentSupport) living = p.properties.length > 0 ? 9_000 : 14_000;
+  if (adult && !p.isInPrison && !isRoyal(p) && !parentSupport) {
+    // Lifestyle inflation: the more you earn, the more you spend.
+    living = (p.properties.length > 0 ? 9_000 : 14_000) + Math.max(0, gross - 50_000) * 0.2;
+  }
+  living = Math.round(living);
   p.bankBalance -= living;
 
   const prog = PROGRAMS[p.education.stage as keyof typeof PROGRAMS];
@@ -353,6 +362,7 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
 // ---------------------------------------------------------------------------
 
 function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
+  processAthlete(p, rng, notices);
   const job = p.currentJob;
   if (!job || p.isInPrison) return;
   job.performance = clamp(job.performance + rng.int(-8, 4) + Math.round((p.smarts - 50) / 25));
@@ -373,7 +383,11 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
     notices.push(info("Laid Off", body, "bad"));
     return;
   }
-  if (job.performance >= 50) job.salary = Math.round(job.salary * 1.03);
+  if (job.performance >= 50) {
+    const line = CAREER_BY_ID[job.lineId];
+    const cap = line ? line.ladder[line.ladder.length - 1].salary * 1.6 : Infinity;
+    job.salary = Math.min(Math.round(job.salary * 1.02), Math.round(cap));
+  }
   p.annualSalary = job.salary;
   if (p.age >= 75) {
     p.pension = Math.max(p.pension, Math.round(job.salary * 0.45), 12_000);
@@ -382,7 +396,8 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
     p.annualSalary = 0;
     return;
   }
-  if (job.performance > 85) {
+  job.yearsInRole = (job.yearsInRole ?? 0) + 1;
+  if (job.performance > 85 && job.yearsInRole >= 2 + job.tier) {
     const ev = promotionEvent(p);
     if (ev) notices.push({ kind: "event", event: ev });
   }
@@ -396,7 +411,9 @@ function processEntertainment(p: PlayerState) {
   const job = p.currentJob;
   const actorActive = job?.lineId === "actor";
   if (actorActive && job.tier >= 2) changeStat(p, "fame", job.tier - 1);
-  const active = actorActive || p.music.signed || isRoyal(p);
+  const athleteActive = job?.lineId === "athlete" && job.tier >= 1;
+  if (athleteActive) changeStat(p, "fame", job!.tier);
+  const active = actorActive || athleteActive || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
   if (!active) changeStat(p, "fame", p.fame > 0 ? -2 : 0);
 }
 

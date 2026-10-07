@@ -102,7 +102,7 @@ export const EARLY_EVENTS: LifeEvent[] = [
     opt("Walk away", "You walked away. You were called chicken for a week. You're still alive.", { happinessDelta: -2, smartsDelta: 1 }),
   ]),
   ev("stray_dog", "general", 6, 14, "Stray Dog", "A scruffy stray dog followed you home from school.", [
-    opt("Convince your parents to keep it", "You pleaded your case with the skill of a lawyer. You have a dog now.", { happinessDelta: 10, karmaDelta: 4, relationshipDelta: { target: "Parent", delta: -2 } }),
+    opt("Convince your parents to keep it", "You pleaded your case with the skill of a lawyer. You have a dog now.", { happinessDelta: 10, karmaDelta: 4, setFlags: ["has_dog"], relationshipDelta: { target: "Parent", delta: -2 } }),
     opt("Feed it and let it go", "You gave it a sandwich and waved goodbye.", { karmaDelta: 2, happinessDelta: 1 }),
     opt("Call animal control", "Animal control took the dog to a shelter. Hopefully it found a home.", { karmaDelta: 1 }),
   ], { once: true }),
@@ -112,8 +112,8 @@ export const EARLY_EVENTS: LifeEvent[] = [
     opt("Start a rumor about them", "You started a nasty rumor. It spread fast. It will follow you.", { relationshipDelta: { target: "Friend", delta: -30 }, karmaDelta: -6, happinessDelta: 2 }),
   ], { requires: { hasFriend: true } }),
   ev("sports_team", "school", 8, 14, "Youth Sports", "Tryouts are this weekend. Which team will you try for?", [
-    opt("Soccer", "You joined the soccer team and ran a lot.", { healthDelta: 6, happinessDelta: 4, addRelative: { relation: "Friend", ageOffset: [-1, 1] } }),
-    opt("Basketball", "You joined the basketball team. Your jump shot was ugly but effective.", { healthDelta: 5, happinessDelta: 4, addRelative: { relation: "Friend", ageOffset: [-1, 1] } }),
+    opt("Soccer", "You joined the soccer team and ran a lot.", { healthDelta: 6, happinessDelta: 4, skillDeltas: { athletics: 6 }, setFlags: ["athlete_dream"], addRelative: { relation: "Friend", ageOffset: [-1, 1] } }),
+    opt("Basketball", "You joined the basketball team. Your jump shot was ugly but effective.", { healthDelta: 5, happinessDelta: 4, skillDeltas: { athletics: 6 }, setFlags: ["athlete_dream"], addRelative: { relation: "Friend", ageOffset: [-1, 1] } }),
     opt("Chess club instead", "You joined chess club and met your people.", { smartsDelta: 5, happinessDelta: 2, addRelative: { relation: "Friend", ageOffset: [-1, 1] } }),
   ], { once: true }),
   ev("video_games", "general", 8, 15, "Gaming Marathon", "A new video game dropped. The weekend is yours.", [

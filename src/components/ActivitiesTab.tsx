@@ -26,12 +26,14 @@ import { commitCrime } from "@/engine/crime";
 import { CRIMES } from "@/data/crimes";
 import { handValue, isBlackjack, newDeck, settle, type Card as PlayingCard } from "@/engine/blackjack";
 import { money } from "@/lib/format";
-import { Button, Card, Pill, Segmented, SectionTitle } from "./ui";
+import { Button, Card, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
 
 type Panel = "medical" | "wellness" | "casino" | "crime" | "surgery" | "leisure";
 
 export default function ActivitiesTab() {
+  const { player } = useGame();
   const [panel, setPanel] = useState<Panel>("wellness");
+  if (player.age < 6) return <TooYoung>You're too little for activities. Enjoy being a kid, and ask your parents for a cookie.</TooYoung>;
   return (
     <div>
       <Segmented<Panel>

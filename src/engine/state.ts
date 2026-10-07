@@ -39,12 +39,13 @@ export function clampAll(p: PlayerState) {
   p.skills.acting = clamp(p.skills.acting);
   p.skills.music = clamp(p.skills.music);
   p.skills.charisma = clamp(p.skills.charisma);
+  p.skills.athletics = clamp(p.skills.athletics);
 }
 
 export function netWorth(p: PlayerState): number {
   const props = p.properties.reduce((s, x) => s + x.currentValue - x.mortgageBalance, 0);
   const cars = p.vehicles.reduce((s, x) => s + x.currentValue - x.loanBalance, 0);
-  return Math.round(p.bankBalance + props + cars - p.outstandingLoans);
+  return Math.round(p.bankBalance + props + cars + (p.business?.value ?? 0) - p.outstandingLoans);
 }
 
 export const isRoyal = (p: PlayerState) => p.royalRank !== "none";
@@ -81,6 +82,8 @@ export function playerTitle(p: PlayerState): string {
   if (isRoyal(p)) return p.royalRank === "none" ? "" : p.royalRank;
   if (p.music.signed) return `${p.music.status === "band" ? "Band Member" : "Recording Artist"}`;
   if (p.currentJob) return p.currentJob.title;
+  if (p.business) return "Business Owner";
+  if (p.influencer.active && p.influencer.followers >= 10_000) return "Influencer";
   const st = p.education.stage;
   if (st === "University") return "University Student";
   if (st === "MedicalSchool") return "Medical Student";
@@ -258,8 +261,11 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     royalRespect: royal ? 60 : 50,
     nation: { economy: 50, freedom: 50, military: 50 },
     education: educationForAge(0),
-    skills: { acting: 0, music: 0, charisma: rng.int(0, 10) },
-    music: { status: "none", signed: false, pendingAlbum: null, albums: [], },
+    skills: { acting: 0, music: 0, charisma: rng.int(0, 10), athletics: rng.int(0, 20) },
+    music: { status: "none", signed: false, pendingAlbum: null, albums: [] },
+    business: null,
+    influencer: { active: false, followers: 0, lastPostYear: 0 },
+    athlete: { sport: null },
     isInPrison: false,
     isFugitive: false,
     prison: null,
