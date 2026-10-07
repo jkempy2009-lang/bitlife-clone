@@ -2,6 +2,7 @@ import type { PlayerState } from "@/types/game.types";
 import { hydrateAthlete } from "./athleteState";
 import { upgradeBusiness } from "./business";
 import { hydrateCrimeLife } from "./justiceState";
+import { hydrateCreative } from "./creativeState";
 
 const KEY = "lifeline-save-v1";
 const PREV_KEY = "lifeline-save-prev";
@@ -62,11 +63,11 @@ function readSlot(key: string): SaveData | null {
 }
 
 /** Fill in fields added after a save was written so older saves keep working. */
-function hydrate(p: PlayerState): PlayerState {
+export function hydrate(p: PlayerState): PlayerState {
   return {
     ...p,
     skills: { ...p.skills, athletics: p.skills.athletics ?? 0 },
-    influencer: p.influencer ?? { active: false, followers: 0, lastPostYear: 0 },
+    ...hydrateCreative(p),
     athlete: hydrateAthlete(p.athlete, p),
     hobbies: p.hobbies ?? {},
     politics: { ...p.politics, party: p.politics?.party ?? null },

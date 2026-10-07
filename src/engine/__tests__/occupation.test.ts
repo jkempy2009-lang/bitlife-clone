@@ -49,7 +49,7 @@ describe("exclusive commitments", () => {
 
   it("a signed musician can't take a job or open a business and can leave the label", () => {
     const { rng, p } = adult(2);
-    p.music = { status: "solo", signed: true, pendingAlbum: null, albums: [] };
+    p.music = { ...p.music, status: "solo", signed: true };
     expect(blockerFor(p, "job")).toMatch(/label/);
     expect(blockerFor(p, "business")).toMatch(/label/);
     expect(applyForJob(p, "retail", rng).player.currentJob).toBeNull();

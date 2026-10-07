@@ -3,7 +3,6 @@ import type { LifeEvent } from "@/data/lifeEventsEngine";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import {
-  ALBUM_RATINGS,
   CAREER_BY_ID,
   DECREES,
   PROGRAMS,
@@ -414,172 +413,11 @@ export function enrollCertificate(p0: PlayerState, certId: string, rng: Rng): Ac
 }
 
 // ---------------------------------------------------------------------------
-// Movie Star pack
+// Movie Star and Rock Star packs now live in acting.ts and music.ts; re-exported so imports keep working.
 // ---------------------------------------------------------------------------
 
-export const FAMOUS_FAME = 30;
-
-export function auditionForLead(p0: PlayerState, rng: Rng): ActionResult {
-  const p = clone(p0);
-  const job = p.currentJob;
-  if (!job || job.lineId !== "actor") return { player: p0 };
-  if ((p.annual.audition ?? 0) >= 1) {
-    return { player: p0, notices: [{ kind: "info", title: "Already Auditioned", body: "Casting directors need time to forget your face. Try next year.", tone: "neutral" }] };
-  }
-  if (job.tier >= 3) return { player: p0 };
-  p.annual.audition = 1;
-  const base = (p.looks / 100) * (job.performance / 100) * (job.tier === 0 ? 0.5 : 0.8);
-  const chance = clamp(base + p.skills.acting / 500, 0.03, 0.9);
-  if (rng.chance(chance)) {
-    promoteJob(p);
-    const fameGain = rng.int(8, 15);
-    changeStat(p, "fame", fameGain);
-    changeStat(p, "happiness", 12);
-    const body = `You nailed the audition and landed a bigger role: ${p.currentJob?.title}! Fame +${fameGain}.`;
-    addLog(p, body);
-    return { player: p, notices: [{ kind: "info", title: "You Got the Part!", body, tone: "good" }] };
-  }
-  changeStat(p, "happiness", -4);
-  const body = "The casting director said, \"Thanks, we'll call you.\" They won't.";
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "No Callback", body, tone: "bad" }] };
-}
-
-export function shootCommercial(p0: PlayerState): ActionResult {
-  const p = clone(p0);
-  if (p.fame < FAMOUS_FAME) return { player: p0 };
-  if ((p.annual.commercial ?? 0) >= 1) {
-    return { player: p0, notices: [{ kind: "info", title: "Over-exposed", body: "You've already shot a commercial this year.", tone: "neutral" }] };
-  }
-  p.annual.commercial = 1;
-  p.bankBalance += 50_000;
-  changeStat(p, "fame", 5);
-  const body = "You shot a commercial for a luxury brand. +$50,000, +5 Fame.";
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "Commercial Shoot", body, tone: "good" }] };
-}
-
-export function writeMemoir(p0: PlayerState, rng: Rng): ActionResult {
-  const p = clone(p0);
-  if (p.fame < FAMOUS_FAME) return { player: p0 };
-  if ((p.annual.memoir ?? 0) >= 1) {
-    return { player: p0, notices: [{ kind: "info", title: "Writer's Cramp", body: "You've already written a memoir this year.", tone: "neutral" }] };
-  }
-  p.annual.memoir = 1;
-  const payout = Math.round(p.fame * 25_000 * rng.float(0.8, 1.2));
-  p.bankBalance += payout;
-  changeStat(p, "happiness", 4);
-  const body = `Your memoir became a bestseller. The publisher paid you ${money(payout)}.`;
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "Memoir Published", body, tone: "good" }] };
-}
-
-// ---------------------------------------------------------------------------
-// Rock Star pack
-// ---------------------------------------------------------------------------
-
-export function practiceMusic(p0: PlayerState, rng: Rng): ActionResult {
-  const p = clone(p0);
-  if ((p.annual.practice ?? 0) >= 1) {
-    return { player: p0, notices: [{ kind: "info", title: "Sore Fingers", body: "You've practised plenty this year.", tone: "neutral" }] };
-  }
-  p.annual.practice = 1;
-  const gain = rng.int(3, 6);
-  p.skills.music = clamp(p.skills.music + gain);
-  changeStat(p, "happiness", 2);
-  const body = `You practised for hours every day. Music skill +${gain}.`;
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "Practice Makes Perfect", body, tone: "good" }] };
-}
-
-export function formBand(p0: PlayerState, tapScore: number): ActionResult {
-  const p = clone(p0);
-  if (p.age < 14) return { player: p0 };
-  if (p.music.status !== "none") return { player: p0 };
-  if ((p.annual.audition_music ?? 0) >= 1) {
-    return { player: p0, notices: [{ kind: "info", title: "Try Next Year", body: "Your bandmates are tired of rehearsing for now.", tone: "neutral" }] };
-  }
-  p.annual.audition_music = 1;
-  const rating = p.skills.music * 0.6 + tapScore * 0.6;
-  if (rating >= 40) {
-    p.music.status = "band";
-    changeStat(p, "fame", 2);
-    changeStat(p, "happiness", 8);
-    const body = `You formed a band! Your skill and rhythm check (${Math.round(rating)}) impressed everybody.`;
-    addLog(p, body);
-    return { player: p, notices: [{ kind: "info", title: "A Band Is Born", body, tone: "good" }] };
-  }
-  changeStat(p, "happiness", -3);
-  const body = `Nobody wanted to join your band. Rating: ${Math.round(rating)} (needed 40). Practise and try again.`;
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "Band Fell Apart", body, tone: "bad" }] };
-}
-
-export function auditionContract(p0: PlayerState, kind: "solo" | "band", tapScore: number, rng: Rng): ActionResult {
-  const p = clone(p0);
-  if (p.age < 18) {
-    return { player: p0, notices: [{ kind: "info", title: "Too Young", body: "Record labels only sign artists who are 18 or older.", tone: "neutral" }] };
-  }
-  if (p.music.signed) return { player: p0 };
-  const blocked = blockerFor(p, "music");
-  if (blocked) return { player: p0, notices: [{ kind: "info", title: "Can't Sign", body: blocked, tone: "bad" }] };
-  if (kind === "band" && p.music.status !== "band") return { player: p0 };
-  if ((p.annual.audition_music ?? 0) >= 1) {
-    return { player: p0, notices: [{ kind: "info", title: "Try Next Year", body: "You've already auditioned this year.", tone: "neutral" }] };
-  }
-  p.annual.audition_music = 1;
-  const rating = p.skills.music * 0.5 + tapScore * 0.4 + p.looks * 0.1 + p.fame * 0.2 + rng.int(-8, 8) + (kind === "band" ? 6 : 0);
-  const needed = kind === "solo" ? 58 : 52;
-  if (rating >= needed) {
-    p.music.signed = true;
-    p.music.status = kind;
-    if (!p.specialCareers.includes("musician")) p.specialCareers.push("musician");
-    if (!isRoyal(p)) p.specialCareerPath = "musician";
-    changeStat(p, "fame", 6);
-    changeStat(p, "happiness", 15);
-    const body = `A label signed you to a ${kind === "solo" ? "solo" : "band"} contract! You get a ${money(25_000)} yearly advance.`;
-    addLog(p, body);
-    return { player: p, notices: [{ kind: "info", title: "Record Deal!", body, tone: "good" }] };
-  }
-  changeStat(p, "happiness", -5);
-  const body = `The label passed. Your audition scored ${Math.round(rating)} (needed ${needed}). Practise and try again.`;
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "Audition Failed", body, tone: "bad" }] };
-}
-
-/** Walk away from your label (and its yearly advance). */
-export function leaveLabel(p0: PlayerState): ActionResult {
-  const p = clone(p0);
-  if (!p.music.signed) return { player: p0 };
-  p.music.signed = false;
-  p.music.status = "none";
-  p.music.pendingAlbum = null;
-  if (p.specialCareerPath === "musician") p.specialCareerPath = "none";
-  changeStat(p, "happiness", -3);
-  const body = "You left your record label. Your back catalogue still earns royalties, but the yearly advance is gone.";
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "Left the Label", body, tone: "neutral" }] };
-}
-
-export function recordAlbum(p0: PlayerState, genre: string, title: string): ActionResult {
-  const p = clone(p0);
-  if (!p.music.signed) return { player: p0 };
-  if (p.music.pendingAlbum || (p.annual.album ?? 0) >= 1) {
-    return { player: p0, notices: [{ kind: "info", title: "Studio Booked", body: "You've already recorded an album this year. It will be released when you age up.", tone: "neutral" }] };
-  }
-  p.annual.album = 1;
-  const name = title.trim() || `${genre} Dreams ${p.music.albums.length + 1}`;
-  p.music.pendingAlbum = { title: name, genre };
-  const body = `You recorded a ${genre} album called "${name}". It will be released this year!`;
-  addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "In the Studio", body, tone: "good" }] };
-}
-
-export function albumRating(score: number) {
-  let chosen: (typeof ALBUM_RATINGS)[number] = ALBUM_RATINGS[0];
-  for (const r of ALBUM_RATINGS) if (score >= r.min) chosen = r;
-  return chosen;
-}
+export { FAMOUS_FAME, auditionForLead, shootCommercial, writeMemoir } from "./acting";
+export { albumRating, auditionContract, formBand, leaveLabel, practiceMusic, recordAlbum } from "./music";
 
 // ---------------------------------------------------------------------------
 // Royalty pack

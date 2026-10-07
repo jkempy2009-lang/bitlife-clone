@@ -4,6 +4,7 @@ import { money } from "@/lib/format";
 import { newAthleteState } from "./athleteState";
 import { inheritBusiness } from "./business";
 import { inheritRoyalty } from "./royalty";
+import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 import {
   addLog,
   clone,
@@ -152,9 +153,11 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     nation: royalParent ? { ...old.nation } : { economy: 50, freedom: 50, military: 50 },
     education: educationForAge(child.age),
     skills: { acting: 0, music: 0, charisma: 0, athletics: rng.int(0, 20) },
-    music: { status: "none", signed: false, pendingAlbum: null, albums: [] },
+    music: newMusic(),
     business: bizHeir.business,
-    influencer: { active: false, followers: 0, lastPostYear: 0 },
+    influencer: newInfluencer(),
+    acting: newActing(),
+    celeb: newCeleb(),
     athlete: newAthleteState(),
     hobbies: {},
     politics: { popularity: 30, yearsInOffice: 0, party: null },
