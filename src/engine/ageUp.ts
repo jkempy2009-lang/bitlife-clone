@@ -34,7 +34,7 @@ import { processPolitics } from "./politics";
 import { processMob } from "./underworld";
 import { hobbyIncome, processHobbies } from "./hobbies";
 import { processAthlete, processBusiness, processInfluencer } from "./paths";
-import { RENT_TIERS, BASE_LIVING, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
+import { RENT_TIERS, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -230,7 +230,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
 
   const adult = p.age >= 18;
   if (adult && p.age < 65 && !p.currentJob && !isRoyal(p) && !p.isInPrison && !p.music.signed && p.pension === 0) {
-    gross += 9_000;
+    gross += 11_000;
   }
   const allowance = isRoyal(p) ? Math.round(ROYAL_ALLOWANCE[p.royalRank] * (p.royalRespect < 20 ? 0.5 : 1)) : 0;
   // Royal allowances are state-funded and tax exempt; all other income is taxed progressively.
@@ -243,7 +243,8 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   const parentSupport = p.age < 21 && livingRelatives(p, "Parent").length > 0;
   if (adult && !p.isInPrison && !isRoyal(p) && !parentSupport) {
     // Lifestyle inflation: the more you earn, the more you spend.
-    living = BASE_LIVING + housingCost(p) + Math.max(0, gross - 50_000) * 0.2;
+    const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
+    living = BASE_LIVING + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross - 45_000) * 0.28;
   }
   living = Math.round(living);
   p.bankBalance -= living;

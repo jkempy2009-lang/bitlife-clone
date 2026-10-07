@@ -153,7 +153,9 @@ export const RENT_TIERS = [
   { name: "Luxury Rental", emoji: "🏙️", rent: 55_000, happiness: 2, blurb: "Doorman, skyline, and a monthly bill that makes you wince." },
 ] as const;
 
-export const BASE_LIVING = 6_000;
+export const BASE_LIVING = 9_000;
+/** Yearly cost of raising each minor child. */
+export const CHILD_COST = 3_500;
 export const OWNED_HOUSING = 3_000;
 
 export function housingCost(p: PlayerState): number {

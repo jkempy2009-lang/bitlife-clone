@@ -43,12 +43,12 @@ export const ADULT_EVENTS: LifeEvent[] = [
     opt("Keep it professional", "You kept things professional. HR is pleased.", { performanceDelta: 2 }),
   ], { requires: { hasJob: true, hasPartner: false }, cooldown: 4 }),
   ev("startup_idea", "money", 20, 50, "The Big Idea", "You think of an app that could change everything. It needs funding.", [
-    risk("Invest $20,000 of your savings", 0.2, ["Your startup was acquired for $400,000! You're a genius!", { bankBalanceDelta: 400000, happinessDelta: 14, fameDelta: 3, smartsDelta: 3 }], ["Your startup crashed and burned. $20,000 gone.", { bankBalanceDelta: -20000, happinessDelta: -8 }], "smarts"),
+    risk("Invest $20,000 of your savings", 0.1, ["Your startup was acquired for $240,000! You're a genius!", { bankBalanceDelta: 220000, happinessDelta: 14, fameDelta: 3, smartsDelta: 3 }], ["Your startup crashed and burned. $20,000 gone.", { bankBalanceDelta: -20000, happinessDelta: -8 }], "smarts"),
     opt("Build it as a side project", "You worked nights and weekends. It wasn't a hit, but you learned a lot.", { smartsDelta: 3, happinessDelta: 2, healthDelta: -2 }),
     opt("Give up on the idea", "You decided it was too risky.", { happinessDelta: -1 }),
   ], { requires: { minBank: 20000 }, cooldown: 6 }),
   ev("startup_idea_poor", "money", 20, 50, "The Big Idea (Poor Edition)", "You have an app idea but no money. A friend offers a loan.", [
-    risk("Take the loan and try", 0.15, ["Against all odds, the app took off and you made $120,000.", { bankBalanceDelta: 120000, happinessDelta: 12, smartsDelta: 3 }], ["The app flopped. You owe a friend $3,000.", { bankBalanceDelta: -3000, relationshipDelta: { target: "Friend", delta: -12 }, happinessDelta: -6 }], "smarts"),
+    risk("Take the loan and try", 0.08, ["Against all odds, the app took off and you made $100,000.", { bankBalanceDelta: 100000, happinessDelta: 12, smartsDelta: 3 }], ["The app flopped. You owe a friend $3,000.", { bankBalanceDelta: -3000, relationshipDelta: { target: "Friend", delta: -12 }, happinessDelta: -6 }], "smarts"),
     opt("Wait until you have savings", "You decided to wait. Patience!", { smartsDelta: 1 }),
   ], { requires: { maxBank: 20000, hasFriend: true }, cooldown: 6 }),
   ev("road_trip", "general", 18, 35, "Road Trip!", "Your friends want to drive across the country.", [
@@ -202,7 +202,7 @@ export const ADULT_EVENTS: LifeEvent[] = [
     opt("Skip it", "Galas aren't your thing.", {}),
   ], { requires: { minNetWorth: 1_000_000 }, cooldown: 4 }),
   ev("investor_tip", "money", 25, 80, "A Hot Tip", "A stranger at a party swears they've got a surefire investment.", [
-    risk("Invest $20,000", 0.3, ["The stranger was right! Your $20,000 became $90,000.", { bankBalanceDelta: 70000, happinessDelta: 10 }], ["It was a pyramid scheme. Your money's gone.", { bankBalanceDelta: -20000, happinessDelta: -10 }], "smarts"),
+    risk("Invest $20,000", 0.25, ["The stranger was right! Your $20,000 became $80,000.", { bankBalanceDelta: 60000, happinessDelta: 10 }], ["It was a pyramid scheme. Your money's gone.", { bankBalanceDelta: -20000, happinessDelta: -10 }], "smarts"),
     opt("Politely decline", "You declined. Good instincts.", { smartsDelta: 1 }),
   ], { requires: { minBank: 25000 }, cooldown: 6 }),
   ev("tax_haven", "crime", 30, 80, "Offshore Offer", "A smooth-talking advisor suggests hiding money in an offshore account.", [
