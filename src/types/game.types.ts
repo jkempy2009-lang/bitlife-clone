@@ -337,6 +337,8 @@ export interface PlayerState {
 
   // World & lifestyle
   effort: Effort;
+  /** Standing health routine: exercise and diet, 0 (neglect) – 2 (dedicated). 1 is the baseline. */
+  habits: { exercise: number; diet: number };
   /** Living standard: 0 frugal, 1 comfortable, 2 lavish. */
   lifestyle: number;
   economy: EconomyState;

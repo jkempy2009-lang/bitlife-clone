@@ -21,6 +21,7 @@ import {
   type WellnessId,
 } from "@/engine/activities";
 import { commitCrime } from "@/engine/crime";
+import { DIET_LEVELS, EXERCISE_LEVELS, careSystem, hasInsurance, illnessCosts, medicalPrice, setHabit } from "@/engine/health";
 import { HOBBIES, MAX_HOBBY_SESSIONS, hobbyIncome, practiceHobby } from "@/engine/hobbies";
 import { REHAB_COST, VICE_INFO, hasAnyVice, quitVice, rehab } from "@/engine/vices";
 import type { Vices } from "@/types/game.types";
@@ -85,7 +86,7 @@ function MedicalCenter() {
                   </div>
                 </div>
                 <Button variant="primary" className="shrink-0 px-3 py-1.5" onClick={() => act((pl, rng) => visitDoctor(pl, d.id, rng))}>
-                  Treat ({money(DOCTOR_COST)})
+                  Treat ({money(medicalPrice(p, DOCTOR_COST))})
                 </Button>
               </li>
             ))}
@@ -108,8 +109,43 @@ function MedicalCenter() {
           </Button>
         </Card>
       )}
+      <Card>
+        <div className="mb-1 text-sm font-semibold">Health routine</div>
+        <p className="mb-2 text-xs text-slate-400">Standing habits you keep up year after year.</p>
+        {(["exercise", "diet"] as const).map((kind) => {
+          const levels = kind === "exercise" ? EXERCISE_LEVELS : DIET_LEVELS;
+          return (
+            <div key={kind} className="mb-2 last:mb-0">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">{kind === "exercise" ? "Exercise" : "Diet"}</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {levels.map((l, i) => (
+                  <button
+                    key={l.name}
+                    type="button"
+                    disabled={p.age < 12}
+                    onClick={() => act((pl) => setHabit(pl, kind, i))}
+                    className={`rounded-xl px-1.5 py-2 text-center text-xs font-semibold transition-colors ${p.habits[kind] === i ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                  >
+                    <div className="text-base">{l.emoji}</div>
+                    {l.name}
+                    {l.cost > 0 && <div className="font-normal opacity-80">{money(l.cost)}/yr</div>}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-slate-400">{levels[p.habits[kind]].blurb}</p>
+            </div>
+          );
+        })}
+      </Card>
+      <Card className="p-3 text-xs text-slate-400">
+        <div className="mb-0.5 font-semibold text-slate-300">Healthcare in {p.residence.country}</div>
+        {careSystem(p.residence.country) === "universal" && "Public healthcare covers most costs."}
+        {careSystem(p.residence.country) === "insured" && (hasInsurance(p) ? "You're covered through work or your spouse. Treatment is heavily discounted." : "You have no insurance. Treatment is very expensive. A full-time job (or an insured spouse) fixes that.")}
+        {careSystem(p.residence.country) === "private" && "Public care is thin. You pay most costs yourself."}
+        {illnessCosts(p) > 0 && <div className="mt-1 text-amber-300">Your conditions cost about {money(illnessCosts(p))} a year to manage.</div>}
+      </Card>
       <Button variant="primary" onClick={() => act((pl, rng) => visitDoctor(pl, null, rng))}>
-        🩺 Visit the Doctor — {money(DOCTOR_COST)}
+        🩺 Check-up — {money(medicalPrice(p, DOCTOR_COST))}
       </Button>
       <Button variant="ghost" onClick={() => act((pl, rng) => visitWitchDoctor(pl, rng))}>
         🔮 Witch Doctor — {money(WITCH_COST)} <span className="text-xs text-slate-400">(miracle or curse)</span>

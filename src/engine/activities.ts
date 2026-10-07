@@ -4,6 +4,7 @@ import { clamp, money } from "@/lib/format";
 import { CURE_CHANCE } from "@/data/diseases";
 import { addLog, changeStat, clone } from "./state";
 import { killPlayer } from "./mortality";
+import { medicalPrice } from "./health";
 
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" | "surgery" = "neutral") =>
   ({ kind: "info" as const, title, body, tone });
@@ -17,7 +18,8 @@ export const WITCH_COST = 50;
 
 export function visitDoctor(p0: PlayerState, diseaseId: string | null, rng: Rng): ActionResult {
   const p = clone(p0);
-  if (p.bankBalance < DOCTOR_COST) return { player: p0, notices: [info("Can't Afford It", `A doctor's visit costs ${money(DOCTOR_COST)}.`, "bad")] };
+  const price = medicalPrice(p, DOCTOR_COST);
+  if (p.bankBalance < price) return { player: p0, notices: [info("Can't Afford It", `A doctor's visit costs ${money(price)}.`, "bad")] };
   const target = diseaseId ? p.diseases.find((d) => d.id === diseaseId) : p.diseases[0];
   if (diseaseId && !target) return { player: p0 };
   const key = `doctor:${target?.id ?? "checkup"}`;
@@ -25,10 +27,11 @@ export function visitDoctor(p0: PlayerState, diseaseId: string | null, rng: Rng)
     return { player: p0, notices: [info("Second Opinion Denied", "The doctor has already done all they can for this condition this year.")] };
   }
   p.annual[key] = 1;
-  p.bankBalance -= DOCTOR_COST;
+  p.bankBalance -= price;
   if (!target) {
     changeStat(p, "health", 1);
-    const body = "The doctor gave you a clean bill of health. You paid $200 for peace of mind.";
+    if (!p.flags.includes(`checkup_${p.year}`)) p.flags.push(`checkup_${p.year}`);
+    const body = `The doctor gave you a clean bill of health. You paid ${money(price)} for peace of mind, and regular check-ups catch serious illness early.`;
     addLog(p, body);
     return { player: p, notices: [info("Checkup", body, "good")] };
   }

@@ -35,6 +35,7 @@ import { processMob } from "./underworld";
 import { hobbyIncome, processHobbies } from "./hobbies";
 import { processAthlete, processBusiness, processInfluencer } from "./paths";
 import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
+import { applyHabitEffects, habitCost, illnessCosts, riskMultiplier } from "./health";
 import { SHARED_LIVING_FACTOR, SPOUSE_TAX, childSupportDue, marriedPartner, spouseIncome } from "./household";
 import { LIFESTYLES, RENT_TIERS, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
@@ -232,7 +233,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
 
   const adult = p.age >= 18;
   if (adult && p.age < 65 && !p.currentJob && !isRoyal(p) && !p.isInPrison && !p.music.signed && p.pension === 0 && !marriedPartner(p)) {
-    gross += 11_000;
+    gross += 16_000;
   }
   const allowance = isRoyal(p) ? Math.round(ROYAL_ALLOWANCE[p.royalRank] * (p.royalRespect < 20 ? 0.5 : 1)) : 0;
   // Royal allowances are state-funded and tax exempt; all other income is taxed progressively.
@@ -251,11 +252,20 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
     // Lifestyle inflation: the more you earn, the more you spend.
     const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
     const ls = LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1];
-    living = BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 45_000) * ls.slope;
+    living = BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope;
     living += childSupportDue(p, gross);
   }
   living = Math.round(living);
   p.bankBalance -= living;
+  // Standing health routine and the price of chronic illness (heavier where care isn't covered).
+  const care = adult && !p.isInPrison ? habitCost(p) + illnessCosts(p) : 0;
+  if (care > 0) {
+    p.bankBalance -= care;
+    if (illnessCosts(p) > 0 && p.bankBalance < 0 && p.age >= 18) {
+      // Unaffordable treatment means going without.
+      p.health -= 2;
+    }
+  }
 
   const prog = PROGRAMS[p.education.stage as keyof typeof PROGRAMS];
   const tuition = prog && !p.isInPrison ? prog.tuition : 0;
@@ -289,6 +299,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
 // ---------------------------------------------------------------------------
 
 function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
+  applyHabitEffects(p);
   // Natural ageing
   const lingering = p.diseases.some((d) => d.severity !== "mild");
   if (p.age < 55 && !lingering) p.health += rng.int(1, 4);
@@ -316,18 +327,27 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
   const owned = new Set(p.diseases.map((d) => d.id));
   const healthFactor = clamp((100 - p.health) / 40 + 0.6, 0.5, 2.2);
   const candidates = DISEASE_CATALOG.filter((d) => !owned.has(d.id) && p.age >= d.minAge);
-  const roll = rng.weighted(candidates, (d) => d.baseChance * healthFactor * (d.severity === "mild" ? 1 : 1 + (p.age - d.minAge) / 40));
-  if (roll && rng.chance(Math.min(0.5, 0.45 * candidates.reduce((s, d) => s + d.baseChance * healthFactor, 0)))) {
+  const weight = (d: (typeof candidates)[number]) => d.baseChance * healthFactor * riskMultiplier(p, d.id);
+  let roll = rng.weighted(candidates, (d) => weight(d) * (d.severity === "mild" ? 1 : 1 + (p.age - d.minAge) / 40));
+  if (roll && rng.chance(Math.min(0.5, 0.45 * candidates.reduce((s, d) => s + weight(d), 0)))) {
+    // Regular check-ups catch cancer early, when it is treatable.
+    const screened = p.flags.includes(`checkup_${p.year}`) || p.flags.includes(`checkup_${p.year - 1}`);
+    let earlyCatch = false;
+    if (roll.id === "cancer" && screened && rng.chance(0.65)) {
+      roll = DISEASE_CATALOG.find((d) => d.id === "early_cancer") ?? roll;
+      earlyCatch = roll.id === "early_cancer";
+    }
     p.diseases.push(instantiateDisease(roll, (a, b) => rng.int(a, b)));
-    addLog(p, `You were diagnosed with ${roll.name}.`);
+    addLog(p, `You were diagnosed with ${roll.name}${earlyCatch ? ", caught early at a routine check-up" : ""}.`);
     notices.push(
       info(
         "Diagnosis",
-        `You were diagnosed with ${roll.name}.${roll.severity === "fatal" ? " The prognosis is grim." : roll.severity === "chronic" ? " It's a chronic condition that will wear on you each year." : " It should pass in time."}`,
+        `You were diagnosed with ${roll.name}.${earlyCatch ? " Your last check-up caught it early, which makes it far more treatable." : roll.severity === "fatal" ? " The prognosis is grim." : roll.severity === "chronic" ? " It's a chronic condition that will wear on you each year." : " It should pass in time."}`,
         "bad",
       ),
     );
   }
+  p.flags = p.flags.filter((f) => !f.startsWith("checkup_") || f === `checkup_${p.year}` || f === `checkup_${p.year - 1}`);
 
   p.health = clamp(Math.round(p.health));
   if (p.health <= 0) return; // finalize() handles the cause of death
@@ -453,7 +473,9 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
     return;
   }
   job.yearsInRole = (job.yearsInRole ?? 0) + 1;
-  if (!job.partTime && job.performance > 85 && job.yearsInRole >= 2 + job.tier) {
+  // Promotions need standout performance, time in the role, and an opening: rarer at the top and in a recession.
+  const openingChance = (p.economy.climate === "boom" ? 0.55 : p.economy.climate === "recession" ? 0.2 : 0.4) * Math.max(0.3, 1 - 0.15 * job.tier);
+  if (!job.partTime && job.performance > 85 && job.yearsInRole >= 3 + job.tier && rng.chance(openingChance)) {
     const ev = promotionEvent(p);
     if (ev) notices.push({ kind: "event", event: ev });
   }

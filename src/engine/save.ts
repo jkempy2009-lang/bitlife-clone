@@ -77,6 +77,7 @@ function hydrate(p: PlayerState): PlayerState {
     careerYears: p.careerYears ?? (p.currentJob ? { [p.currentJob.lineId]: Math.round(p.stats?.yearsWorked ?? 0) } : {}),
     matureContent: p.matureContent ?? true,
     effort: p.effort ?? "steady",
+    habits: p.habits ?? { exercise: 1, diet: 1 },
     lifestyle: p.lifestyle ?? 1,
     business: p.business ? { ...p.business, staff: p.business.staff ?? 0, locations: p.business.locations ?? 1 } : null,
     achievements: p.achievements ?? [],

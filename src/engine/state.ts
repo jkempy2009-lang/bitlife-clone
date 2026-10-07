@@ -318,6 +318,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     blackjack: null,
     matureContent: true,
     effort: "steady",
+    habits: { exercise: 1, diet: 1 },
     lifestyle: 1,
     isInPrison: false,
     isFugitive: false,
