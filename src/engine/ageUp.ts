@@ -26,6 +26,7 @@ import {
 import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
 import { processFriendLoans } from "./friends";
+import { processLaterLife } from "./later";
 import { startTrial } from "./crime";
 import { selectEvents } from "./events";
 import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
@@ -117,6 +118,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
       addLog(p, line + ".");
       let body = line + ".";
       changeStat(p, "happiness", -Math.round(6 + r.relationshipBar / 8));
+      if (r.relation === "Partner" && r.partnerStatus === "married" && !p.flags.some((f) => f.startsWith("grief:"))) p.flags.push(`grief:${p.year}`);
       const chance =
         r.relation === "Parent" || r.relation === "Partner" ? 0.1 + 0.12 * r.incomeTier : 0.04 * r.incomeTier;
       if (rng.chance(chance)) {
@@ -668,6 +670,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   processHobbies(p, prevAnnual, notices);
   processVices(p, rng, notices);
   processMedical(p, rng, notices); // 5. medical & disease progression
+  if (p.alive) processLaterLife(p, notices);
   if (p.alive) {
     processEducation(p, rng, notices);
     processCareer(p, rng, notices);
