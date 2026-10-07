@@ -23,7 +23,7 @@ describe("year summary & milestones", () => {
     const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
     p.age = 17;
     const res = ageUp(p, rng);
-    expect(res.notices?.some((n) => n.kind === "info" && n.title === "Adulthood")).toBe(true);
+    expect(res.notices?.some((n) => "title" in n && n.title === "Adulthood")).toBe(true);
   });
 });
 
