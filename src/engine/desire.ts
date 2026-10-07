@@ -161,3 +161,137 @@ export function knownTastes(rel: Relative): { tag: string; taste: "like" | "limi
 }
 
 export const isOpenRelationship = isOpen;
+
+// ---------------------------------------------------------------------------
+// Planning an evening together: choose each step, read their reaction, adjust.
+// ---------------------------------------------------------------------------
+
+export interface SceneChoice {
+  id: string;
+  label: string;
+  emoji: string;
+  /** Interest the player must have opted into. */
+  tag: string;
+  cost: number;
+}
+
+export const SCENE_SETTINGS: SceneChoice[] = [
+  { id: "home", label: "Home, candles lit", emoji: "🏠", tag: "sensual", cost: 20 },
+  { id: "hotel", label: "A hotel night away", emoji: "🏨", tag: "sensual", cost: 220 },
+  { id: "bath", label: "Bubbles and a long bath", emoji: "🛁", tag: "sensual", cost: 30 },
+  { id: "outdoors", label: "Somewhere with a thrill", emoji: "🌃", tag: "adventurous", cost: 0 },
+];
+
+export const SCENE_MOODS: SceneChoice[] = [
+  { id: "tender", label: "Slow and tender", emoji: "🕯️", tag: "sensual", cost: 0 },
+  { id: "playful", label: "Playful and teasing", emoji: "🎭", tag: "playful", cost: 0 },
+  { id: "bold", label: "Bold and daring", emoji: "🔥", tag: "adventurous", cost: 0 },
+  { id: "control", label: "Rules and trust", emoji: "🪢", tag: "kink", cost: 60 },
+];
+
+export const SCENE_EXTRAS: SceneChoice[] = [
+  { id: "none", label: "Just the two of you", emoji: "💞", tag: "sensual", cost: 0 },
+  { id: "roleplay", label: "Characters and costumes", emoji: "🎭", tag: "playful", cost: 100 },
+  { id: "toys", label: "A little help from the boutique", emoji: "🎀", tag: "toys", cost: 120 },
+  { id: "photos", label: "A private photo or two", emoji: "📸", tag: "photo", cost: 0 },
+  { id: "call", label: "Tease by message first", emoji: "💬", tag: "digital", cost: 0 },
+];
+
+export const SCENE_CAP = 3;
+
+export type SceneStep = "setting" | "mood" | "extra";
+
+export interface Reaction {
+  /** What they do when you suggest it. */
+  text: string;
+  /** "yes" they're keen, "maybe" willing, "no" a limit: you can't proceed with this. */
+  verdict: "yes" | "maybe" | "no";
+}
+
+/** Their immediate reaction to a suggestion. Reading it is how you learn what they like. */
+export function sceneReaction(rel: Relative, choice: SceneChoice): Reaction {
+  const n = firstName(rel);
+  if (choice.id === "none") return { verdict: "yes", text: `${n} smiles. "Just us sounds perfect."` };
+  const taste = tasteOf(rel, choice.tag);
+  if (taste === "limit") return { verdict: "no", text: `${n} gently shakes their head. "Not that one. Anything else?"` };
+  if (taste === "like") return { verdict: "yes", text: `${n}'s eyes light up. "Oh, yes. Please."` };
+  return { verdict: "maybe", text: `${n} thinks for a second, then shrugs with a grin. "Why not? If the mood's right."` };
+}
+
+export interface ScenePlan {
+  setting: string;
+  mood: string;
+  extra: string;
+  /** Pause to ask how they're doing and what they want. */
+  checkIn: boolean;
+  /** Finish with cuddling and an honest chat. */
+  aftercare: boolean;
+}
+
+const pick = <T extends { id: string }>(list: T[], id: string) => list.find((x) => x.id === id);
+
+export function playScene(p0: PlayerState, relId: string, plan: ScenePlan, protectedSex: boolean, rng: Rng): ActionResult {
+  const blocked = gate(p0);
+  if (blocked) return { ...blocked, player: p0 };
+  const p = clone(p0);
+  const rel = findPartnerLike(p, relId);
+  if (!rel || !isAdult(rel)) return { player: p0 };
+  const setting = pick(SCENE_SETTINGS, plan.setting);
+  const mood = pick(SCENE_MOODS, plan.mood);
+  const extra = pick(SCENE_EXTRAS, plan.extra) ?? SCENE_EXTRAS[0];
+  if (!setting || !mood) return { player: p0 };
+  const chosen = [setting, mood, extra];
+  for (const c of chosen) {
+    if (!p.intimacy.interests.includes(c.tag)) return { player: p0, notices: [info("Not On Your List", `Add “${INTEREST_BY_ID[c.tag].label}” to your interests first.`)] };
+    if (tasteOf(rel, c.tag) === "limit") return { player: p0, notices: [info("A Limit", `${firstName(rel)} already said no to part of that plan, and a no stays a no.`)] };
+  }
+  const key = `scene:${rel.id}`;
+  if ((p.annual[key] ?? 0) >= SCENE_CAP) return { player: p0, notices: [info("Pace Yourselves", "You've planned plenty of evenings together this year.")] };
+  const cost = chosen.reduce((s, c) => s + c.cost, 0);
+  if (p.bankBalance < cost) return { player: p0, notices: [info("Insufficient Funds", `That plan costs ${money(cost)}.`, "bad")] };
+  const needBar = Math.max(...chosen.map((c) => (c.tag === "kink" ? 55 : c.tag === "photo" || c.tag === "adventurous" ? 40 : 20)));
+  if (rel.relationshipBar < needBar) return { player: p0, notices: [info("Not There Yet", `${firstName(rel)} would want a stronger bond first (relationship ${needBar}+).`)] };
+
+  p.annual[key] = (p.annual[key] ?? 0) + 1;
+  p.bankBalance -= cost;
+  const n = firstName(rel);
+  const notices: Notices = [];
+  // How well it goes: shared tastes, trust, and paying attention to them.
+  const likes = chosen.filter((c) => tasteOf(rel, c.tag) === "like").length;
+  const quality = clamp(0.35 + likes * 0.14 + rel.relationshipBar / 250 + (plan.checkIn ? 0.12 : 0) + (rng.next() - 0.5) * 0.3, 0, 1.2);
+  rel.encounters = (rel.encounters ?? 0) + 1;
+  encounter(p, rel, protectedSex, rng, notices, rel.relation === "Partner" ? 0.004 : 0.1);
+  for (const c of chosen) if (c.id !== "none" && !knows(rel, c.tag)) rel.knownTastes = [...(rel.knownTastes ?? []), c.tag];
+  for (const c of chosen) if (tasteOf(rel, c.tag) === "like") learn(rel, c.tag, "like");
+
+  let title: string;
+  let line: string;
+  let gain: number;
+  if (quality >= 0.95) {
+    title = "An Unforgettable Evening";
+    line = `${setting.label.toLowerCase()}, ${mood.label.toLowerCase()}: you read each other perfectly. ${n} said it was the best night in a long time.`;
+    gain = rng.int(12, 18);
+  } else if (quality >= 0.6) {
+    title = "A Lovely Evening";
+    line = `${setting.label}, ${mood.label.toLowerCase()}. It started a little hesitantly and ended with both of you glowing.`;
+    gain = rng.int(7, 12);
+  } else {
+    title = "Awkward, But Fun";
+    line = `${setting.label}. The mood wasn't quite right and some things fell flat, but you laughed about it afterwards.`;
+    gain = rng.int(2, 6);
+  }
+  if (plan.checkIn) line += ` You paused to ask how ${n} was feeling, and it made all the difference.`;
+  rel.relationshipBar = clamp(rel.relationshipBar + gain);
+  changeStat(p, "happiness", Math.round(gain / 2));
+  if (plan.aftercare) {
+    rel.relationshipBar = clamp(rel.relationshipBar + 3);
+    line += " Afterwards you stayed up talking and laughing, wrapped in a blanket.";
+  }
+  if (setting.id === "outdoors" && rng.chance(0.1)) {
+    p.bankBalance = Math.max(0, p.bankBalance - 200);
+    line += " A passing patrol interrupted you and issued a fine. You'll tell that story for years.";
+  }
+  if (rel.relation === "Lover" && rel.partnerStatus === "affair") recordCheating(p, rng, notices, 0.06);
+  addLog(p, `${title}: ${line}`);
+  return { player: p, notices: [info(title, line, quality >= 0.6 ? "good" : "neutral"), ...notices] };
+}

@@ -161,3 +161,54 @@ describe("relationship styles", () => {
     expect(said).toBeLessThanOrEqual(3);
   });
 });
+
+describe("planning an evening", () => {
+  it("their reaction reflects their tastes; a limit blocks the plan and a no stays a no", async () => {
+    const { sceneReaction, playScene, SCENE_MOODS } = await import("../desire");
+    const rel = lover({ tastes: { playful: "like", kink: "limit" } });
+    expect(sceneReaction(rel, SCENE_MOODS.find((m) => m.id === "playful")!).verdict).toBe("yes");
+    expect(sceneReaction(rel, SCENE_MOODS.find((m) => m.id === "control")!).verdict).toBe("no");
+
+    const { p } = adult(40);
+    p.intimacy.interests = ["sensual", "playful", "kink"];
+    p.relatives.push(rel);
+    const refused = playScene(p, "L1", { setting: "home", mood: "control", extra: "none", checkIn: true, aftercare: true }, true, makeRng(1));
+    expect(refused.notices?.[0]).toMatchObject({ title: "A Limit" });
+    expect(refused.player.pregnancy).toBeNull();
+    expect(refused.player.bankBalance).toBe(p.bankBalance);
+  });
+
+  it("matching tastes and checking in make for better evenings; costs, caps and opt-ins are enforced", async () => {
+    const { playScene, SCENE_CAP } = await import("../desire");
+    const gain = (checkIn: boolean, like: boolean) => {
+      let total = 0;
+      for (let s = 1; s <= 40; s++) {
+        const { p } = adult(50);
+        p.intimacy.interests = ["sensual", "playful"];
+        p.relatives.push(lover({ tastes: like ? { playful: "like", sensual: "like" } : {}, relationshipBar: 60 }));
+        const r = playScene(p, "L1", { setting: "home", mood: "playful", extra: "none", checkIn, aftercare: false }, true, makeRng(s)).player;
+        total += r.relatives.find((x) => x.id === "L1")!.relationshipBar - 60;
+      }
+      return total / 40;
+    };
+    expect(gain(true, true)).toBeGreaterThan(gain(false, false));
+
+    const { p } = adult(51);
+    p.intimacy.interests = ["sensual", "playful"];
+    p.relatives.push(lover({ tastes: {} }));
+    // Not opted in to adventurous
+    expect(playScene(p, "L1", { setting: "outdoors", mood: "tender", extra: "none", checkIn: true, aftercare: true }, true, makeRng(1)).notices?.[0]).toMatchObject({ title: "Not On Your List" });
+    // Caps
+    let q = p;
+    let done = 0;
+    for (let i = 0; i < SCENE_CAP + 2; i++) {
+      const r = playScene(q, "L1", { setting: "home", mood: "tender", extra: "none", checkIn: true, aftercare: true }, true, makeRng(60 + i));
+      if (r.player !== q) done++;
+      q = r.player;
+    }
+    expect(done).toBe(SCENE_CAP);
+    // Adults only and mature content off
+    const off = { ...structuredClone(p), matureContent: false };
+    expect(playScene(off, "L1", { setting: "home", mood: "tender", extra: "none", checkIn: true, aftercare: true }, true, makeRng(1)).player).toBe(off);
+  });
+});

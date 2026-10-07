@@ -35,7 +35,7 @@ import {
   swingerClub,
 } from "@/engine/intimacy";
 import { EXPERIENCES, INTERESTS, INTEREST_BY_ID } from "@/data/experiences";
-import { discussDesires, knownTastes, setIntimacyPrefs, shareExperience, toggleGender, toggleInterest } from "@/engine/desire";
+import { SCENE_CAP, SCENE_EXTRAS, SCENE_MOODS, SCENE_SETTINGS, discussDesires, knownTastes, playScene, sceneReaction, setIntimacyPrefs, shareExperience, toggleGender, toggleInterest, type SceneChoice } from "@/engine/desire";
 import { adultRange } from "@/engine/people";
 import { closeRelationship, type Intent } from "@/engine/intimacy";
 import { supportAction } from "@/engine/friends";
@@ -278,6 +278,98 @@ function PreferencesCard() {
   );
 }
 
+function EveningPlanner({ rel, safe }: { rel: Relative; safe: boolean }) {
+  const { player: p, act } = useGame();
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState(0);
+  const [picks, setPicks] = useState<{ setting?: SceneChoice; mood?: SceneChoice; extra?: SceneChoice }>({});
+  const [pending, setPending] = useState<{ choice: SceneChoice; reaction: ReturnType<typeof sceneReaction> } | null>(null);
+  const [checkIn, setCheckIn] = useState(true);
+  const [aftercare, setAftercare] = useState(true);
+  const left = SCENE_CAP - (p.annual[`scene:${rel.id}`] ?? 0);
+  const steps = [
+    { key: "setting" as const, title: "Where?", options: SCENE_SETTINGS },
+    { key: "mood" as const, title: "What's the mood?", options: SCENE_MOODS },
+    { key: "extra" as const, title: "Anything extra?", options: SCENE_EXTRAS },
+  ];
+  const cur = steps[step];
+  const reset = () => { setStep(0); setPicks({}); setPending(null); };
+  const cost = [picks.setting, picks.mood, picks.extra].reduce((sum, c) => sum + (c?.cost ?? 0), 0);
+
+  if (!open) {
+    return (
+      <Button variant="primary" onClick={() => setOpen(true)} disabled={left <= 0}>
+        🌙 Plan an Evening {left <= 0 ? "(done this year)" : `(${left} left this year)`}
+      </Button>
+    );
+  }
+  return (
+    <Card className="border-fuchsia-500/30 bg-fuchsia-950/10">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="font-semibold">🌙 Plan an Evening with {rel.name.split(" ")[0]}</span>
+        <button type="button" className="text-xs text-slate-400 underline" onClick={() => { reset(); setOpen(false); }}>Cancel</button>
+      </div>
+      {step < 3 ? (
+        <>
+          <div className="mb-2 text-sm text-slate-300">{cur.title} <span className="text-xs text-slate-500">(step {step + 1} of 3, you'll see how they react)</span></div>
+          <div className="flex flex-col gap-1.5">
+            {cur.options.map((o) => {
+              const optedIn = p.intimacy.interests.includes(o.tag);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={!optedIn || p.bankBalance < o.cost}
+                  onClick={() => setPending({ choice: o, reaction: sceneReaction(rel, o) })}
+                  className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800/70 p-2 text-left text-sm transition-colors hover:border-fuchsia-400/60 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span className="text-xl">{o.emoji}</span>
+                  <span className="flex-1">{o.label}{o.cost ? ` · ${money(o.cost)}` : ""}</span>
+                  {!optedIn && <span className="text-xs text-amber-300">add interest</span>}
+                </button>
+              );
+            })}
+          </div>
+          {pending && (
+            <div className={`mt-2 rounded-xl p-2.5 text-sm ${pending.reaction.verdict === "no" ? "bg-rose-500/10 text-rose-200" : pending.reaction.verdict === "yes" ? "bg-emerald-500/10 text-emerald-200" : "bg-slate-700/40 text-slate-200"}`}>
+              <div>{pending.reaction.text}</div>
+              {pending.reaction.verdict === "no" ? (
+                <div className="mt-1 text-xs">That's a limit. Choose something else.</div>
+              ) : (
+                <Button variant="primary" className="mt-2 w-full" onClick={() => { setPicks((x) => ({ ...x, [cur.key]: pending.choice })); setPending(null); setStep(step + 1); }}>
+                  Go with “{pending.choice.label}”
+                </Button>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="text-sm text-slate-300">
+            {picks.setting?.emoji} {picks.setting?.label} · {picks.mood?.emoji} {picks.mood?.label} · {picks.extra?.emoji} {picks.extra?.label}
+          </div>
+          <label className="mt-2 flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={checkIn} onChange={(e) => setCheckIn(e.target.checked)} className="h-4 w-4 accent-emerald-500" />Check in with them along the way</label>
+          <label className="mt-1 flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={aftercare} onChange={(e) => setAftercare(e.target.checked)} className="h-4 w-4 accent-emerald-500" />Afterwards: cuddle and talk</label>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button variant="ghost" onClick={reset}>Start over</Button>
+            <Button
+              variant="primary"
+              disabled={p.bankBalance < cost}
+              onClick={() => {
+                act((pl, rng) => playScene(pl, rel.id, { setting: picks.setting!.id, mood: picks.mood!.id, extra: picks.extra!.id, checkIn, aftercare }, safe, rng));
+                reset();
+                setOpen(false);
+              }}
+            >
+              Begin{cost ? ` (${money(cost)})` : ""}
+            </Button>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function ExperienceMenu({ rel, safe }: { rel: Relative; safe: boolean }) {
   const { player: p, act } = useGame();
   const known = knownTastes(rel);
@@ -473,6 +565,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
               </>
             )}
           </div>
+          <EveningPlanner rel={rel} safe={safe} />
           <ExperienceMenu rel={rel} safe={safe} />
           {rel.relation === "Partner" && (
             <p className="text-xs text-slate-500">Your partner's personality ({rel.traits?.join(", ") ?? "unknown"}) shapes how they'll react. Asking is always their choice, and no means no.</p>
