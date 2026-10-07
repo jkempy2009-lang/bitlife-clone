@@ -29,6 +29,11 @@ import { adoptPet } from "../social";
 import { blackjackClear, blackjackDeal, blackjackHit, blackjackStand } from "../blackjack";
 import { joinParty, PARTIES } from "../politics";
 import { expandBusiness, fireStaff, hireStaff, runMarketing } from "../paths";
+import {
+  acquireCompetitor, closeBusiness, complianceAudit, diversifyBusiness, fileBankruptcy, fireManager, handToManager, hireManager, pivotBusiness,
+  raiseFunding, renovateBusiness, repayBusinessLoan, sellBusiness, sellFranchise, setInsurance, setPayout, setPrice, setRescue, takeBusinessLoan,
+  trainStaff, upgradeProduct,
+} from "../paths";
 import { COUNTRIES } from "@/data/countries";
 import type { ActionResult, Notice, PlayerState } from "@/types/game.types";
 
@@ -52,6 +57,20 @@ function checkInvariants(p: PlayerState) {
   expect(p.creditScore).toBeLessThanOrEqual(850);
   for (const r of p.relatives) expect(r.relationshipBar).toBeGreaterThanOrEqual(0);
   if (p.isInPrison) expect(p.currentJob).toBeNull();
+  // A business is a full-time commitment: it never coexists with a job.
+  if (p.business) {
+    expect(p.currentJob, "business and job at once").toBeNull();
+    const b = p.business;
+    for (const k of ["cash", "debt", "value", "assets", "basis", "revenue", "customers", "reputation", "quality", "morale", "fit"] as const) expect(Number.isFinite(b[k]), `business.${k}`).toBe(true);
+    expect(b.ownerShare).toBeGreaterThan(0);
+    expect(b.ownerShare).toBeLessThanOrEqual(1);
+    expect(b.debt).toBeGreaterThanOrEqual(0);
+    expect(b.staff).toBeGreaterThanOrEqual(0);
+    expect(b.reputation).toBeLessThanOrEqual(100);
+    expect(p.flags).toContain("business_owner");
+  } else {
+    expect(p.flags).not.toContain("business_owner");
+  }
 }
 
 function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): PlayerState {
@@ -107,7 +126,7 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl) => holdGala(pl),
       (pl, r) => executeCitizen(pl, r),
       (pl) => passDecree(pl, rng.pick(DECREES).id),
-      (pl, r) => startBusiness(pl, r.pick(BUSINESS_TYPES).id, ""),
+      (pl, r) => startBusiness(pl, r.pick(BUSINESS_TYPES).id, "", r),
       (pl) => workOnBusiness(pl),
       (pl) => investInBusiness(pl, 10_000),
       (pl, r) => startChannel(pl, r),
@@ -154,6 +173,27 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl) => fireStaff(pl),
       (pl) => runMarketing(pl),
       (pl) => expandBusiness(pl),
+      (pl, r) => hireManager(pl, r, r.pick(["solid", "star"] as const)),
+      (pl) => fireManager(pl),
+      (pl) => trainStaff(pl),
+      (pl, r) => setPrice(pl, r.int(0, 2)),
+      (pl, r) => setPayout(pl, r.pick(["reinvest", "balanced", "salary"] as const)),
+      (pl, r) => setInsurance(pl, r.int(0, 2)),
+      (pl, r) => setRescue(pl, r.chance(0.5)),
+      (pl) => complianceAudit(pl),
+      (pl) => renovateBusiness(pl),
+      (pl) => upgradeProduct(pl),
+      (pl) => diversifyBusiness(pl),
+      (pl, r) => pivotBusiness(pl, r),
+      (pl, r) => acquireCompetitor(pl, r),
+      (pl, r) => takeBusinessLoan(pl, r.int(5, 400) * 1000),
+      (pl, r) => repayBusinessLoan(pl, r.int(5, 400) * 1000),
+      (pl, r) => raiseFunding(pl, r, r.pick([0.1, 0.2, 0.3])),
+      (pl, r) => sellFranchise(pl, r),
+      (pl, r) => (r.chance(0.15) ? sellBusiness(pl, r) : { player: pl }),
+      (pl, r) => (r.chance(0.08) ? closeBusiness(pl) : { player: pl }),
+      (pl, r) => (r.chance(0.05) ? fileBankruptcy(pl) : { player: pl }),
+      (pl, r) => (r.chance(0.1) ? handToManager(pl) : { player: pl }),
       (pl, r) => applyForJob(pl, r.pick(["dancer", "escort", "creator"]), r),
       (pl, r) => runMission(pl, r.pick(["stealth", "social", "force"]), r),
       (pl, r) => applyForJob(pl, "spy", r),

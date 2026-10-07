@@ -28,7 +28,7 @@ describe("business", () => {
     expect(aged.business === null || aged.business.lastProfit !== undefined).toBe(true);
     const sold = sellBusiness(started).player;
     expect(sold.business).toBeNull();
-    expect(sold.bankBalance).toBe(50_000 + 135_000);
+    expect(sold.bankBalance).toBe(50_000 + 141_000); // whole equity less a 6% sale fee, no gain to tax
   });
 });
 
