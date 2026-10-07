@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import type { Relative } from "@/types/game.types";
 import {
+  ADOPTION_COST,
   INTERACTION_CAP,
+  adoptChild,
   dateNight,
   interact,
   leavePartner,
@@ -15,8 +17,8 @@ import {
 } from "@/engine/social";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
 
-const RELATION_ORDER = ["Partner", "Parent", "Child", "Sibling", "Friend"] as const;
-const ICONS: Record<string, string> = { Partner: "💞", Parent: "👪", Child: "🧒", Sibling: "🧑‍🤝‍🧑", Friend: "🤝" };
+const RELATION_ORDER = ["Partner", "Parent", "Child", "Grandchild", "Sibling", "Grandparent", "Friend"] as const;
+const ICONS: Record<string, string> = { Partner: "💞", Parent: "👪", Child: "🧒", Sibling: "🧑‍🤝‍🧑", Friend: "🤝", Grandparent: "👵", Grandchild: "👶" };
 
 function barColor(v: number) {
   return v >= 70 ? "bg-emerald-500" : v >= 40 ? "bg-amber-400" : "bg-rose-500";
@@ -27,6 +29,8 @@ function label(r: Relative) {
   if (r.relation === "Parent") return r.gender === "Female" ? "Mother" : r.gender === "Male" ? "Father" : "Parent";
   if (r.relation === "Sibling") return r.gender === "Female" ? "Sister" : r.gender === "Male" ? "Brother" : "Sibling";
   if (r.relation === "Child") return r.gender === "Female" ? "Daughter" : r.gender === "Male" ? "Son" : "Child";
+  if (r.relation === "Grandparent") return r.gender === "Female" ? "Grandmother" : "Grandfather";
+  if (r.relation === "Grandchild") return "Grandchild";
   return r.relation;
 }
 
@@ -76,6 +80,9 @@ export default function RelationshipsTab() {
       <div>
         <SectionTitle>Meet People</SectionTitle>
         <div className="grid grid-cols-2 gap-2">
+          <Button variant="secondary" className="col-span-2" onClick={() => act((pl, rng) => adoptChild(pl, rng))} disabled={p.age < 22}>
+            🍼 Adopt a Child ({`$${ADOPTION_COST.toLocaleString()}`})
+          </Button>
           <Button variant="secondary" onClick={() => act((pl, rng) => meetSomeone(pl, "friend", rng))} disabled={p.age < 4}>
             🤝 Make a Friend
           </Button>

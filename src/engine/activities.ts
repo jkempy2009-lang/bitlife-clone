@@ -19,6 +19,7 @@ export function visitDoctor(p0: PlayerState, diseaseId: string | null, rng: Rng)
   const p = clone(p0);
   if (p.bankBalance < DOCTOR_COST) return { player: p0, notices: [info("Can't Afford It", `A doctor's visit costs ${money(DOCTOR_COST)}.`, "bad")] };
   const target = diseaseId ? p.diseases.find((d) => d.id === diseaseId) : p.diseases[0];
+  if (diseaseId && !target) return { player: p0 };
   const key = `doctor:${target?.id ?? "checkup"}`;
   if ((p.annual[key] ?? 0) >= 1) {
     return { player: p0, notices: [info("Second Opinion Denied", "The doctor has already done all they can for this condition this year.")] };
@@ -109,7 +110,7 @@ export function doWellness(p0: PlayerState, id: WellnessId): ActionResult {
 // Leisure & social extras
 // ---------------------------------------------------------------------------
 
-export type LeisureId = "vacation" | "party" | "therapy" | "volunteer" | "sidehustle";
+export type LeisureId = "vacation" | "party" | "therapy" | "volunteer" | "sidehustle" | "bar" | "experiment";
 
 export const LEISURE: Record<LeisureId, { label: string; emoji: string; blurb: string; cost: number }> = {
   vacation: { label: "Take a Vacation", emoji: "🏖️", blurb: "Unwind somewhere sunny.", cost: 3000 },
@@ -117,6 +118,8 @@ export const LEISURE: Record<LeisureId, { label: string; emoji: string; blurb: s
   therapy: { label: "See a Therapist", emoji: "🛋️", blurb: "Talk it out.", cost: 150 },
   volunteer: { label: "Volunteer", emoji: "🤝", blurb: "Do some good.", cost: 0 },
   sidehustle: { label: "Side Hustle", emoji: "💼", blurb: "Gig work for quick cash.", cost: 0 },
+  bar: { label: "Hit the Bar", emoji: "🍻", blurb: "Unwind with a few (dozen) drinks.", cost: 150 },
+  experiment: { label: "Experiment with Drugs", emoji: "💊", blurb: "A very bad idea with a very fun reputation.", cost: 200 },
 };
 
 export function doLeisure(p0: PlayerState, id: LeisureId, rng: Rng): ActionResult {
@@ -145,6 +148,20 @@ export function doLeisure(p0: PlayerState, id: LeisureId, rng: Rng): ActionResul
   } else if (id === "therapy") {
     changeStat(p, "happiness", rng.int(4, 9));
     body = "You talked through your feelings. You feel lighter.";
+  } else if (id === "bar") {
+    if (p.age < 18) {
+      return { player: p0, notices: [info("ID Please", "You must be 18 to drink.")] };
+    }
+    changeStat(p, "happiness", rng.int(3, 7));
+    p.vices.alcohol = clamp(p.vices.alcohol + rng.int(2, 6));
+    for (const r of p.relatives) if (r.alive && r.relation === "Friend") r.relationshipBar = clamp(r.relationshipBar + 4);
+    body = "You closed down the bar with your friends. Fun night, fuzzy morning.";
+  } else if (id === "experiment") {
+    if (p.age < 16) return { player: p0, notices: [info("Not a Chance", "You're far too young for that.")] };
+    changeStat(p, "happiness", rng.int(6, 12));
+    changeStat(p, "health", -rng.int(2, 6));
+    p.vices.drugs = clamp(p.vices.drugs + rng.int(8, 18));
+    body = "It was an unforgettable night. Whether you can remember it is another matter. You may be getting hooked.";
   } else if (id === "volunteer") {
     changeStat(p, "karma", rng.int(4, 9));
     changeStat(p, "happiness", 3);
@@ -178,6 +195,7 @@ export function buyLotteryTicket(p0: PlayerState, rng: Rng): ActionResult {
   p.bankBalance -= LOTTERY_COST;
   if (rng.next() < 0.00001) {
     p.bankBalance += LOTTERY_JACKPOT;
+    if (!p.flags.includes("lottery_winner")) p.flags.push("lottery_winner");
     changeStat(p, "happiness", 40);
     changeStat(p, "fame", 15);
     const body = `JACKPOT! Your ticket won ${money(LOTTERY_JACKPOT)}!`;
@@ -208,6 +226,7 @@ export function placeWager(p0: PlayerState, wager: number): ActionResult {
   if (p.age < 18) return { player: p0, notices: [info("Too Young", "You must be 18 to gamble.")] };
   if (wager <= 0 || wager > p.bankBalance) return { player: p0 };
   p.bankBalance -= wager;
+  p.vices.gambling = clamp(p.vices.gambling + 1);
   return { player: p };
 }
 

@@ -6,6 +6,12 @@ import { addLog, changeStat, clone, hasFlag, setFlag } from "./state";
 
 export function startTrial(p: PlayerState, charge: CrimeCharge) {
   if (p.pendingTrial || p.isInPrison) return;
+  if (p.probation) {
+    // Reoffending on probation means the book gets thrown at you.
+    charge = { ...charge, years: Math.ceil(charge.years * 1.5) };
+    addLog(p, `You violated your probation for ${p.probation.charge}. The judge is not amused.`);
+    p.probation = null;
+  }
   p.pendingTrial = charge;
   p.stats.crimesCommitted += 1;
   p.criminalRecord.push(charge.name);
@@ -46,13 +52,24 @@ export function resolveTrial(p0: PlayerState, lawyerId: string, rng: Rng): Actio
   }
   p.bankBalance -= lawyer.cost;
   p.pendingTrial = null;
-  if (rng.chance(lawyer.successChance)) {
+  const plea = lawyer.id === "plea";
+  if (!plea && rng.chance(lawyer.successChance)) {
     const body = `${lawyer.name} was brilliant. You were found NOT GUILTY of ${charge.name}!`;
     addLog(p, body);
     changeStat(p, "happiness", 6);
     return { player: p, notices: [{ kind: "info", title: "Not Guilty", body, tone: "good" }] };
   }
-  const years = Math.max(1, charge.years + rng.int(-1, 1));
+  const years = plea ? Math.max(1, Math.ceil(charge.years / 2)) : Math.max(1, charge.years + rng.int(-1, 1));
+  // Minor offences often end in a fine and probation instead of a cell.
+  if (charge.severity === "minor" && rng.chance(0.55)) {
+    const fine = rng.int(500, 5_000);
+    p.bankBalance -= fine;
+    p.probation = { yearsLeft: years + 1, charge: charge.name };
+    changeStat(p, "happiness", -6);
+    const body = `Found guilty of ${charge.name}${plea ? " (plea bargain)" : ""}, but the judge showed leniency: a ${money(fine)} fine and ${years + 1} years of probation. Stay out of trouble.`;
+    addLog(p, body);
+    return { player: p, notices: [{ kind: "info", title: "Probation", body, tone: "bad" }] };
+  }
   p.isInPrison = true;
   p.prison = { charge: charge.name, sentenceYears: years, yearsServed: 0 };
   p.currentJob = null;
@@ -99,6 +116,7 @@ export function attemptEscape(p0: PlayerState, pathId: string, rng: Rng): Action
     p.isInPrison = false;
     p.isFugitive = true;
     setFlag(p, "fugitive");
+    setFlag(p, "escaped");
     changeStat(p, "karma", -10);
     const body = `You escaped via "${path.name}"! You're a free man... woman... person — but now a fugitive.`;
     addLog(p, body);

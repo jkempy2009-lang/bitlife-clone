@@ -23,12 +23,15 @@ import {
   type WellnessId,
 } from "@/engine/activities";
 import { commitCrime } from "@/engine/crime";
+import { HOBBIES, MAX_HOBBY_SESSIONS, hobbyIncome, practiceHobby } from "@/engine/hobbies";
+import { REHAB_COST, VICE_INFO, hasAnyVice, quitVice, rehab } from "@/engine/vices";
+import type { Vices } from "@/types/game.types";
 import { CRIMES } from "@/data/crimes";
 import { handValue, isBlackjack, newDeck, settle, type Card as PlayingCard } from "@/engine/blackjack";
 import { money } from "@/lib/format";
-import { Button, Card, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
+import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
 
-type Panel = "medical" | "wellness" | "casino" | "crime" | "surgery" | "leisure";
+type Panel = "medical" | "wellness" | "hobbies" | "casino" | "crime" | "surgery" | "leisure";
 
 export default function ActivitiesTab() {
   const { player } = useGame();
@@ -42,6 +45,7 @@ export default function ActivitiesTab() {
         options={[
           { id: "wellness", label: "🏋️ Wellness" },
           { id: "medical", label: "🏥 Medical" },
+          { id: "hobbies", label: "🎨 Hobbies" },
           { id: "leisure", label: "🎈 Leisure" },
           { id: "casino", label: "🎰 Gambling" },
           { id: "crime", label: "🦹 Crime" },
@@ -50,6 +54,7 @@ export default function ActivitiesTab() {
       />
       {panel === "wellness" && <Wellness />}
       {panel === "medical" && <MedicalCenter />}
+      {panel === "hobbies" && <Hobbies />}
       {panel === "leisure" && <Leisure />}
       {panel === "casino" && <GamblingDen />}
       {panel === "crime" && <CrimeRings />}
@@ -88,6 +93,22 @@ function MedicalCenter() {
           </ul>
         )}
       </Card>
+      {hasAnyVice(p) && (
+        <Card>
+          <div className="mb-2 text-sm font-semibold">Habits & addictions</div>
+          {(Object.keys(VICE_INFO) as (keyof Vices)[]).filter((k) => p.vices[k] > 0).map((k) => (
+            <div key={k} className="mb-2">
+              <StatBar label={`${VICE_INFO[k].emoji} ${VICE_INFO[k].label}`} value={p.vices[k]} color="red" compact />
+              <Button variant="ghost" className="mt-1 w-full py-1 text-xs" disabled={(p.annual[`quit:${k}`] ?? 0) >= 1} onClick={() => act((pl, rng) => quitVice(pl, k, rng))}>
+                Try to quit
+              </Button>
+            </div>
+          ))}
+          <Button variant="primary" className="mt-1 w-full" disabled={p.bankBalance < REHAB_COST || (p.annual.rehab ?? 0) >= 1} onClick={() => act((pl) => rehab(pl))}>
+            🏥 Enter Rehab — {money(REHAB_COST)}
+          </Button>
+        </Card>
+      )}
       <Button variant="primary" onClick={() => act((pl, rng) => visitDoctor(pl, null, rng))}>
         🩺 Visit the Doctor — {money(DOCTOR_COST)}
       </Button>
@@ -124,6 +145,37 @@ function Wellness() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function Hobbies() {
+  const { player: p, act } = useGame();
+  const sessions = p.annual.hobbies ?? 0;
+  const income = hobbyIncome(p);
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionTitle hint={`${MAX_HOBBY_SESSIONS - sessions} sessions left this year`}>Hobbies</SectionTitle>
+      {income > 0 && <Card className="p-3 text-sm text-emerald-300">Your hobbies earn about {money(income)} a year.</Card>}
+      {HOBBIES.map((h) => {
+        const skill = p.hobbies[h.id] ?? 0;
+        const done = (p.annual[`hobby:${h.id}`] ?? 0) >= 1;
+        return (
+          <div key={h.id} className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{h.emoji}</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{h.name}</div>
+                <div className="text-xs text-slate-400">{h.blurb} {h.effects}</div>
+              </div>
+              <Button variant={skill ? "secondary" : "primary"} className="shrink-0 px-3 py-1.5" disabled={done || sessions >= MAX_HOBBY_SESSIONS || p.age < 6} onClick={() => act((pl, rng) => practiceHobby(pl, h.id, rng))}>
+                {done ? "✓" : skill ? "Practise" : "Start"}
+              </Button>
+            </div>
+            {skill > 0 && <div className="mt-2"><StatBar label="Skill" value={skill} color="purple" compact /></div>}
+          </div>
+        );
+      })}
     </div>
   );
 }

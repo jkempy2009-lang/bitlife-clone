@@ -39,7 +39,9 @@ export default function TrialView() {
                     <span className="text-sm font-semibold text-amber-300">{l.cost ? money(l.cost) : "Free"}</span>
                   </div>
                   <div className="text-xs text-slate-400">{l.blurb}</div>
-                  <div className="mt-1 text-sm text-emerald-300">{Math.round(l.successChance * 100)}% chance of acquittal</div>
+                  <div className="mt-1 text-sm text-emerald-300">
+                    {l.id === "plea" ? "Guaranteed conviction, half the sentence" : `${Math.round(l.successChance * 100)}% chance of acquittal`}
+                  </div>
                   {cant && <div className="text-xs text-rose-300">You can't afford this.</div>}
                 </button>
               );

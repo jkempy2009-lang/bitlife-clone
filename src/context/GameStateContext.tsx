@@ -15,6 +15,7 @@ import type { ActionResult, GameState, PlayerState, TabId } from "@/types/game.t
 import type { Rng } from "@/lib/rng";
 import { freshSeed } from "@/lib/rng";
 import { initialState, reducer } from "@/engine/reducer";
+import { recordAchievements, recordLife } from "@/engine/hall";
 import { clearSave, hasSaveSnapshot, loadGame, saveGame, subscribeSave } from "@/engine/save";
 import type { NewLifeOptions } from "@/engine/state";
 
@@ -65,6 +66,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (state.screen === "game" && state.player) saveGame(state.player, state.rngState);
   }, [state.player, state.rngState, state.screen]);
+
+  // Immortalise finished lives and unlocked achievements in the Hall of Lives.
+  useEffect(() => {
+    const pl = state.player;
+    if (!pl) return;
+    recordAchievements(pl.achievements);
+    if (!pl.alive) recordLife(pl);
+  }, [state.player]);
 
   const act = useCallback((run: (p: PlayerState, rng: Rng) => ActionResult) => dispatch({ type: "RUN", run }), []);
 

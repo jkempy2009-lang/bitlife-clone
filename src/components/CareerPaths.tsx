@@ -16,6 +16,8 @@ import {
   workOnBusiness,
 } from "@/engine/paths";
 import { jobEligibility, workHarder, quitJob } from "@/engine/career";
+import { CAMPAIGN_COST, MIN_AGE, TERM_YEARS, canRun, charityDrive, electionChance, giveSpeech, nextTier, runForOffice } from "@/engine/politics";
+import { inMob, joinMob, leaveMob } from "@/engine/underworld";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { money } from "@/lib/format";
 import { Button, Card, Pill, SectionTitle, StatBar } from "./ui";
@@ -158,6 +160,75 @@ export function InfluencerSection() {
           </div>
           <p className="text-xs text-slate-500">If you skip a year of posting, your audience shrinks by 15%.</p>
         </>
+      )}
+    </div>
+  );
+}
+
+export function PoliticsSection() {
+  const { player: p, act } = useGame();
+  const line = CAREER_BY_ID.politics;
+  const job = p.currentJob?.lineId === "politics" ? p.currentJob : null;
+  const tier = nextTier(p);
+  const next = line.ladder[tier];
+  const check = canRun(p);
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionTitle>Politics</SectionTitle>
+      <Card>
+        {job ? (
+          <>
+            <div className="text-lg font-bold">{job.title}</div>
+            <div className="text-sm text-slate-400">{job.company} · {money(job.salary)}/yr · term year {p.politics.yearsInOffice + 1}/{TERM_YEARS}</div>
+          </>
+        ) : (
+          <div className="text-sm text-slate-300">You hold no office. Win elections, from city council all the way to head of state.</div>
+        )}
+        <div className="mt-3"><StatBar label="🗳️ Popularity" value={p.politics.popularity} color="blue" compact /></div>
+      </Card>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="secondary" disabled={(p.annual.speech ?? 0) >= 1 || p.age < 18} onClick={() => act((pl, rng) => giveSpeech(pl, rng))}>🎤 Give a Speech</Button>
+        <Button variant="secondary" disabled={(p.annual.drive ?? 0) >= 1 || p.bankBalance < 5_000} onClick={() => act((pl) => charityDrive(pl))}>🤝 Charity Drive ($5,000)</Button>
+      </div>
+      {next && (
+        <Card>
+          <div className="font-semibold">Run for {next.title}</div>
+          <div className="text-xs text-slate-400">Campaign cost {money(CAMPAIGN_COST[tier])} · age {MIN_AGE[tier]}+ · salary {money(next.salary)}</div>
+          {check.ok ? <div className="mt-1 text-xs text-emerald-300">Estimated odds: {Math.round(electionChance(p, tier) * 100)}%</div> : <div className="mt-1 text-xs font-medium text-rose-300">🔒 {check.reason}</div>}
+          <Button variant="gold" className="mt-2 w-full" disabled={!check.ok || (p.annual.campaign ?? 0) >= 1} onClick={() => act((pl, rng) => runForOffice(pl, rng))}>🏛️ Launch Campaign</Button>
+        </Card>
+      )}
+      <p className="text-xs text-slate-500">Karma, charisma, fame and popularity all sway voters. Incumbents face re-election every {TERM_YEARS} years.</p>
+    </div>
+  );
+}
+
+export function UnderworldSection() {
+  const { player: p, act } = useGame();
+  const job = inMob(p) ? p.currentJob : null;
+  const line = CAREER_BY_ID.mafia;
+  const elig = jobEligibility(p, line);
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionTitle>The Underworld</SectionTitle>
+      {job ? (
+        <Card className="border-rose-900/60">
+          <div className="text-xs uppercase tracking-widest text-rose-300">{job.company}</div>
+          <div className="text-xl font-bold">{job.title}</div>
+          <div className="text-sm text-slate-400">{money(job.salary)}/yr, untaxed · arrest and gang-war risk rises with rank</div>
+          <div className="mt-3"><StatBar label="Standing" value={job.performance} color="red" /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="danger" disabled={(p.annual.work ?? 0) >= 1} onClick={() => act((pl, rng) => workHarder(pl, rng))}>🔫 Take on a Job</Button>
+            <Button variant="ghost" onClick={() => act((pl, rng) => leaveMob(pl, rng))}>Leave the Family</Button>
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <p className="mb-2 text-sm text-slate-300">Associates earn off-the-books cash and climb to Boss. But the police, rival crews, and your conscience are all watching.</p>
+          <p className="mb-2 text-xs text-slate-500">Odds improve with a criminal record and a low karma. Open to Karma 50 or lower.</p>
+          {!elig.ok && <p className="mb-2 text-xs font-medium text-rose-300">🔒 {elig.reason}</p>}
+          <Button variant="danger" className="w-full" disabled={!elig.ok || (p.annual["apply:mafia"] ?? 0) >= 1} onClick={() => act((pl, rng) => joinMob(pl, rng))}>🕴️ Seek Out the Family</Button>
+        </Card>
       )}
     </div>
   );

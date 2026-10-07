@@ -45,7 +45,8 @@ export function clampAll(p: PlayerState) {
 export function netWorth(p: PlayerState): number {
   const props = p.properties.reduce((s, x) => s + x.currentValue - x.mortgageBalance, 0);
   const cars = p.vehicles.reduce((s, x) => s + x.currentValue - x.loanBalance, 0);
-  return Math.round(p.bankBalance + props + cars + (p.business?.value ?? 0) - p.outstandingLoans);
+  const portfolio = Object.values(p.investments).reduce((sum, h) => sum + h.value, 0);
+  return Math.round(p.bankBalance + props + cars + portfolio + (p.business?.value ?? 0) - p.outstandingLoans);
 }
 
 export const isRoyal = (p: PlayerState) => p.royalRank !== "none";
@@ -219,6 +220,15 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     );
   }
 
+  // Grandparents: each side may still be alive.
+  for (const gender of ["Female", "Male"] as const) {
+    if (rng.chance(0.65)) {
+      const gp = makeRelativeBase(rng, "Grandparent", `${randomName(countryName, gender, rng).first} ${rng.pick(country.lastNames)}`, relatives[0].age + rng.int(20, 30), gender, tier, rng.int(50, 90));
+      gp.health = rng.int(35, 90);
+      relatives.push(gp);
+    }
+  }
+
   const royal = scenario === "royal";
   const celebrity = scenario === "celebrity";
 
@@ -266,11 +276,19 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     business: null,
     influencer: { active: false, followers: 0, lastPostYear: 0 },
     athlete: { sport: null },
+    hobbies: {},
+    politics: { popularity: 30, yearsInOffice: 0 },
+    economy: { climate: rng.pick(["normal", "normal", "boom", "recession"] as const), yearsLeft: rng.int(1, 4) },
+    residence: { country: country.name, city: "", rentTier: 1 },
+    investments: {},
+    vices: { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
+    probation: null,
     isInPrison: false,
     isFugitive: false,
     prison: null,
     pendingTrial: null,
     criminalRecord: [],
+    achievements: [],
     flags,
     annual: {},
     queuedEvents: [],
@@ -291,6 +309,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     deathYear: null,
   };
 
+  player.residence.city = player.birthCity;
   const birthLine = royal
     ? `You were born ${royalRankFor(gender, false) === "Prince" ? "a Prince" : "a Princess"} in ${player.birthCity}, ${country.name}. The whole nation celebrates. Your parents are ${relatives[0].name} and ${relatives[1].name}.`
     : `You were born in ${player.birthCity}, ${country.name}. Your parents are ${relatives[0].name} and ${relatives[1].name}.`;

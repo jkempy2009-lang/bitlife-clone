@@ -11,6 +11,7 @@ import {
   type CareerLine,
 } from "@/data/careersRegistry";
 import { addLog, changeStat, clone, hasAnyDegree, hasFlag, isRoyal, setFlag } from "./state";
+import { hiringModifier } from "./world";
 
 // ---------------------------------------------------------------------------
 // Corporate career
@@ -51,6 +52,9 @@ export function jobEligibility(p: PlayerState, line: CareerLine): { ok: boolean;
   if (line.requirements.minLooks && p.looks < line.requirements.minLooks) {
     return { ok: false, reason: `Needs ${line.requirements.minLooks}+ Looks` };
   }
+  if (line.requirements.maxKarma !== undefined && p.karma > line.requirements.maxKarma) {
+    return { ok: false, reason: "The family doesn't trust do-gooders (Karma 50 or lower)" };
+  }
   for (const [skill, min] of Object.entries(line.requirements.minSkills ?? {})) {
     if (p.skills[skill as keyof typeof p.skills] < (min ?? 0)) {
       return { ok: false, reason: `Needs ${min}+ ${skill[0].toUpperCase() + skill.slice(1)} skill` };
@@ -86,7 +90,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   p.annual[key] = 1;
   const guaranteed = line.pack === "actor";
   const chance = clamp(
-    0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 - (hasFlag(p, "ex_con") ? 0.25 : 0),
+    0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 - (hasFlag(p, "ex_con") ? 0.25 : 0) + hiringModifier(p.economy.climate),
     0.15,
     0.95,
   );
@@ -104,6 +108,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
     setFlag(p, "acting_dream");
     changeStat(p, "fame", 2);
   }
+  if (line.id === "military") setFlag(p, "veteran");
   recordCareerPeak(p);
   const body = `You got a job as a ${job.title} at ${job.company}, earning ${money(job.salary)} a year!`;
   addLog(p, body);
@@ -170,7 +175,7 @@ export function promotionEvent(p: PlayerState): LifeEvent | null {
   const j = p.currentJob;
   if (!j) return null;
   const line = CAREER_BY_ID[j.lineId];
-  if (!line || j.tier >= line.ladder.length - 1) return null;
+  if (!line || line.pack === "politics" || j.tier >= line.ladder.length - 1) return null;
   const next = line.ladder[j.tier + 1];
   return {
     id: `promo_${j.id}_${p.year}`,

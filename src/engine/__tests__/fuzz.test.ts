@@ -15,6 +15,13 @@ import { dateNight, interact, meetSomeone, propose, tryForBaby } from "../social
 import { BUSINESS_TYPES, brandCollab, postContent, signWithClub, startBusiness, startChannel, trainAthletics, workOnBusiness, investInBusiness } from "../paths";
 import { DECREES } from "@/data/careersRegistry";
 import { continueAsChild, heirs } from "../legacy";
+import { divest, invest, relocate, setRentTier, INVESTMENTS } from "../world";
+import { quitVice, rehab } from "../vices";
+import { HOBBIES, practiceHobby } from "../hobbies";
+import { charityDrive, giveSpeech, runForOffice } from "../politics";
+import { joinMob, leaveMob } from "../underworld";
+import { adoptChild } from "../social";
+import { COUNTRIES } from "@/data/countries";
 import type { ActionResult, Notice, PlayerState } from "@/types/game.types";
 
 function run(p: PlayerState, rng: Rng, fn: (p: PlayerState, rng: Rng) => ActionResult): { p: PlayerState; notices: NonNullable<ActionResult["notices"]> } {
@@ -54,7 +61,7 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
     }
     if (!p.alive) break;
     if (p.pendingTrial) {
-      p = run(p, rng, (pl, r) => resolveTrial(pl, rng.pick(["expensive", "public", "self"]), r)).p;
+      p = run(p, rng, (pl, r) => resolveTrial(pl, rng.pick(["expensive", "public", "self", "plea"]), r)).p;
     }
     // random actions
     const actions: Array<(pl: PlayerState, r: Rng) => ActionResult> = [
@@ -100,6 +107,20 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl) => brandCollab(pl),
       (pl, r) => trainAthletics(pl, r),
       (pl, r) => signWithClub(pl, "Soccer", r),
+      (pl, r) => invest(pl, r.pick(INVESTMENTS).id, 5_000),
+      (pl) => divest(pl, rng.pick(Object.keys(pl.investments).concat("index"))),
+      (pl) => setRentTier(pl, rng.int(0, 3)),
+      (pl, r) => relocate(pl, r.pick(COUNTRIES).name, r),
+      (pl, r) => quitVice(pl, r.pick(["smoking", "alcohol", "drugs", "gambling"] as const), r),
+      (pl) => rehab(pl),
+      (pl, r) => practiceHobby(pl, r.pick(HOBBIES).id, r),
+      (pl, r) => giveSpeech(pl, r),
+      (pl) => charityDrive(pl),
+      (pl, r) => runForOffice(pl, r),
+      (pl, r) => joinMob(pl, r),
+      (pl, r) => leaveMob(pl, r),
+      (pl, r) => adoptChild(pl, r),
+      (pl, r) => doLeisure(pl, r.pick(["bar", "experiment"] as const), r),
       (pl, r) => attemptEscape(pl, "tunnel", r),
       (pl, r) => startRiot(pl, r),
       (pl) => workOutYard(pl),

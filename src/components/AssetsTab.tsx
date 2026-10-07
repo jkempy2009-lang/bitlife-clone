@@ -6,8 +6,10 @@ import { buyCar, buyHouse, carInventory, houseInventory, maxLoan, renovate, repa
 import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/data/assetsCatalog";
 import { money } from "@/lib/format";
 import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
+import { COUNTRIES } from "@/data/countries";
+import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, RENT_TIERS, divest, invest, portfolioValue, relocate, setRentTier } from "@/engine/world";
 
-type Panel = "cars" | "homes" | "bank";
+type Panel = "cars" | "homes" | "living" | "invest" | "bank";
 
 export default function AssetsTab() {
   const { player } = useGame();
@@ -21,12 +23,119 @@ export default function AssetsTab() {
         options={[
           { id: "cars", label: "🚗 Car Dealership" },
           { id: "homes", label: "🏠 Real Estate" },
+          { id: "living", label: "🛋️ Living" },
+          { id: "invest", label: "📈 Invest" },
           { id: "bank", label: "🏦 Bank" },
         ]}
       />
       {panel === "cars" && <Cars />}
       {panel === "homes" && <Homes />}
+      {panel === "living" && <Living />}
+      {panel === "invest" && <Invest />}
       {panel === "bank" && <Bank />}
+    </div>
+  );
+}
+
+const CLIMATE_LABEL = { boom: "📈 Boom", normal: "➖ Steady", recession: "📉 Recession" } as const;
+
+function Living() {
+  const { player: p, act } = useGame();
+  const owns = p.properties.length > 0;
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionTitle>Where You Live</SectionTitle>
+      <Card>
+        <div className="text-lg font-bold">{p.residence.city}, {p.residence.country}</div>
+        <div className="mt-1 text-sm text-slate-400">
+          {owns ? "You own your home, so rent doesn't apply (utilities and upkeep still do)." : `Renting a ${RENT_TIERS[p.residence.rentTier].name.toLowerCase()}.`}
+        </div>
+        <div className="mt-2"><Pill tone={p.economy.climate === "recession" ? "red" : p.economy.climate === "boom" ? "green" : "slate"}>{CLIMATE_LABEL[p.economy.climate]}</Pill></div>
+      </Card>
+
+      {!owns && (
+        <>
+          <SectionTitle hint="a $500 moving fee applies">Rent</SectionTitle>
+          {RENT_TIERS.map((t, i) => (
+            <button
+              key={t.name}
+              type="button"
+              disabled={i === p.residence.rentTier || p.age < 18}
+              onClick={() => act((pl) => setRentTier(pl, i))}
+              className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors disabled:cursor-default ${i === p.residence.rentTier ? "border-emerald-500 bg-emerald-950/40" : "border-slate-700/60 bg-slate-800/70 hover:border-emerald-500/60"}`}
+            >
+              <span className="text-2xl">{t.emoji}</span>
+              <span className="flex-1">
+                <span className="block font-semibold">{t.name}</span>
+                <span className="text-xs text-slate-400">{t.blurb}</span>
+              </span>
+              <span className="text-sm font-semibold text-slate-200">{money(t.rent)}/yr</span>
+            </button>
+          ))}
+        </>
+      )}
+
+      <SectionTitle hint="you'll leave your job behind">Relocate</SectionTitle>
+      <Card>
+        <p className="mb-2 text-xs text-slate-400">Move within your country for {money(RELOCATE_DOMESTIC)} or abroad for {money(RELOCATE_ABROAD)}. Your tax rules change with where you live. Friends and family drift further away.</p>
+        <div className="grid grid-cols-2 gap-2">
+          {COUNTRIES.map((c) => (
+            <Button
+              key={c.name}
+              variant={c.name === p.residence.country ? "primary" : "secondary"}
+              className="px-2 py-1.5 text-xs"
+              disabled={p.age < 18}
+              onClick={() => act((pl, rng) => relocate(pl, c.name, rng))}
+            >
+              {c.name === p.residence.country ? "📍 " : ""}{c.name}
+            </Button>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function Invest() {
+  const { player: p, act } = useGame();
+  const total = portfolioValue(p);
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionTitle hint="15% tax on gains when you sell">Portfolio</SectionTitle>
+      <Card>
+        <div className="text-center">
+          <div className="text-xs uppercase tracking-wider text-slate-400">Total value</div>
+          <div className="text-3xl font-black tabular-nums text-amber-300">{money(total)}</div>
+          <div className="mt-1"><Pill tone={p.economy.climate === "recession" ? "red" : p.economy.climate === "boom" ? "green" : "slate"}>Market: {CLIMATE_LABEL[p.economy.climate]}</Pill></div>
+        </div>
+      </Card>
+      {INVESTMENTS.map((inv) => {
+        const h = p.investments[inv.id];
+        return (
+          <Card key={inv.id} className="p-3">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">{inv.emoji}</span>
+              <div className="flex-1">
+                <div className="font-semibold">{inv.name}</div>
+                <div className="text-xs text-slate-400">{inv.blurb} Avg {Math.round(inv.mean * 100)}%/yr</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-bold tabular-nums">{money(h?.value ?? 0)}</div>
+                {h && <div className={`text-xs tabular-nums ${h.value >= h.basis ? "text-emerald-400" : "text-rose-400"}`}>{h.value >= h.basis ? "+" : ""}{money(h.value - h.basis)}</div>}
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-4 gap-1.5">
+              {[1_000, 10_000, 100_000].map((amt) => (
+                <Button key={amt} variant="secondary" className="px-1 py-1.5 text-xs" disabled={p.bankBalance < amt || p.age < 18} onClick={() => act((pl) => invest(pl, inv.id, amt))}>
+                  +{money(amt)}
+                </Button>
+              ))}
+              <Button variant="ghost" className="px-1 py-1.5 text-xs" disabled={!h} onClick={() => act((pl) => divest(pl, inv.id))}>Sell all</Button>
+            </div>
+          </Card>
+        );
+      })}
+      <p className="text-xs text-slate-500">Returns are rolled when you age up and follow the economic climate: booms lift stocks, recessions hammer them.</p>
     </div>
   );
 }

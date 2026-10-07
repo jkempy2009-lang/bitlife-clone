@@ -109,4 +109,5 @@ export const LAWYERS = [
   { id: "expensive", name: "Expensive Lawyer", cost: 20_000, successChance: 0.8, blurb: "A shark in a three-piece suit." },
   { id: "public", name: "Public Defender", cost: 0, successChance: 0.2, blurb: "Overworked, underpaid, and well-meaning." },
   { id: "self", name: "Defend Yourself", cost: 0, successChance: 0.05, blurb: "You have a fool for a client." },
+  { id: "plea", name: "Plea Bargain", cost: 0, successChance: 0, blurb: "Admit guilt in exchange for half the sentence." },
 ] as const;

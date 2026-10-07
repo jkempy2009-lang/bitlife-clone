@@ -17,7 +17,7 @@ export interface Disease {
   yearsLeft?: number;
 }
 
-export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend";
+export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend" | "Grandparent" | "Grandchild";
 export type PartnerStatus = "dating" | "married" | "ex";
 
 export interface Relative {
@@ -125,6 +125,42 @@ export interface AthleteState {
   sport: string | null;
 }
 
+export type Climate = "boom" | "normal" | "recession";
+
+export interface EconomyState {
+  climate: Climate;
+  yearsLeft: number;
+}
+
+export interface Residence {
+  country: string;
+  city: string;
+  /** 0 basic room, 1 standard apartment, 2 nice apartment, 3 luxury rental. */
+  rentTier: number;
+}
+
+export interface Holding {
+  value: number;
+  basis: number;
+}
+
+export interface Vices {
+  smoking: number;
+  alcohol: number;
+  drugs: number;
+  gambling: number;
+}
+
+export interface PoliticsState {
+  popularity: number;
+  yearsInOffice: number;
+}
+
+export interface Probation {
+  yearsLeft: number;
+  charge: string;
+}
+
 export interface Album {
   title: string;
   genre: string;
@@ -222,8 +258,17 @@ export interface PlayerState {
   business: Business | null;
   influencer: InfluencerState;
   athlete: AthleteState;
+  hobbies: Record<string, number>;
+  politics: PoliticsState;
+
+  // World & lifestyle
+  economy: EconomyState;
+  residence: Residence;
+  investments: Record<string, Holding>;
+  vices: Vices;
 
   // Justice
+  probation: Probation | null;
   isInPrison: boolean;
   isFugitive: boolean;
   prison: PrisonState | null;
@@ -231,6 +276,7 @@ export interface PlayerState {
   criminalRecord: string[];
 
   // Engine bookkeeping
+  achievements: string[];
   flags: string[];
   /** Per-year action counters (reset on Age Up). */
   annual: Record<string, number>;

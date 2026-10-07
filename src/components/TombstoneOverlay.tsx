@@ -42,6 +42,8 @@ export default function TombstoneOverlay() {
               <dd className="text-right font-semibold">{money(summary.finalAssets.property)}</dd>
               <dt className="text-slate-400">Vehicles</dt>
               <dd className="text-right font-semibold">{money(summary.finalAssets.vehicles)}</dd>
+              <dt className="text-slate-400">Investments & business</dt>
+              <dd className="text-right font-semibold">{money(summary.finalAssets.investments)}</dd>
               <dt className="text-slate-400">Debts</dt>
               <dd className="text-right font-semibold text-rose-300">{money(summary.finalAssets.debt)}</dd>
               <dt className="text-slate-400">Highest career</dt>

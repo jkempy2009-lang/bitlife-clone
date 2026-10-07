@@ -19,7 +19,7 @@ export interface DeathSummary {
   netWorth: number;
   children: number;
   lifespan: string;
-  finalAssets: { cash: number; property: number; vehicles: number; debt: number };
+  finalAssets: { cash: number; property: number; vehicles: number; investments: number; debt: number };
 }
 
 export function summarize(p: PlayerState): DeathSummary {
@@ -33,6 +33,7 @@ export function summarize(p: PlayerState): DeathSummary {
       cash: p.bankBalance,
       property: p.properties.reduce((s, x) => s + x.currentValue, 0),
       vehicles: p.vehicles.reduce((s, x) => s + x.currentValue, 0),
+      investments: Object.values(p.investments).reduce((s, h) => s + h.value, 0) + (p.business?.value ?? 0),
       debt: p.outstandingLoans + p.properties.reduce((s, x) => s + x.mortgageBalance, 0) + p.vehicles.reduce((s, x) => s + x.loanBalance, 0),
     },
   };
@@ -84,6 +85,10 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     relatives.push({ ...survivingPartner, id: rng.id(), relation: "Parent", partnerStatus: undefined, relationshipBar: Math.max(60, survivingPartner.relationshipBar) });
   }
   for (const s of heirsLeft) relatives.push({ ...s, id: rng.id(), relation: "Sibling", partnerStatus: undefined });
+  // The old player's own living parents become the new player's grandparents.
+  for (const gp of old.relatives.filter((r) => r.relation === "Parent" && r.alive)) {
+    relatives.push({ ...gp, id: rng.id(), relation: "Grandparent" });
+  }
 
   const royalParent = isRoyal(old);
   const crowned = royalParent && !survivingPartner && (old.royalRank === "King" || old.royalRank === "Queen");
@@ -125,11 +130,21 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     business: null,
     influencer: { active: false, followers: 0, lastPostYear: 0 },
     athlete: { sport: null },
+    hobbies: {},
+    politics: { popularity: 30, yearsInOffice: 0 },
+    economy: { ...old.economy },
+    residence: { ...old.residence },
+    investments: Object.fromEntries(
+      Object.entries(old.investments).map(([k, h]) => [k, { value: Math.round(h.value * 0.9), basis: Math.round(h.basis * 0.9) }]),
+    ),
+    vices: { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
+    probation: null,
     isInPrison: false,
     isFugitive: false,
     prison: null,
     pendingTrial: null,
     criminalRecord: [],
+    achievements: [],
     flags: royalParent ? ["royal_born"] : [],
     annual: {},
     queuedEvents: [],

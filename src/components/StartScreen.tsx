@@ -5,6 +5,8 @@ import { useGame } from "@/context/GameStateContext";
 import { COUNTRIES } from "@/data/countries";
 import type { NewLifeOptions } from "@/engine/state";
 import { Button } from "./ui";
+import HallOfLives, { useHall } from "./HallOfLives";
+import { ACHIEVEMENTS } from "@/data/achievements";
 
 const SCENARIOS: { id: NewLifeOptions["scenario"]; label: string; blurb: string }[] = [
   { id: "random", label: "🎲 Surprise Me", blurb: "Fate decides (1% chance of royalty)." },
@@ -18,6 +20,8 @@ const SCENARIOS: { id: NewLifeOptions["scenario"]; label: string; blurb: string 
 export default function StartScreen() {
   const { newGame, continueSave, hasSave, deleteSave } = useGame();
   const [designing, setDesigning] = useState(false);
+  const [showHall, setShowHall] = useState(false);
+  const hall = useHall();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [gender, setGender] = useState<NonNullable<NewLifeOptions["gender"]>>("random");
@@ -45,6 +49,9 @@ export default function StartScreen() {
             </Button>
             <Button variant="secondary" className="py-3.5 text-base" onClick={() => setDesigning(true)}>
               ✏️ Design a Life
+            </Button>
+            <Button variant="ghost" onClick={() => setShowHall(true)}>
+              🏆 Hall of Lives · {hall.achievements.length}/{ACHIEVEMENTS.length}
             </Button>
             {hasSave && (
               <button type="button" className="mt-1 text-xs text-slate-500 underline" onClick={deleteSave}>
@@ -105,6 +112,7 @@ export default function StartScreen() {
           </div>
         )}
       </div>
+      {showHall && <HallOfLives onClose={() => setShowHall(false)} />}
     </main>
   );
 }

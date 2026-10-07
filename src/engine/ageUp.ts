@@ -23,10 +23,16 @@ import {
   MAX_AGE,
 } from "./state";
 import { deathChance, killPlayer, naturalCause } from "./mortality";
-import { endRelationship } from "./social";
+import { endRelationship, maybeGrandchild } from "./social";
 import { selectEvents } from "./events";
 import { albumRating, maybeCoup, promotionEvent } from "./career";
+import { checkAchievements } from "./achievements";
+import { processVices } from "./vices";
+import { processPolitics } from "./politics";
+import { processMob } from "./underworld";
+import { hobbyIncome, processHobbies } from "./hobbies";
 import { processAthlete, processBusiness, processInfluencer } from "./paths";
+import { RENT_TIERS, BASE_LIVING, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -56,6 +62,7 @@ export function finalize(p: PlayerState, notices: Notices) {
     if (coup) notices.push({ kind: "event", event: coup });
   }
   p.stats.peakNetWorth = Math.max(p.stats.peakNetWorth, netWorth(p));
+  checkAchievements(p, notices);
   clampAll(p);
 }
 
@@ -97,6 +104,10 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
     }
     if (r.relation === "Child" && r.age === 18) addLog(p, `Your child ${r.name} turned 18.`);
   }
+  if (p.age >= 40) {
+    const gc = maybeGrandchild(p, rng);
+    if (gc) notices.push(info("Grandchild!", `Your family grew: ${gc.name} was born.`, "good"));
+  }
   // Relationship fallout
   const partner = getPartner(p);
   if (partner && partner.relationshipBar <= 8 && rng.chance(0.4)) {
@@ -127,7 +138,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
 // ---------------------------------------------------------------------------
 
 function processAssets(p: PlayerState, rng: Rng) {
-  const marketIndex = rng.float(-0.03, 0.06);
+  const marketIndex = housingIndex(p.economy.climate, rng);
   if (p.properties.length > 0) {
     addLog(p, `The housing market ${marketIndex >= 0 ? "rose" : "fell"} ${(Math.abs(marketIndex) * 100).toFixed(1)}% this year.`);
   }
@@ -191,6 +202,8 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   if (p.music.signed) gross += 25_000;
   gross += royalties;
   gross += processInfluencer(p);
+  gross += hobbyIncome(p);
+  processInvestments(p, rng, notices);
   const profit = processBusiness(p, rng, notices);
   if (profit > 0) gross += profit;
   else p.bankBalance += profit;
@@ -202,7 +215,8 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   }
   const allowance = isRoyal(p) ? Math.round(ROYAL_ALLOWANCE[p.royalRank] * (p.royalRespect < 20 ? 0.5 : 1)) : 0;
   // Royal allowances are state-funded and tax exempt; all other income is taxed progressively.
-  const tax = incomeTaxFor(p.birthCountry, gross);
+  const offBooks = p.currentJob?.lineId === "mafia" && !p.isInPrison ? p.currentJob.salary : 0;
+  const tax = incomeTaxFor(p.residence.country, gross - offBooks);
   p.taxesPaidThisYear = tax;
   p.bankBalance += gross - tax + allowance;
 
@@ -210,7 +224,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   const parentSupport = p.age < 21 && livingRelatives(p, "Parent").length > 0;
   if (adult && !p.isInPrison && !isRoyal(p) && !parentSupport) {
     // Lifestyle inflation: the more you earn, the more you spend.
-    living = (p.properties.length > 0 ? 9_000 : 14_000) + Math.max(0, gross - 50_000) * 0.2;
+    living = BASE_LIVING + housingCost(p) + Math.max(0, gross - 50_000) * 0.2;
   }
   living = Math.round(living);
   p.bankBalance -= living;
@@ -361,8 +375,12 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
 
 function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   processAthlete(p, rng, notices);
+  processPolitics(p, rng, notices);
+  processMob(p, rng, notices);
   const job = p.currentJob;
   if (!job || p.isInPrison) return;
+  // Elected officials answer to voters, not managers.
+  if (CAREER_BY_ID[job.lineId]?.pack === "politics") return;
   job.performance = clamp(job.performance + rng.int(-8, 4) + Math.round((p.smarts - 50) / 25));
   if (job.performance < 20 && rng.chance(0.4)) {
     const body = `You were fired from your job as a ${job.title} for poor performance.`;
@@ -372,7 +390,7 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
     notices.push(info("You're Fired", body, "bad"));
     return;
   }
-  if (rng.chance(0.02)) {
+  if (rng.chance(layoffChance(p.economy.climate))) {
     const body = `${job.company} downsized and let you go. You received a small severance package.`;
     p.currentJob = null;
     p.bankBalance += Math.round(job.salary * 0.15);
@@ -409,9 +427,10 @@ function processEntertainment(p: PlayerState) {
   const job = p.currentJob;
   const actorActive = job?.lineId === "actor";
   if (actorActive && job.tier >= 2) changeStat(p, "fame", job.tier - 1);
+  if (job?.lineId === "model" && job.tier >= 1) changeStat(p, "fame", job.tier);
   const athleteActive = job?.lineId === "athlete" && job.tier >= 1;
   if (athleteActive) changeStat(p, "fame", job!.tier);
-  const active = actorActive || athleteActive || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
+  const active = actorActive || athleteActive || job?.lineId === "model" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
   if (!active) changeStat(p, "fame", p.fame > 0 ? -2 : 0);
 }
 
@@ -448,6 +467,15 @@ function processJustice(p: PlayerState, rng: Rng, notices: Notices) {
     }
     return;
   }
+  if (p.probation) {
+    p.probation.yearsLeft -= 1;
+    if (p.probation.yearsLeft <= 0) {
+      const body = `You completed your probation for ${p.probation.charge}. Your record is clean again.`;
+      p.probation = null;
+      addLog(p, body);
+      notices.push(info("Probation Over", body, "good"));
+    }
+  }
   if (p.isFugitive) {
     changeStat(p, "happiness", -2);
     if (rng.chance(0.15)) {
@@ -478,7 +506,8 @@ function processMilestones(p: PlayerState) {
 
 function driftStats(p: PlayerState, rng: Rng) {
   const partner = getPartner(p);
-  const target = 62 + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
+  const rentBonus = p.properties.length === 0 && p.age >= 18 ? RENT_TIERS[p.residence.rentTier].happiness * 2 : 0;
+  const target = 62 + rentBonus + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
   p.happiness += Math.round((target - p.happiness) * 0.1) + rng.int(-2, 2);
   if (p.age >= 40) p.looks -= rng.int(0, p.age >= 60 ? 3 : 2);
   if (p.age >= 70) p.smarts -= rng.int(0, 1);
@@ -496,12 +525,16 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   // 1. Age & timeline
   p.age += 1;
   p.year += 1;
+  const prevAnnual = p.annual;
   p.annual = {};
   addLog(p, logHeader(p));
+  advanceClimate(p, rng, notices);
 
   processSocial(p, rng, notices); // 2. social graph
   processAssets(p, rng); // 3. asset economics
   processFinance(p, rng, notices); // 4. financial balance sheet
+  processHobbies(p, prevAnnual, notices);
+  processVices(p, rng, notices);
   processMedical(p, rng, notices); // 5. medical & disease progression
   if (p.alive) {
     processEducation(p, rng, notices);

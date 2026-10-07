@@ -4,7 +4,7 @@
  *
  * Event files live in ./events/*.ts and are merged into `LIFE_EVENTS` below.
  */
-import type { CrimeCharge, Relation, PartnerStatus, Relative, Skills } from "@/types/game.types";
+import type { Climate, CrimeCharge, Relation, PartnerStatus, Relative, Skills, Vices } from "@/types/game.types";
 import { EARLY_EVENTS } from "./events/early";
 import { TEEN_EVENTS } from "./events/teen";
 import { ADULT_EVENTS } from "./events/adult";
@@ -69,6 +69,10 @@ export interface ChoiceEffects {
   stripRoyalty?: boolean;
   bankMultiplier?: number;
   cureAll?: boolean;
+  /** Changes addiction levels (0-100). */
+  viceDelta?: Partial<Vices>;
+  /** Adds to hobby skill levels. */
+  hobbyDelta?: Record<string, number>;
 }
 
 export interface ChoiceOption {
@@ -90,6 +94,12 @@ export interface EventRequirements {
   hasSibling?: boolean;
   hasFriend?: boolean;
   parentAlive?: boolean;
+  hasGrandchildren?: boolean;
+  hasPartnerStatus?: "dating" | "married";
+  /** Current job must belong to one of these career lines. */
+  jobLine?: string[];
+  climate?: Climate[];
+  minVice?: Partial<Vices>;
   hasJob?: boolean;
   inSchool?: boolean;
   royal?: boolean;

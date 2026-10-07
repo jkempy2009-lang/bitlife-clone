@@ -49,6 +49,14 @@ function hydrate(p: PlayerState): PlayerState {
     business: p.business ?? null,
     influencer: p.influencer ?? { active: false, followers: 0, lastPostYear: 0 },
     athlete: p.athlete ?? { sport: null },
+    hobbies: p.hobbies ?? {},
+    politics: p.politics ?? { popularity: 30, yearsInOffice: 0 },
+    economy: p.economy ?? { climate: "normal", yearsLeft: 2 },
+    residence: p.residence ?? { country: p.birthCountry, city: p.birthCity, rentTier: 1 },
+    investments: p.investments ?? {},
+    vices: p.vices ?? { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
+    probation: p.probation ?? null,
+    achievements: p.achievements ?? [],
     stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0 },
   };
 }

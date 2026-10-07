@@ -65,6 +65,11 @@ export function meetsRequirements(p: PlayerState, req: EventRequirements | undef
   if (req.hasSibling !== undefined && livingRelatives(p, "Sibling").length > 0 !== req.hasSibling) return false;
   if (req.hasFriend !== undefined && livingRelatives(p, "Friend").length > 0 !== req.hasFriend) return false;
   if (req.parentAlive !== undefined && livingRelatives(p, "Parent").length > 0 !== req.parentAlive) return false;
+  if (req.hasGrandchildren !== undefined && livingRelatives(p, "Grandchild").length > 0 !== req.hasGrandchildren) return false;
+  if (req.hasPartnerStatus && partner?.partnerStatus !== req.hasPartnerStatus) return false;
+  if (req.jobLine && !(p.currentJob && req.jobLine.includes(p.currentJob.lineId))) return false;
+  if (req.climate && !req.climate.includes(p.economy.climate)) return false;
+  if (req.minVice) for (const [k, v] of Object.entries(req.minVice)) if (p.vices[k as keyof typeof p.vices] < (v as number)) return false;
   if (req.hasJob !== undefined && !!p.currentJob !== req.hasJob) return false;
   if (req.inSchool !== undefined && (p.education.stage !== "None") !== req.inSchool) return false;
   if (req.royal !== undefined && isRoyal(p) !== req.royal) return false;
@@ -154,6 +159,8 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng) {
   if (e.bankMultiplier !== undefined) p.bankBalance = Math.round(p.bankBalance * e.bankMultiplier);
   if (e.diseaseTrigger) addDisease(p, e.diseaseTrigger, rng);
   if (e.cureAll) p.diseases = [];
+  if (e.viceDelta) for (const [k, v] of Object.entries(e.viceDelta)) p.vices[k as keyof typeof p.vices] = clamp(p.vices[k as keyof typeof p.vices] + (v ?? 0));
+  if (e.hobbyDelta) for (const [k, v] of Object.entries(e.hobbyDelta)) p.hobbies[k] = clamp((p.hobbies[k] ?? 0) + v);
   if (e.performanceDelta && p.currentJob) {
     p.currentJob.performance = clamp(p.currentJob.performance + e.performanceDelta);
   }

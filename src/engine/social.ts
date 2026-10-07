@@ -63,10 +63,54 @@ export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Re
   return rel;
 }
 
+/** Occasionally a grown child has a baby of their own. */
+export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
+  if (livingGrandchildren(p) >= 8) return null;
+  const parents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age >= 22 && r.age <= 38);
+  if (parents.length === 0 || !rng.chance(0.07 * parents.length)) return null;
+  const parent = rng.pick(parents);
+  const gender = randomGender(rng);
+  const first = randomName(p.birthCountry, gender, rng).first;
+  const last = parent.name.split(" ").slice(1).join(" ") || p.lastName;
+  const kid = makeRelativeBase(rng, "Grandchild", `${first} ${last}`, 0, gender, parent.incomeTier, rng.int(60, 95));
+  kid.smarts = clamp(Math.round((parent.smarts + 50) / 2 + rng.int(-12, 12)));
+  kid.looks = clamp(Math.round((parent.looks + 50) / 2 + rng.int(-12, 12)));
+  p.relatives.push(kid);
+  addLog(p, `${parent.name} had a baby: your grandchild ${kid.name}!`);
+  return kid;
+}
+
+export const livingGrandchildren = (p: PlayerState) => p.relatives.filter((r) => r.relation === "Grandchild" && r.alive).length;
+
+export const ADOPTION_COST = 15_000;
+
+export function adoptChild(p0: PlayerState, rng: Rng): ActionResult {
+  const p = clone(p0);
+  const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") => ({ kind: "info" as const, title, body, tone });
+  if (p.age < 22) return { player: p0, notices: [info("Too Young", "You must be at least 22 to adopt.", "bad")] };
+  if (p.isInPrison) return { player: p0, notices: [info("Not Possible", "Adoption agencies don't deal with inmates.", "bad")] };
+  if (p.bankBalance < ADOPTION_COST) return { player: p0, notices: [info("Insufficient Funds", `Adoption fees come to ${money(ADOPTION_COST)}.`, "bad")] };
+  if ((p.annual.adopt ?? 0) >= 1) return { player: p0, notices: [info("One at a Time", "The agency wants a year before another placement.")] };
+  p.annual.adopt = 1;
+  p.bankBalance -= ADOPTION_COST;
+  const gender = randomGender(rng);
+  const first = randomName(p.birthCountry, gender, rng).first;
+  const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, rng.int(0, 8), gender, 2, 65);
+  p.relatives.push(kid);
+  p.stats.childrenBorn += 1;
+  if (!p.flags.includes("adopted")) p.flags.push("adopted");
+  changeStat(p, "happiness", 14);
+  changeStat(p, "karma", 6);
+  const body = `You adopted ${kid.name}, age ${kid.age}. Your family just got bigger.`;
+  addLog(p, body);
+  return { player: p, notices: [info("Welcome Home!", body, "good")] };
+}
+
 export function endRelationship(p: PlayerState, how: "breakup" | "divorce") {
   const partner = getPartner(p);
   if (!partner) return;
   partner.partnerStatus = "ex";
+  if (how === "divorce" && !p.flags.includes("was_divorced")) p.flags.push("was_divorced");
   if (how === "divorce" && p.bankBalance > 0) {
     const lost = Math.round(p.bankBalance * 0.3);
     p.bankBalance -= lost;
@@ -92,6 +136,10 @@ const CONVERSE: Record<string, string[]> = {
   Partner: ["You and {n} discussed your plans for the future.", "You and {n} talked about where to travel next."],
   Friend: ["You and {n} talked about life.", "You and {n} argued about sports."],
 };
+SPEND.Grandparent = ["You baked cookies with {n} and heard the old family stories.", "{n} taught you a card game and then cheated.", "You and {n} sat on the porch and watched the world go by."];
+SPEND.Grandchild = ["You read {n} a bedtime story.", "You took {n} to the zoo.", "You let {n} beat you at a board game (barely)."];
+CONVERSE.Grandparent = ["{n} told you what life was like \"back in the day\".", "{n} gave you some questionable advice about love."];
+CONVERSE.Grandchild = ["{n} told you a very long story about a dragon.", "{n} asked you why the sky is blue."];
 const COMPLIMENT = ["You told {n} they're wonderful. They beamed.", "You complimented {n}'s sense of humour.", "You told {n} how much they mean to you."];
 const INSULT = ["You called {n} a name. They stormed off.", "You and {n} had a vicious argument.", "You mocked {n}'s taste. They were deeply hurt."];
 

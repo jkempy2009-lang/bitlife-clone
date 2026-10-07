@@ -5,6 +5,8 @@ import { useGame } from "@/context/GameStateContext";
 import { money } from "@/lib/format";
 import { netWorth, playerTitle } from "@/engine/state";
 import { Card, Pill, SectionTitle, StatBar } from "./ui";
+import { ACHIEVEMENTS } from "@/data/achievements";
+import { AchievementGrid } from "./HallOfLives";
 
 interface YearGroup {
   header: string;
@@ -52,6 +54,7 @@ export default function DashboardTab() {
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs text-slate-400">
           <span>📍 {p.birthCity}, {p.birthCountry}</span>
           <span>· Gen {p.generation}</span>
+          <span>· {p.economy.climate === "boom" ? "📈 Boom" : p.economy.climate === "recession" ? "📉 Recession" : "➖ Steady economy"}</span>
         </div>
         {(p.diseases.length > 0 || p.isFugitive || p.outstandingLoans > 0) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -93,6 +96,13 @@ export default function DashboardTab() {
           <div className="text-sm font-bold tabular-nums">{p.creditScore}</div>
         </Card>
       </div>
+
+      <details className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-300">
+          🏆 Achievements this life: {p.achievements.length}/{ACHIEVEMENTS.length}
+        </summary>
+        <div className="mt-3"><AchievementGrid unlocked={p.achievements} /></div>
+      </details>
 
       {/* Core feed */}
       <div>
