@@ -174,8 +174,37 @@ export const BASE_LIVING = 14_000;
 export const CHILD_COST = 6_000;
 export const OWNED_HOUSING = 3_000;
 
+/** Living in a parent's home: you chip in, but it isn't a rent. */
+export const FAMILY_HOME_CONTRIBUTION = 1_500;
+
+export const livesWithParents = (p: PlayerState) =>
+  p.flags.includes("lives_with_parents") && p.relatives.some((r) => r.relation === "Parent" && r.alive);
+
 export function housingCost(p: PlayerState): number {
-  return p.properties.length > 0 ? OWNED_HOUSING : RENT_TIERS[p.residence.rentTier].rent;
+  if (p.properties.length > 0) return OWNED_HOUSING;
+  if (livesWithParents(p)) return FAMILY_HOME_CONTRIBUTION;
+  return RENT_TIERS[p.residence.rentTier].rent;
+}
+
+/** Move back in with (or out from) a living parent. */
+export function toggleFamilyHome(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  if (p.age < 18) return { player: p0 };
+  if (p.flags.includes("lives_with_parents")) {
+    if (p.bankBalance < 500) return { player: p0, notices: [info("Moving Costs", "You need at least $500 for a deposit and movers.", "bad")] };
+    p.bankBalance -= 500;
+    p.flags = p.flags.filter((f) => f !== "lives_with_parents");
+    const body = "You moved out of your parents' home and into a place of your own.";
+    addLog(p, body);
+    return { player: p, notices: [info("Flying the Nest", body, "good")] };
+  }
+  if (!p.relatives.some((r) => r.relation === "Parent" && r.alive)) return { player: p0, notices: [info("No Parents", "There's no family home to go back to.", "bad")] };
+  if (p.properties.length > 0) return { player: p0, notices: [info("You Own a Home", "You already have a place of your own.", "neutral")] };
+  p.flags.push("lives_with_parents");
+  for (const r of p.relatives) if (r.alive && r.relation === "Parent") r.relationshipBar = Math.min(100, r.relationshipBar + 6);
+  const body = "You moved back in with your parents. Rent is nearly free, but you're an adult sleeping in your childhood bedroom.";
+  addLog(p, body);
+  return { player: p, notices: [info("Back Home", body, "neutral")] };
 }
 
 export function setRentTier(p0: PlayerState, tier: number): ActionResult {
@@ -184,6 +213,7 @@ export function setRentTier(p0: PlayerState, tier: number): ActionResult {
   if (p.age < 18) return { player: p0, notices: [info("Too Young", "You can't sign a lease yet.", "bad")] };
   if (p.bankBalance < 500) return { player: p0, notices: [info("Moving Costs", "You need at least $500 for movers and a deposit.", "bad")] };
   p.bankBalance -= 500;
+  p.flags = p.flags.filter((f) => f !== "lives_with_parents");
   p.residence.rentTier = tier;
   const body = `You moved into a ${RENT_TIERS[tier].name.toLowerCase()} (${money(RENT_TIERS[tier].rent)}/yr).`;
   addLog(p, body);

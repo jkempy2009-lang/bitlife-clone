@@ -7,7 +7,7 @@ import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/
 import { money } from "@/lib/format";
 import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
 import { COUNTRIES } from "@/data/countries";
-import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, LIFESTYLES, RENT_TIERS, divest, invest, portfolioValue, relocate, setLifestyle, setRentTier } from "@/engine/world";
+import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, LIFESTYLES, RENT_TIERS, divest, invest, portfolioValue, livesWithParents, relocate, setLifestyle, setRentTier, toggleFamilyHome } from "@/engine/world";
 
 type Panel = "cars" | "homes" | "living" | "invest" | "bank";
 
@@ -48,8 +48,13 @@ function Living() {
       <Card>
         <div className="text-lg font-bold">{p.residence.city}, {p.residence.country}</div>
         <div className="mt-1 text-sm text-slate-400">
-          {owns ? "You own your home, so rent doesn't apply (utilities and upkeep still do)." : `Renting a ${RENT_TIERS[p.residence.rentTier].name.toLowerCase()}.`}
+          {owns ? "You own your home, so rent doesn't apply (utilities and upkeep still do)." : livesWithParents(p) ? "Living in your parents' home. You chip in a little, and the privacy is what you'd expect." : `Renting a ${RENT_TIERS[p.residence.rentTier].name.toLowerCase()}.`}
         </div>
+        {!owns && p.age >= 18 && (livesWithParents(p) || p.relatives.some((r) => r.relation === "Parent" && r.alive)) && (
+          <Button variant="secondary" className="mt-2 w-full" onClick={() => act((pl) => toggleFamilyHome(pl))}>
+            {livesWithParents(p) ? "🚪 Move out ($500)" : "🏠 Move back in with parents"}
+          </Button>
+        )}
         <div className="mt-2"><Pill tone={p.economy.climate === "recession" ? "red" : p.economy.climate === "boom" ? "green" : "slate"}>{CLIMATE_LABEL[p.economy.climate]}</Pill></div>
       </Card>
 
@@ -60,7 +65,7 @@ function Living() {
             <button
               key={t.name}
               type="button"
-              disabled={i === p.residence.rentTier || p.age < 18}
+              disabled={(i === p.residence.rentTier && !livesWithParents(p)) || p.age < 18}
               onClick={() => act((pl) => setRentTier(pl, i))}
               className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors disabled:cursor-default ${i === p.residence.rentTier ? "border-emerald-500 bg-emerald-950/40" : "border-slate-700/60 bg-slate-800/70 hover:border-emerald-500/60"}`}
             >

@@ -39,7 +39,7 @@ import { processAthlete, processBusiness, processInfluencer } from "./paths";
 import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
 import { applyHabitEffects, habitCost, illnessCosts, riskMultiplier } from "./health";
 import { SHARED_LIVING_FACTOR, SPOUSE_TAX, childSupportDue, marriedPartner, spouseIncome } from "./household";
-import { LIFESTYLES, RENT_TIERS, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
+import { LIFESTYLES, RENT_TIERS, livesWithParents, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -614,6 +614,10 @@ export const isMilestoneAge = (age: number) => age in MILESTONES;
 function processMilestones(p: PlayerState, notices: Notices) {
   if (p.age === 18) {
     addLog(p, "You are now an adult.");
+    if (livingRelatives(p, "Parent").length > 0 && !p.flags.includes("lives_with_parents")) {
+      p.flags.push("lives_with_parents");
+      addLog(p, "You're still living in your parents' home. You can move out whenever you can afford it (Assets tab).");
+    }
     if (hasFlag(p, "trust_fund")) {
       p.bankBalance += 250_000;
       addLog(p, "Your family's trust fund released $250,000 to you.");
@@ -628,7 +632,8 @@ function processMilestones(p: PlayerState, notices: Notices) {
 
 function driftStats(p: PlayerState, rng: Rng) {
   const partner = getPartner(p);
-  const rentBonus = p.properties.length === 0 && p.age >= 18 ? RENT_TIERS[p.residence.rentTier].happiness * 2 : 0;
+  const atHome = livesWithParents(p);
+  const rentBonus = p.properties.length === 0 && p.age >= 18 ? (atHome ? (p.age >= 25 ? -3 : 0) : RENT_TIERS[p.residence.rentTier].happiness * 2) : 0;
   const moodBonus = p.age >= 18 && !p.isInPrison ? (LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1]).mood : 0;
   const target = 62 + moodBonus + rentBonus + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
   p.happiness += Math.round((target - p.happiness) * 0.1) + rng.int(-2, 2);

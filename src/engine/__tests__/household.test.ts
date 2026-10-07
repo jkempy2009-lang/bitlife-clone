@@ -71,3 +71,21 @@ describe("household economy", () => {
     expect(spouseIncome(sp)).toBeLessThan(working / 2);
   });
 });
+
+describe("family home", () => {
+  it("adults can live with parents cheaply and move out for a fee", async () => {
+    const { housingCost, livesWithParents, toggleFamilyHome } = await import("../world");
+    const { p } = married(7, 3);
+    p.relatives = p.relatives.filter((r) => r.relation !== "Partner");
+    p.age = 23;
+    const rentCost = housingCost(p);
+    const home = toggleFamilyHome(p).player;
+    expect(livesWithParents(home)).toBe(true);
+    expect(housingCost(home)).toBeLessThan(rentCost / 3);
+    const out = toggleFamilyHome(home).player;
+    expect(livesWithParents(out)).toBe(false);
+    expect(out.bankBalance).toBe(home.bankBalance - 500);
+    for (const r of home.relatives) if (r.relation === "Parent") r.alive = false;
+    expect(livesWithParents(home)).toBe(false);
+  });
+});
