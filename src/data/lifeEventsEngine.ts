@@ -19,6 +19,7 @@ import { LIFE3_EVENTS } from "./events/life3";
 import { MATURE_EVENTS } from "./events/mature";
 import { LIFE4_EVENTS } from "./events/life4";
 import { LIFE5_EVENTS } from "./events/life5";
+import { ADULT2_EVENTS } from "./events/adult2";
 
 export type EventCategory =
   | "general"
@@ -42,6 +43,10 @@ export interface NewRelativeSpec {
   age?: number;
   /** Pre-generated person (used for "meet someone" encounters). */
   prebuilt?: Relative;
+  /** Force a gender (dating preferences). */
+  gender?: string;
+  /** Absolute age range for the new person (dating preferences; adults only). */
+  ageRange?: [number, number];
 }
 
 export interface ChoiceEffects {
@@ -173,6 +178,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...MATURE_EVENTS,
   ...LIFE4_EVENTS,
   ...LIFE5_EVENTS,
+  ...ADULT2_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

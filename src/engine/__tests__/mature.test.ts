@@ -115,7 +115,7 @@ describe("intimacy", () => {
       }
       return yes;
     };
-    const threes = (p: PlayerState, r: ReturnType<typeof makeRng>) => askThreesome(p, true, r).player;
+    const threes = (p: PlayerState, r: ReturnType<typeof makeRng>) => askThreesome({ ...p, intimacy: { ...p.intimacy, interests: [...p.intimacy.interests, "group"] } }, true, r).player;
     let eager = 0, prudish = 0;
     for (let s = 0; s < 150; s++) {
       const a = adult(300 + s); withPartner(a.p, a.rng, { openness: 95, jealousy: 5, relationshipBar: 90 });

@@ -15,6 +15,7 @@ import {
   randomName,
 } from "./state";
 import { settleDivorce } from "./household";
+import { adultSpec } from "./people";
 
 export function firstName(r: Relative) {
   return r.name.split(" ")[0];
@@ -35,9 +36,9 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
     return kid;
   }
   if (spec.relation === "Partner") {
-    const gender = partnerGenderFor(p, rng);
+    const gender = spec.gender ?? partnerGenderFor(p, rng);
     const [lo, hi] = spec.ageOffset ?? [-4, 5];
-    const age = Math.max(14, p.age + rng.int(lo, hi));
+    const age = spec.ageRange ? rng.int(Math.max(18, spec.ageRange[0]), Math.max(18, spec.ageRange[1])) : Math.max(14, p.age + rng.int(lo, hi));
     const first = randomName(p.birthCountry, gender, rng).first;
     const rel = makeRelativeBase(rng, "Partner", `${first} ${rng.pick(country.lastNames)}`, age, gender, rng.int(1, 5), rng.int(55, 85));
     rel.partnerStatus = spec.partnerStatus ?? "dating";
@@ -368,9 +369,11 @@ export function meetSomeone(p0: PlayerState, kind: "friend" | "date", rng: Rng):
   if (kind === "friend" && p.age < 4) return { player: p0 };
   p.annual[key] = 1;
 
+  const useAdultPrefs = kind === "date" && p.age >= 18;
+  const adult = useAdultPrefs ? adultSpec(p, rng) : null;
   const spec: NewRelativeSpec =
     kind === "date"
-      ? { relation: "Partner", ageOffset: [-4, 5], partnerStatus: "dating" }
+      ? { relation: "Partner", ageOffset: [-4, 5], partnerStatus: "dating", ...(adult ? { gender: adult.gender, ageRange: adult.ageRange } : {}) }
       : { relation: "Friend", ageOffset: [-3, 4] };
   const candidate = createRelative(p, spec, rng);
   const places = ["at a coffee shop", "at a friend's party", "at the gym", "at the library", "online", "at a concert"];

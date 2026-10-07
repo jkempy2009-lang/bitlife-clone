@@ -47,6 +47,10 @@ export interface Relative {
   encounters?: number;
   deathAge?: number;
   deathYear?: number;
+  /** Hidden tastes in adult life; the player learns them by talking or trying things. */
+  tastes?: Record<string, "like" | "limit">;
+  /** Which tastes the player has discovered. */
+  knownTastes?: string[];
   /** Calendar year you married them (partners). */
   marriedYear?: number;
   /** Short occupation blurb for flavour ("Nurse", "Electrician"). */
@@ -183,6 +187,18 @@ export interface PoliticsState {
   popularity: number;
   yearsInOffice: number;
   party: string | null;
+}
+
+export interface IntimacyPrefs {
+  /** Use an age window around your own age instead of fixed limits. */
+  ageAuto: boolean;
+  /** Adults only: never below 18. */
+  ageMin: number;
+  ageMax: number;
+  /** Genders you're open to meeting. Empty means follow your sexuality. */
+  genders: string[];
+  /** Interests you're comfortable exploring (see data/experiences.ts). */
+  interests: string[];
 }
 
 export interface Pregnancy {
@@ -340,6 +356,8 @@ export interface PlayerState {
   politics: PoliticsState;
   pregnancy: Pregnancy | null;
   blackjack: BlackjackHand | null;
+  /** Who you're looking for and what you're open to (adult content only). */
+  intimacy: IntimacyPrefs;
   /** Mature (18+) content: sexual choices, adult careers, and graphic-ish crime options. */
   matureContent: boolean;
 

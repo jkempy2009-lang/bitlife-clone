@@ -11,6 +11,7 @@ import { createRelative, endRelationship, firstName } from "./social";
 import { addDisease } from "./events";
 import { startTrial } from "./crime";
 import { makeRelativeBase, randomGender, randomName } from "./state";
+import { adultSpec, tasteOf } from "./people";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
@@ -18,7 +19,10 @@ const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "j
 
 export const isAdult = (r: Relative) => r.age >= 18;
 
-function gate(p: PlayerState): ActionResult | null {
+/** Open or polyamorous: your partner knows and agrees about other people. */
+export const isOpen = (p: PlayerState) => p.flags.includes("open_relationship") || p.flags.includes("polyamorous");
+
+export function gate(p: PlayerState): ActionResult | null {
   if (!p.matureContent) {
     return { player: p, notices: [info("Mature Content Off", "Turn on mature content in Settings to access adult options.")] };
   }
@@ -47,7 +51,7 @@ const FLING_LINES = [
   "You didn't plan on staying the night, but here you are.",
 ];
 
-const fill = (line: string, name: string) => line.replace("{n}", name);
+export const fill = (line: string, name: string) => line.replace("{n}", name);
 
 function canConceive(p: PlayerState, other: Relative): boolean {
   const a = p.gender;
@@ -75,7 +79,7 @@ function maybeConceive(p: PlayerState, other: Relative, protectedSex: boolean, r
   notices.push(info("Positive Test!", `${who} pregnant. A baby is due by next year.`, "neutral"));
 }
 
-function maybeInfect(p: PlayerState, protectedSex: boolean, risk: number, rng: Rng, notices: Notices) {
+export function maybeInfect(p: PlayerState, protectedSex: boolean, risk: number, rng: Rng, notices: Notices) {
   if (!rng.chance(protectedSex ? risk * 0.1 : risk)) return;
   const id = rng.weighted(["chlamydia", "herpes", "hiv"], (d) => (d === "chlamydia" ? 0.6 : d === "herpes" ? 0.3 : 0.1))!;
   if (addDisease(p, id, rng)) {
@@ -108,9 +112,9 @@ export function exposeAffair(p: PlayerState, rng: Rng, notices: Notices) {
   }
 }
 
-function recordCheating(p: PlayerState, rng: Rng, notices: Notices, immediateRisk: number): boolean {
+export function recordCheating(p: PlayerState, rng: Rng, notices: Notices, immediateRisk: number): boolean {
   const partner = getPartner(p);
-  if (!partner || p.flags.includes("open_relationship")) return false;
+  if (!partner || isOpen(p)) return false;
   p.stats.affairs += 1;
   if (!p.flags.includes("cheater")) p.flags.push("cheater");
   changeStat(p, "karma", -5);
@@ -122,7 +126,7 @@ function recordCheating(p: PlayerState, rng: Rng, notices: Notices, immediateRis
 }
 
 /** Common intimate-encounter outcome. */
-function encounter(p: PlayerState, other: Relative, protectedSex: boolean, rng: Rng, notices: Notices, stiRisk: number) {
+export function encounter(p: PlayerState, other: Relative, protectedSex: boolean, rng: Rng, notices: Notices, stiRisk: number) {
   other.encounters = (other.encounters ?? 0) + 1;
   p.annual[`love:${other.id}`] = (p.annual[`love:${other.id}`] ?? 0) + 1;
   changeStat(p, "happiness", rng.int(3, 7));
@@ -201,23 +205,32 @@ export function romanticGetaway(p0: PlayerState, relId: string): ActionResult {
   return { player: p, notices: [info("Romantic Getaway", body, "good")] };
 }
 
-export function proposeOpenRelationship(p0: PlayerState, rng: Rng): ActionResult {
+export type RelationshipStyle = "open" | "poly";
+
+export function proposeOpenRelationship(p0: PlayerState, rng: Rng, style: RelationshipStyle = "open"): ActionResult {
   const blocked = gate(p0);
   if (blocked) return { ...blocked, player: p0 };
   const p = clone(p0);
   const partner = getPartner(p);
   if (!partner || !isAdult(partner)) return { player: p0 };
-  if (p.flags.includes("open_relationship")) return { player: p0, notices: [info("Already Open", "You two already have an open relationship.")] };
+  const flag = style === "poly" ? "polyamorous" : "open_relationship";
+  if (p.flags.includes(flag)) return { player: p0, notices: [info("Already Agreed", style === "poly" ? "You two already practise polyamory." : "You two already have an open relationship.")] };
   if ((p.annual.openask ?? 0) >= 1) return { player: p0, notices: [info("Give It Time", "You've already raised this once this year.")] };
   p.annual.openask = 1;
-  const chance = clamp((partner.openness ?? 40) / 100 - (partner.jealousy ?? 50) / 200 + partner.relationshipBar / 300, 0.05, 0.85);
+  const tag = style === "poly" ? "open" : "group";
+  void tag;
+  const hardness = style === "poly" ? 0.7 : 1;
+  const chance = clamp(((partner.openness ?? 40) / 100 - (partner.jealousy ?? 50) / 200 + partner.relationshipBar / 300) * hardness, 0.04, 0.85);
   const n = firstName(partner);
   if (rng.chance(chance)) {
-    p.flags.push("open_relationship");
+    p.flags.push(flag);
     partner.relationshipBar = clamp(partner.relationshipBar + 4);
-    const body = `After a long, honest conversation, ${n} agreed to open up your relationship. Ground rules were set.`;
+    const body =
+      style === "poly"
+        ? `After several honest conversations, ${n} agreed to try polyamory: more than one loving relationship, everyone informed and consenting. Ground rules, schedules and a shared calendar were involved.`
+        : `After a long, honest conversation, ${n} agreed to open up your relationship. Ground rules were set.`;
     addLog(p, body);
-    return { player: p, notices: [info("Open Relationship", body, "good")] };
+    return { player: p, notices: [info(style === "poly" ? "Polyamory" : "Open Relationship", body, "good")] };
   }
   partner.relationshipBar = clamp(partner.relationshipBar - 12);
   changeStat(p, "happiness", -3);
@@ -231,16 +244,31 @@ export function proposeOpenRelationship(p0: PlayerState, rng: Rng): ActionResult
   return { player: p, notices };
 }
 
-export function askThreesome(p0: PlayerState, protectedSex: boolean, rng: Rng): ActionResult {
+/** Return to a monogamous relationship (your partner is told, and has feelings about it). */
+export function closeRelationship(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  if (!p.flags.includes("open_relationship") && !p.flags.includes("polyamorous")) return { player: p0 };
+  p.flags = p.flags.filter((f) => f !== "open_relationship" && f !== "polyamorous");
+  const partner = getPartner(p);
+  if (partner) partner.relationshipBar = clamp(partner.relationshipBar + 3);
+  for (const l of p.relatives) if (l.relation === "Lover" && l.partnerStatus !== "ex" && l.alive) l.partnerStatus = "ex";
+  const body = "You agreed to be exclusive again. Any other connections were ended kindly.";
+  addLog(p, body);
+  return { player: p, notices: [info("Exclusive Again", body, "neutral")] };
+}
+
+export function askThreesome(p0: PlayerState, protectedSex: boolean, rng: Rng, guestGender?: string): ActionResult {
   const blocked = gate(p0);
   if (blocked) return { ...blocked, player: p0 };
   const p = clone(p0);
   const partner = getPartner(p);
   if (!partner || !isAdult(partner)) return { player: p0 };
+  if (!p.intimacy.interests.includes("group")) return { player: p0, notices: [info("Not On Your List", "Add \"More Than Two\" to your interests (Preferences) before raising it.")] };
   if ((p.annual.threesome ?? 0) >= 1) return { player: p0, notices: [info("Maybe Next Year", "You've already had that conversation this year.")] };
   p.annual.threesome = 1;
-  const open = p.flags.includes("open_relationship");
-  const chance = clamp(0.08 + (partner.openness ?? 40) / 120 + partner.relationshipBar / 400 - (partner.jealousy ?? 50) / 250 + (open ? 0.25 : 0), 0.03, 0.8);
+  const open = isOpen(p);
+  const taste = tasteOf(partner, "group");
+  const chance = taste === "limit" ? 0.02 : clamp(0.08 + (partner.openness ?? 40) / 120 + partner.relationshipBar / 400 - (partner.jealousy ?? 50) / 250 + (open ? 0.25 : 0) + (taste === "like" ? 0.35 : 0), 0.03, 0.92);
   const n = firstName(partner);
   if (!rng.chance(chance)) {
     partner.relationshipBar = clamp(partner.relationshipBar - 10);
@@ -251,7 +279,8 @@ export function askThreesome(p0: PlayerState, protectedSex: boolean, rng: Rng): 
   }
   if (!p.flags.includes("threesome")) p.flags.push("threesome");
   const notices: Notices = [];
-  const guest = createRelative(p, { relation: "Partner", ageOffset: [-5, 7], partnerStatus: "dating" }, rng);
+  const ad = adultSpec(p, rng);
+  const guest = createRelative(p, { relation: "Partner", ageOffset: [-5, 7], partnerStatus: "dating", gender: guestGender ?? ad.gender, ageRange: ad.ageRange }, rng);
   guest.age = Math.max(18, guest.age);
   const g = guest.name.split(" ")[0];
   p.stats.hookups += 1;
@@ -276,7 +305,7 @@ export function swingerClub(p0: PlayerState, protectedSex: boolean, rng: Rng): A
   if (blocked) return { ...blocked, player: p0 };
   const p = clone(p0);
   const partner = getPartner(p);
-  if (partner && !p.flags.includes("open_relationship")) {
+  if (partner && !isOpen(p)) {
     return { player: p0, notices: [info("Not Without Consent", "Your partner needs to be on board (open relationship) first.")] };
   }
   if (p.bankBalance < SWINGER_COST) return { player: p0, notices: [info("Insufficient Funds", `Entry and drinks cost ${money(SWINGER_COST)}.`, "bad")] };
@@ -300,17 +329,37 @@ export function swingerClub(p0: PlayerState, protectedSex: boolean, rng: Rng): A
 // Hookups, flings, affairs
 // ---------------------------------------------------------------------------
 
-export type Venue = "bar" | "app" | "party" | "gym";
-const VENUE_COST: Record<Venue, number> = { bar: 100, app: 20, party: 50, gym: 0 };
-export const VENUES: { id: Venue; label: string; emoji: string; cost: number }[] = [
-  { id: "bar", label: "At the Bar", emoji: "🍸", cost: VENUE_COST.bar },
-  { id: "app", label: "Dating App", emoji: "📱", cost: VENUE_COST.app },
-  { id: "party", label: "At a Party", emoji: "🎉", cost: VENUE_COST.party },
-  { id: "gym", label: "At the Gym", emoji: "🏋️", cost: VENUE_COST.gym },
+export type Venue = "bar" | "app" | "party" | "gym" | "singles" | "club" | "social" | "retreat" | "scene";
+export type Intent = "casual" | "relationship";
+
+interface VenueDef {
+  id: Venue;
+  label: string;
+  emoji: string;
+  cost: number;
+  blurb: string;
+  /** Shifts the typical age of people you meet there. */
+  ageShift: number;
+  chanceBonus: number;
+  /** Interest tag you must have opted into. */
+  requires?: string;
+}
+
+export const VENUES: VenueDef[] = [
+  { id: "bar", label: "At the Bar", emoji: "🍸", cost: 100, blurb: "Low lights, loud music, short conversations.", ageShift: 0, chanceBonus: 0 },
+  { id: "app", label: "Dating App", emoji: "📱", cost: 20, blurb: "Swipe on your own terms and filters.", ageShift: 0, chanceBonus: 0.1 },
+  { id: "party", label: "House Party", emoji: "🎉", cost: 50, blurb: "Friends of friends and good music.", ageShift: -3, chanceBonus: 0 },
+  { id: "gym", label: "The Gym", emoji: "🏋️", cost: 0, blurb: "Shared spotting and sweaty small talk.", ageShift: -2, chanceBonus: 0 },
+  { id: "singles", label: "Singles Mixer", emoji: "🥂", cost: 60, blurb: "Name tags and clear intentions. Older crowd.", ageShift: 8, chanceBonus: 0.08 },
+  { id: "club", label: "Nightclub", emoji: "🪩", cost: 80, blurb: "Loud, young and fast.", ageShift: -5, chanceBonus: 0.03 },
+  { id: "social", label: "Hobby Club", emoji: "🎨", cost: 40, blurb: "Slow to start, but you meet real people.", ageShift: 2, chanceBonus: -0.1 },
+  { id: "retreat", label: "Adults-Only Resort", emoji: "🏝️", cost: 900, blurb: "Everyone is there to unwind and meet someone.", ageShift: 3, chanceBonus: 0.15 },
+  { id: "scene", label: "Lifestyle Event", emoji: "🔥", cost: 120, blurb: "An adults-only evening for people with open minds. Needs the \"More Than Two\" or \"Power Play\" interest.", ageShift: 4, chanceBonus: 0.12, requires: "group" },
 ];
 
-function newLover(p: PlayerState, rng: Rng, status: "fling" | "affair"): Relative {
-  const base = createRelative(p, { relation: "Partner", ageOffset: [-6, 8], partnerStatus: "dating" }, rng);
+function newLover(p: PlayerState, rng: Rng, status: "fling" | "affair", shift = 0): Relative {
+  const ad = adultSpec(p, rng, shift);
+  const base = createRelative(p, { relation: "Partner", ageOffset: [-6, 8], partnerStatus: "dating", gender: ad.gender, ageRange: ad.ageRange }, rng);
   base.age = Math.max(18, base.age);
   base.relation = "Lover";
   base.partnerStatus = status;
@@ -318,19 +367,23 @@ function newLover(p: PlayerState, rng: Rng, status: "fling" | "affair"): Relativ
   return base;
 }
 
-export function hookUp(p0: PlayerState, venue: Venue, protectedSex: boolean, rng: Rng): ActionResult {
+export function hookUp(p0: PlayerState, venue: Venue, protectedSex: boolean, rng: Rng, intent: Intent = "casual"): ActionResult {
   const blocked = gate(p0);
   if (blocked) return { ...blocked, player: p0 };
   const p = clone(p0);
-  const cost = VENUE_COST[venue];
-  if (p.bankBalance < cost) return { player: p0, notices: [info("Insufficient Funds", `That costs ${money(cost)}.`, "bad")] };
-  if ((p.annual[`hookup:${venue}`] ?? 0) >= 2) return { player: p0, notices: [info("Out of Energy", "You've been out enough this way for one year.")] };
+  const def = VENUES.find((v) => v.id === venue)!;
+  if (def.requires && !p.intimacy.interests.includes(def.requires) && !p.intimacy.interests.includes("kink")) {
+    return { player: p0, notices: [info("Not On Your List", "Add the matching interest in Preferences first.")] };
+  }
+  if (p.bankBalance < def.cost) return { player: p0, notices: [info("Insufficient Funds", `That costs ${money(def.cost)}.`, "bad")] };
+  const cap = venue === "retreat" ? 1 : 2;
+  if ((p.annual[`hookup:${venue}`] ?? 0) >= cap) return { player: p0, notices: [info("Out of Energy", "You've been out enough this way for one year.")] };
   p.annual[`hookup:${venue}`] = (p.annual[`hookup:${venue}`] ?? 0) + 1;
-  p.bankBalance -= cost;
+  p.bankBalance -= def.cost;
   const partner = getPartner(p);
-  const open = p.flags.includes("open_relationship");
+  const open = isOpen(p);
   const cheating = !!partner && !open;
-  const chance = clamp(0.35 + (p.looks - 50) / 200 + p.skills.charisma / 300 + (venue === "app" ? 0.1 : 0), 0.1, 0.85);
+  const chance = clamp(0.35 + (p.looks - 50) / 200 + p.skills.charisma / 300 + def.chanceBonus - (intent === "relationship" ? 0.08 : 0), 0.1, 0.88);
   if (!rng.chance(chance)) {
     changeStat(p, "happiness", -2);
     const body = "You tried your luck, but nobody was biting tonight.";
@@ -338,13 +391,25 @@ export function hookUp(p0: PlayerState, venue: Venue, protectedSex: boolean, rng
     return { player: p, notices: [info("No Luck", body, "neutral")] };
   }
   const notices: Notices = [];
-  const stays = rng.chance(0.4);
+  // Looking for something real: someone single who wants the same.
+  if (intent === "relationship" && !partner) {
+    const ad = adultSpec(p, rng, def.ageShift);
+    const match = createRelative(p, { relation: "Partner", ageOffset: [-6, 8], partnerStatus: "dating", gender: ad.gender, ageRange: ad.ageRange }, rng);
+    match.age = Math.max(18, match.age);
+    match.relationshipBar = rng.int(50, 72);
+    p.relatives.push(match);
+    changeStat(p, "happiness", 6);
+    const body = `You met ${match.name} (${match.age}) and, for once, you both wanted the same thing. You're officially dating.`;
+    addLog(p, body);
+    return { player: p, notices: [info("A Real Connection", body, "good")] };
+  }
+  const stays = rng.chance(intent === "relationship" ? 0.7 : 0.4);
   const status = cheating || open ? "affair" : "fling";
-  const lover = newLover(p, rng, status);
+  const lover = newLover(p, rng, status, def.ageShift);
   p.stats.hookups += 1;
   encounter(p, lover, protectedSex, rng, notices, 0.12);
   const line = rng.pick(FLING_LINES);
-  addLog(p, `${line} (${lover.name})`);
+  addLog(p, `${line} (${lover.name}, ${lover.age})`);
   if (stays) p.relatives.push(lover);
   if (cheating) recordCheating(p, rng, notices, 0.1);
   const tail = stays ? ` You're keeping in touch with ${lover.name.split(" ")[0]}.` : "";
@@ -363,7 +428,8 @@ export function seduce(p0: PlayerState, kind: SeduceKind, protectedSex: boolean,
   if (kind === "friend") target = p.relatives.filter((r) => r.alive && r.relation === "Friend" && r.age >= 18 && r.partnerStatus !== "ex").sort((a, b) => b.relationshipBar - a.relationshipBar)[0];
   if (kind === "ex") target = p.relatives.find((r) => r.alive && r.relation === "Partner" && r.partnerStatus === "ex" && r.age >= 18);
   if (kind === "coworker") {
-    target = createRelative(p, { relation: "Friend", ageOffset: [-8, 10] }, rng);
+    const ad = adultSpec(p, rng);
+    target = createRelative(p, { relation: "Partner", ageOffset: [-8, 10], partnerStatus: "dating", gender: ad.gender, ageRange: ad.ageRange }, rng);
     target.age = Math.max(18, target.age);
     target.relation = "Lover";
     target.partnerStatus = "fling";
@@ -372,7 +438,7 @@ export function seduce(p0: PlayerState, kind: SeduceKind, protectedSex: boolean,
   if (!target) return { player: p0, notices: [info("Nobody There", kind === "friend" ? "You don't have a friend who fits." : "You don't have an ex to call.")] };
   p.annual[`seduce:${kind}`] = 1;
   const partner = getPartner(p);
-  const cheating = !!partner && !p.flags.includes("open_relationship");
+  const cheating = !!partner && !isOpen(p);
   const base = kind === "friend" ? target.relationshipBar / 120 : kind === "ex" ? 0.5 : 0.4;
   const chance = clamp(base + (p.looks - 50) / 250 + (target.openness ?? 40) / 400, 0.1, 0.85);
   const name = target.name.split(" ")[0];
@@ -390,7 +456,7 @@ export function seduce(p0: PlayerState, kind: SeduceKind, protectedSex: boolean,
   else {
     // Existing friend or ex becomes a lover; the original entry is replaced.
     p.relatives = p.relatives.filter((r) => r.id !== target!.id);
-    lover = { ...target, relation: "Lover", partnerStatus: cheating || p.flags.includes("open_relationship") ? "affair" : "fling" };
+    lover = { ...target, relation: "Lover", partnerStatus: cheating || isOpen(p) ? "affair" : "fling" };
   }
   if (kind === "coworker" && cheating) lover.partnerStatus = "affair";
   p.relatives.push(lover);
@@ -456,7 +522,7 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
     addLog(p, body);
     notices.push(info("A New Baby!", body, "good"));
     const partner = getPartner(p);
-    if (partner && partner.name !== other && !p.flags.includes("open_relationship") && rng.chance(0.4)) exposeAffair(p, rng, notices);
+    if (partner && partner.name !== other && !isOpen(p) && rng.chance(0.4)) exposeAffair(p, rng, notices);
   }
   // Lovers: upkeep, drift and discovery
   for (const l of p.relatives) {
@@ -469,7 +535,20 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
     }
   }
   const partner = getPartner(p);
-  if (partner && !p.flags.includes("open_relationship")) {
+  // Juggling more than one relationship takes time and emotional work, whatever the rules.
+  if (partner && p.flags.includes("polyamorous")) {
+    const others = p.relatives.filter((l) => l.relation === "Lover" && l.alive && l.partnerStatus !== "ex").length;
+    if (others > 0) {
+      const strain = Math.round(others * (0.5 + (partner.jealousy ?? 50) / 100) * rng.int(0, 3));
+      partner.relationshipBar = clamp(partner.relationshipBar - strain + (prevAnnual[`love:${partner.id}`] ?? 0) * 2);
+      if (strain >= 4) {
+        const body = `${firstName(partner)} admitted that sharing your time is harder than they expected. A heart-to-heart is overdue.`;
+        addLog(p, body);
+        notices.push(info("Strain", body, "bad"));
+      }
+    }
+  }
+  if (partner && !isOpen(p)) {
     for (const l of p.relatives) {
       if (l.relation !== "Lover" || l.partnerStatus !== "affair" || !l.alive) continue;
       const meetups = prevAnnual[`love:${l.id}`] ?? 0;
@@ -503,7 +582,7 @@ export function processAdultWork(p: PlayerState, rng: Rng, notices: Notices) {
   }
   const partner = getPartner(p);
   if (job.lineId === "escort") {
-    if (partner && !p.flags.includes("open_relationship")) partner.relationshipBar = clamp(partner.relationshipBar - 6);
+    if (partner && !isOpen(p)) partner.relationshipBar = clamp(partner.relationshipBar - 6);
     maybeInfect(p, true, 0.1, rng, notices);
     if (rng.chance(0.03)) {
       const dmg = rng.int(10, 30);

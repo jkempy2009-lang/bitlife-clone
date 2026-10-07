@@ -318,6 +318,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     probation: null,
     pregnancy: null,
     blackjack: null,
+    intimacy: { ageAuto: true, ageMin: 18, ageMax: 60, genders: [], interests: ["sensual", "playful"] },
     matureContent: true,
     effort: "steady",
     habits: { exercise: 1, diet: 1 },

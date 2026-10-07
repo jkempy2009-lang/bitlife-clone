@@ -34,6 +34,10 @@ import {
   spiceItUp,
   swingerClub,
 } from "@/engine/intimacy";
+import { EXPERIENCES, INTERESTS, INTEREST_BY_ID } from "@/data/experiences";
+import { discussDesires, knownTastes, setIntimacyPrefs, shareExperience, toggleGender, toggleInterest } from "@/engine/desire";
+import { adultRange } from "@/engine/people";
+import { closeRelationship, type Intent } from "@/engine/intimacy";
 import { money } from "@/lib/format";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
@@ -71,6 +75,7 @@ export default function RelationshipsTab() {
   const { player: p, act } = useGame();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [safe, setSafe] = useState(true);
+  const [intent, setIntent] = useState<Intent>("casual");
 
   const living = p.relatives.filter((r) => r.alive && r.partnerStatus !== "ex");
   const past = p.relatives.filter((r) => !r.alive || r.partnerStatus === "ex");
@@ -138,29 +143,58 @@ export default function RelationshipsTab() {
         </div>
       </div>
 
+      {mature && <PreferencesCard />}
+
       {mature && (
         <div>
-          <SectionTitle hint="18+ · consenting adults">Casual Encounters</SectionTitle>
+          <SectionTitle hint="18+ · consenting adults">Meet Someone</SectionTitle>
           <Card className="mb-2 p-3">
+            <div className="mb-2 grid grid-cols-2 gap-1.5">
+              {(["casual", "relationship"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setIntent(k)}
+                  className={`rounded-xl px-2 py-2 text-sm font-semibold transition-colors ${intent === k ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                >
+                  {k === "casual" ? "🔥 Something casual" : "💞 Something real"}
+                </button>
+              ))}
+            </div>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" checked={safe} onChange={(e) => setSafe(e.target.checked)} className="h-4 w-4 accent-emerald-500" />
               Use protection
             </label>
-            <p className="mt-1 text-xs text-slate-500">Protection greatly lowers the chance of pregnancy and infections.</p>
-            {partner && !p.flags.includes("open_relationship") && (
+            <p className="mt-1 text-xs text-slate-500">Protection greatly lowers the chance of pregnancy and infections. Who you meet follows your Preferences above.</p>
+            {partner && !p.flags.includes("open_relationship") && !p.flags.includes("polyamorous") && (
               <p className="mt-2 text-xs font-medium text-rose-300">⚠️ You have a partner, and this would be cheating. You might be caught.</p>
             )}
           </Card>
-          <div className="grid grid-cols-2 gap-2">
-            {VENUES.map((v) => (
-              <Button key={v.id} variant="secondary" onClick={() => act((pl, rng) => hookUp(pl, v.id, safe, rng))}>
-                {v.emoji} {v.label}{v.cost ? ` ($${v.cost})` : ""}
-              </Button>
-            ))}
+          <div className="flex flex-col gap-2">
+            {VENUES.map((v) => {
+              const locked = v.requires && !p.intimacy.interests.includes(v.requires) && !p.intimacy.interests.includes("kink");
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  disabled={!!locked || p.bankBalance < v.cost}
+                  onClick={() => act((pl, rng) => hookUp(pl, v.id, safe, rng, intent))}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/70 p-2.5 text-left transition-colors hover:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span className="text-2xl">{v.emoji}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">{v.label}{v.cost ? ` · $${v.cost}` : ""}</span>
+                    <span className="block text-xs text-slate-400">{v.blurb}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <Button variant="secondary" onClick={() => act((pl, rng) => seduce(pl, "friend", safe, rng))}>🤝 A Friend</Button>
             <Button variant="secondary" onClick={() => act((pl, rng) => seduce(pl, "ex", safe, rng))}>💔 An Ex</Button>
             <Button variant="secondary" disabled={!p.currentJob} onClick={() => act((pl, rng) => seduce(pl, "coworker", safe, rng))}>💼 A Coworker</Button>
-            <Button variant="secondary" disabled={!!partner && !p.flags.includes("open_relationship")} onClick={() => act((pl, rng) => swingerClub(pl, safe, rng))}>
+            <Button variant="secondary" disabled={!!partner && !p.flags.includes("open_relationship") && !p.flags.includes("polyamorous")} onClick={() => act((pl, rng) => swingerClub(pl, safe, rng))}>
               🪩 Swinger Club (${SWINGER_COST})
             </Button>
           </div>
@@ -183,6 +217,112 @@ export default function RelationshipsTab() {
   );
 }
 
+function PreferencesCard() {
+  const { player: p, act } = useGame();
+  const prefs = p.intimacy;
+  const [lo, hi] = adultRange(p);
+  return (
+    <details className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-200">💞 Preferences · ages {lo}–{hi}{prefs.genders.length ? ` · ${prefs.genders.join(", ")}` : ""}</summary>
+      <div className="mt-3 flex flex-col gap-3">
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Age range (adults only)</div>
+          <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={prefs.ageAuto} onChange={() => act((pl) => setIntimacyPrefs(pl, { ageAuto: !pl.intimacy.ageAuto }))} className="h-4 w-4 accent-emerald-500" />
+            Around my own age
+          </label>
+          {!prefs.ageAuto && (
+            <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
+              <label>
+                From
+                <input type="number" min={18} max={99} value={prefs.ageMin} onChange={(e) => act((pl) => setIntimacyPrefs(pl, { ageMin: Number(e.target.value) || 18 }))} className="mt-1 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100" />
+              </label>
+              <label>
+                To
+                <input type="number" min={18} max={99} value={prefs.ageMax} onChange={(e) => act((pl) => setIntimacyPrefs(pl, { ageMax: Number(e.target.value) || 60 }))} className="mt-1 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100" />
+              </label>
+            </div>
+          )}
+          <p className="mt-1 text-xs text-slate-500">Everyone you meet is an adult, 18 or older. Nobody younger is ever generated.</p>
+        </div>
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Who you're open to</div>
+          <div className="flex flex-wrap gap-1.5">
+            {["Male", "Female", "Non-binary"].map((g) => (
+              <button key={g} type="button" onClick={() => act((pl) => toggleGender(pl, g))} className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${prefs.genders.includes(g) ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
+                {g === "Male" ? "Men" : g === "Female" ? "Women" : "Non-binary people"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">{prefs.genders.length === 0 ? `Nothing chosen: following your sexuality (${p.sexuality}).` : "Choose as many as you like."}</p>
+        </div>
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">What you're open to exploring</div>
+          <div className="flex flex-col gap-1.5">
+            {INTERESTS.map((i) => (
+              <label key={i.id} className={`flex items-start gap-2 rounded-xl border p-2 text-sm transition-colors ${prefs.interests.includes(i.id) ? "border-emerald-500/60 bg-emerald-950/30" : "border-slate-700/60 bg-slate-900/40"}`}>
+                <input type="checkbox" checked={prefs.interests.includes(i.id)} onChange={() => act((pl) => toggleInterest(pl, i.id))} className="mt-0.5 h-4 w-4 accent-emerald-500" />
+                <span>
+                  <span className="font-semibold">{i.emoji} {i.label}</span>
+                  <span className="block text-xs text-slate-400">{i.blurb}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">These only unlock the options for you. Whether someone else agrees is always their choice, and a no is a no.</p>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function ExperienceMenu({ rel, safe }: { rel: Relative; safe: boolean }) {
+  const { player: p, act } = useGame();
+  const known = knownTastes(rel);
+  return (
+    <>
+      <SectionTitle hint="your interests unlock these">Share an Experience</SectionTitle>
+      <div className="flex flex-col gap-2">
+        {EXPERIENCES.filter((e) => !(e.partnerOnly && rel.relation !== "Partner")).map((e) => {
+          const optedIn = p.intimacy.interests.includes(e.tag);
+          const left = e.cap - (p.annual[`exp:${e.id}:${rel.id}`] ?? 0);
+          const tooEarly = rel.relationshipBar < e.minBar;
+          const taste = known.find((k) => k.tag === e.tag)?.taste;
+          const why = !optedIn ? `Add “${INTEREST_BY_ID[e.tag].label}” to your preferences` : tooEarly ? `Needs relationship ${e.minBar}+` : left <= 0 ? "Done this year" : p.bankBalance < e.cost ? "Can't afford it" : "";
+          return (
+            <button
+              key={e.id}
+              type="button"
+              disabled={!!why}
+              onClick={() => act((pl, rng) => shareExperience(pl, rel.id, e.id, safe, rng))}
+              className="flex items-start gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/70 p-2.5 text-left transition-colors hover:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <span className="text-2xl">{e.emoji}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{e.label}{e.cost ? ` · ${money(e.cost)}` : ""}</span>
+                <span className="block text-xs text-slate-400">{e.blurb}</span>
+                {why ? <span className="mt-0.5 block text-xs font-medium text-amber-300">🔒 {why}</span> : taste === "like" ? <span className="mt-0.5 block text-xs font-medium text-emerald-300">💚 They've told you they love this</span> : taste === "limit" ? <span className="mt-0.5 block text-xs font-medium text-rose-300">⛔ A limit for them. They'll say no.</span> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <Button variant="secondary" onClick={() => act((pl) => discussDesires(pl, rel.id))} disabled={(p.annual[`talk:${rel.id}`] ?? 0) >= 1}>
+        🗣️ Talk About Desires & Limits {(p.annual[`talk:${rel.id}`] ?? 0) >= 1 ? "(done this year)" : ""}
+      </Button>
+      {known.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {known.map((k) => (
+            <Pill key={k.tag} tone={k.taste === "like" ? "green" : k.taste === "limit" ? "red" : "slate"}>
+              {INTEREST_BY_ID[k.tag]?.emoji} {INTEREST_BY_ID[k.tag]?.label}: {k.taste === "like" ? "loves" : k.taste === "limit" ? "limit" : "open"}
+            </Pill>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe: boolean; setSafe: (b: boolean) => void; onBack: () => void }) {
   const { player: p, act } = useGame();
   const used = p.annual[`rel:${rel.id}`] ?? 0;
@@ -191,6 +331,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
   const canAsk = rel.relation === "Parent" && p.age < 22;
   const mature = p.matureContent && p.age >= 18 && rel.age >= 18;
   const open = p.flags.includes("open_relationship");
+  const poly = p.flags.includes("polyamorous");
   const loveLeft = LOVE_CAP - (p.annual[`love:${rel.id}`] ?? 0);
   const isPet = rel.relation === "Pet";
 
@@ -219,6 +360,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
           {rel.relation === "Partner" && <Pill tone="blue">{rel.partnerStatus === "married" ? `Married${rel.marriedYear ? ` ${Math.max(0, p.year - rel.marriedYear)} yrs` : ""}` : "Dating"}</Pill>}
           {rel.relation === "Partner" && rel.partnerStatus === "married" && <Pill tone="green">Adds ≈{money(Math.round(spouseIncome(rel) * 0.75))}/yr</Pill>}
           {rel.relation === "Partner" && open && <Pill tone="amber">Open relationship</Pill>}
+          {rel.relation === "Partner" && p.flags.includes("polyamorous") && <Pill tone="amber">Polyamorous</Pill>}
           {(rel.relation === "Partner" || rel.relation === "Lover" || rel.relation === "Friend") && rel.traits?.map((t) => <Pill key={t} tone="slate">{t}</Pill>)}
         </div>
       </Card>
@@ -277,12 +419,19 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
               <>
                 <Button variant="secondary" onClick={() => act((pl, rng) => spiceItUp(pl, rel.id, rng))}>🎭 Spice It Up (${SPICE_COST})</Button>
                 <Button variant="secondary" onClick={() => act((pl, rng) => askThreesome(pl, safe, rng))}>👥 Ask for a Threesome</Button>
-                <Button variant="secondary" className="col-span-2" disabled={open} onClick={() => act((pl, rng) => proposeOpenRelationship(pl, rng))}>
-                  {open ? "🔓 Relationship is open" : "🔓 Propose an Open Relationship"}
+                <Button variant="secondary" disabled={open || poly} onClick={() => act((pl, rng) => proposeOpenRelationship(pl, rng, "open"))}>
+                  {open ? "🔓 Open" : "🔓 Propose Open"}
                 </Button>
+                <Button variant="secondary" disabled={poly} onClick={() => act((pl, rng) => proposeOpenRelationship(pl, rng, "poly"))}>
+                  {poly ? "💞 Polyamorous" : "💞 Propose Polyamory"}
+                </Button>
+                {(open || poly) && (
+                  <Button variant="ghost" className="col-span-2" onClick={() => act((pl) => closeRelationship(pl))}>🔒 Return to Exclusive</Button>
+                )}
               </>
             )}
           </div>
+          <ExperienceMenu rel={rel} safe={safe} />
           {rel.relation === "Partner" && (
             <p className="text-xs text-slate-500">Your partner's personality ({rel.traits?.join(", ") ?? "unknown"}) shapes how they'll react. Asking is always their choice, and no means no.</p>
           )}

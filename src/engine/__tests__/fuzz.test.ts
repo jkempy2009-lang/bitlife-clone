@@ -22,6 +22,9 @@ import { charityDrive, giveSpeech, runForOffice } from "../politics";
 import { joinMob, leaveMob } from "../underworld";
 import { adoptChild } from "../social";
 import { runMission } from "../spy";
+import { discussDesires, setIntimacyPrefs, shareExperience, toggleGender, toggleInterest } from "../desire";
+import { EXPERIENCES, INTERESTS } from "@/data/experiences";
+import { closeRelationship } from "../intimacy";
 import { askThreesome, endLover, hookUp, leaveForLover, makeLove, proposeOpenRelationship, romanticGetaway, seduce, spiceItUp, swingerClub } from "../intimacy";
 import { arson, assault, blackmail, commitMurder, kidnap, targetsFor } from "../violence";
 import { appealSentence } from "../crime";
@@ -134,7 +137,14 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl, r) => proposeOpenRelationship(pl, r),
       (pl, r) => askThreesome(pl, r.chance(0.5), r),
       (pl, r) => swingerClub(pl, r.chance(0.5), r),
-      (pl, r) => hookUp(pl, r.pick(["bar", "app", "party", "gym"] as const), r.chance(0.5), r),
+      (pl, r) => hookUp(pl, r.pick(["bar", "app", "party", "gym", "singles", "club", "social", "retreat", "scene"] as const), r.chance(0.5), r, r.pick(["casual", "relationship"] as const)),
+      (pl, r) => shareExperience(pl, (pl.relatives.find((x) => x.relation === "Partner" || x.relation === "Lover") ?? { id: "x" }).id, r.pick(EXPERIENCES).id, r.chance(0.5), r),
+      (pl) => discussDesires(pl, (pl.relatives.find((x) => x.relation === "Partner" || x.relation === "Lover") ?? { id: "x" }).id),
+      (pl, r) => toggleInterest(pl, r.pick(INTERESTS).id),
+      (pl, r) => toggleGender(pl, r.pick(["Male", "Female", "Non-binary"])),
+      (pl, r) => setIntimacyPrefs(pl, { ageAuto: r.chance(0.5), ageMin: r.int(0, 80), ageMax: r.int(0, 120) }),
+      (pl, r) => proposeOpenRelationship(pl, r, r.pick(["open", "poly"] as const)),
+      (pl) => closeRelationship(pl),
       (pl, r) => seduce(pl, r.pick(["friend", "coworker", "ex"] as const), r.chance(0.5), r),
       (pl) => endLover(pl, (pl.relatives.find((x) => x.relation === "Lover") ?? { id: "x" }).id),
       (pl, r) => leaveForLover(pl, (pl.relatives.find((x) => x.relation === "Lover") ?? { id: "x" }).id, r),
