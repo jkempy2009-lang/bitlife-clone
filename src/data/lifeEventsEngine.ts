@@ -4,7 +4,7 @@
  *
  * Event files live in ./events/*.ts and are merged into `LIFE_EVENTS` below.
  */
-import type { Climate, CrimeCharge, Relation, PartnerStatus, Relative, Skills, Vices } from "@/types/game.types";
+import type { Climate, CrimeCharge, Effort, Relation, PartnerStatus, Relative, Skills, Vices } from "@/types/game.types";
 import { EARLY_EVENTS } from "./events/early";
 import { TEEN_EVENTS } from "./events/teen";
 import { ADULT_EVENTS } from "./events/adult";
@@ -26,6 +26,7 @@ import { BUSINESS_EVENTS } from "./events/business";
 import { CREATIVE_EVENTS } from "./events/creative";
 import { JUSTICE_EVENTS } from "./events/justice";
 import { POLITICS_EVENTS } from "./events/politics";
+import { ARC_EVENTS } from "./events/arcs";
 
 export type EventCategory =
   | "general"
@@ -47,12 +48,20 @@ export interface NewRelativeSpec {
   partnerStatus?: Exclude<PartnerStatus, "ex">;
   /** Absolute age (e.g. 0 for a newborn sibling). */
   age?: number;
+  /** Storyline cast member whose name the child keeps (see engine/npc.ts), e.g. "fosterkid". */
+  npc?: string;
   /** Pre-generated person (used for "meet someone" encounters). */
   prebuilt?: Relative;
   /** Force a gender (dating preferences). */
   gender?: string;
   /** Absolute age range for the new person (dating preferences; adults only). */
   ageRange?: [number, number];
+}
+
+export interface ScheduleSpec {
+  id: string;
+  /** Inclusive range of years from now (minimum 1). */
+  years: [number, number];
 }
 
 export interface ChoiceEffects {
@@ -74,11 +83,22 @@ export interface ChoiceEffects {
   skillDeltas?: Partial<Skills>;
   relationshipDelta?: { target: Relation | "All"; delta: number };
   addRelative?: NewRelativeSpec;
-  endRelationship?: "breakup" | "divorce";
+  /** "auto" divorces a spouse and ends a dating relationship. */
+  endRelationship?: "breakup" | "divorce" | "auto";
   /** Upgrades a dating partner to married. */
   marry?: boolean;
   /** Event id to force into next year's Age Up. */
   queueEvent?: string;
+  /** Book a follow-up beat for some years from now (storylines). Waits for eligibility unless the event is `force`. */
+  queueAfter?: ScheduleSpec | ScheduleSpec[];
+  /** Cancel scheduled beats by id (walking away from a storyline). */
+  cancelScheduled?: string[];
+  /** The eldest living relative of this kind dies (peacefully, off-screen). */
+  relativeDies?: Relation;
+  /** Switch how hard you work (coast / steady / grind), e.g. cutting hours to care for a parent. */
+  setEffort?: Effort;
+  /** Emigrate to a random other country, or return to your birth country. Job and some ties are lost. */
+  emigrate?: "abroad" | "home";
   arrest?: CrimeCharge;
   loseJob?: boolean;
   promote?: boolean;
@@ -171,6 +191,12 @@ export interface LifeEvent {
   prisonOnly?: boolean;
   /** Adult-themed scenario: only offered when mature content is on and the player is 18+. */
   mature?: boolean;
+  /** Storyline this event belongs to (see data/events/arcs.ts). */
+  arc?: string;
+  /** A follow-up beat: delivered by the scheduler, never drawn from the random pool. */
+  scheduledOnly?: boolean;
+  /** When due, fires even if `requires` / the age window no longer hold (still waits out prison). */
+  force?: boolean;
 }
 
 export const LIFE_EVENTS: LifeEvent[] = [
@@ -195,6 +221,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...CREATIVE_EVENTS,
   ...JUSTICE_EVENTS,
   ...POLITICS_EVENTS,
+  ...ARC_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

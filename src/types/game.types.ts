@@ -891,6 +891,12 @@ export interface HistoryPoint {
   health: number;
 }
 
+/** A life event booked for a later calendar year (multi-year storylines). */
+export interface ScheduledEvent {
+  id: string;
+  dueYear: number;
+}
+
 export interface PlayerState {
   // Personal profile
   id: string;
@@ -999,6 +1005,8 @@ export interface PlayerState {
   /** Per-year action counters (reset on Age Up). */
   annual: Record<string, number>;
   queuedEvents: string[];
+  /** Storyline beats due in a future year (see engine/arcEffects.ts). */
+  scheduled: ScheduledEvent[];
   seenEvents: Record<string, number>;
   lifeLog: string[];
   stats: LifetimeStats;

@@ -9,6 +9,7 @@ import { ACHIEVEMENTS } from "@/data/achievements";
 import { AchievementGrid } from "./HallOfLives";
 import { suggestTips } from "@/lib/tips";
 import { CHALLENGE_BY_ID } from "@/data/challenges";
+import { activeStorylines } from "@/engine/storylines";
 
 interface YearGroup {
   header: string;
@@ -53,6 +54,7 @@ function LastYear({ y }: { y: NonNullable<ReturnType<typeof useGame>["player"]["
 export default function DashboardTab() {
   const { player: p, setTab } = useGame();
   const tips = suggestTips(p);
+  const stories = activeStorylines(p);
   const groups = useMemo(() => groupLog(p.lifeLog), [p.lifeLog]);
   const nw = netWorth(p);
   const showFame = p.fame > 0 || p.specialCareers.length > 0 || p.royalRank !== "none";
@@ -156,6 +158,22 @@ export default function DashboardTab() {
               <span className="text-xs text-sky-300">Go →</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {stories.length > 0 && (
+        <div>
+          <SectionTitle hint="your choices echo">Ongoing storylines</SectionTitle>
+          <ul className="flex flex-col gap-1.5">
+            {stories.map((s) => (
+              <li key={s.id} className="flex items-start gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-100">
+                <span className="text-lg leading-none">{s.emoji}</span>
+                <span>
+                  <span className="font-semibold">{s.title}.</span> {s.status}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

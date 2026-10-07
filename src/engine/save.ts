@@ -95,6 +95,7 @@ export function hydrate(p: PlayerState): PlayerState {
     challenge: p.challenge ?? null,
     lastYear: p.lastYear ?? null,
     recentCats: p.recentCats ?? [],
+    scheduled: Array.isArray(p.scheduled) ? p.scheduled.filter((s) => s && typeof s.id === "string" && typeof s.dueYear === "number") : [],
     stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0, kills: p.stats.kills ?? 0, affairs: p.stats.affairs ?? 0, hookups: p.stats.hookups ?? 0, yearsWorked: p.stats.yearsWorked ?? Math.max(0, p.age - 22) },
   };
 }

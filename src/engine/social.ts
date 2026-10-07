@@ -3,6 +3,7 @@ import type { NewRelativeSpec, LifeEvent } from "@/data/lifeEventsEngine";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { getCountry } from "@/data/countries";
+import { npcName } from "./npc";
 import {
   addLog,
   changeStat,
@@ -30,7 +31,8 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
     const gender = randomGender(rng);
     const partner = getPartner(p);
     const first = randomName(p.birthCountry, gender, rng).first;
-    const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, 0, gender, tier, rng.int(70, 100));
+    const named = spec.npc ? npcName(p, spec.npc).first : first; // storyline characters keep their name
+    const kid = makeRelativeBase(rng, "Child", `${named} ${p.lastName}`, spec.age ?? 0, gender, tier, rng.int(70, 100));
     kid.smarts = clamp(Math.round((p.smarts + (partner?.smarts ?? 50)) / 2 + rng.int(-15, 15)));
     kid.looks = clamp(Math.round((p.looks + (partner?.looks ?? 50)) / 2 + rng.int(-15, 15)));
     kid.health = rng.int(80, 100);
@@ -61,7 +63,7 @@ export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Re
   p.relatives.push(rel);
   if (rel.relation === "Child") {
     p.stats.childrenBorn += 1;
-    addLog(p, `A child, ${rel.name}, was born into your family.`);
+    addLog(p, rel.age >= 2 ? `${rel.name} joined your family as your child.` : `A child, ${rel.name}, was born into your family.`);
   } else if (rel.relation === "Partner") {
     addLog(p, `You are now ${rel.partnerStatus === "married" ? "married to" : "dating"} ${rel.name}.`);
   } else if (rel.relation === "Friend") {
