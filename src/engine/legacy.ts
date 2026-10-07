@@ -1,6 +1,7 @@
 import type { PlayerState, Relative } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { money } from "@/lib/format";
+import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 import {
   addLog,
   clone,
@@ -144,9 +145,11 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     nation: royalParent ? { ...old.nation } : { economy: 50, freedom: 50, military: 50 },
     education: educationForAge(child.age),
     skills: { acting: 0, music: 0, charisma: 0, athletics: rng.int(0, 20) },
-    music: { status: "none", signed: false, pendingAlbum: null, albums: [] },
+    music: newMusic(),
     business: null,
-    influencer: { active: false, followers: 0, lastPostYear: 0 },
+    influencer: newInfluencer(),
+    acting: newActing(),
+    celeb: newCeleb(),
     athlete: { sport: null },
     hobbies: {},
     politics: { popularity: 30, yearsInOffice: 0, party: null },

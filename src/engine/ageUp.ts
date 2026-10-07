@@ -26,14 +26,16 @@ import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
 import { startTrial } from "./crime";
 import { selectEvents } from "./events";
-import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
+import { convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
 import { checkAchievements } from "./achievements";
 import { processVices } from "./vices";
 import { escortIsIllegal, processAdultWork, processIntimacy } from "./intimacy";
 import { processPolitics } from "./politics";
 import { processMob } from "./underworld";
 import { hobbyIncome, processHobbies } from "./hobbies";
-import { processAthlete, processBusiness, processInfluencer } from "./paths";
+import { processAthlete, processBusiness } from "./paths";
+import { processCreative } from "./creative";
+import { creativeFameFloor, processCelebrity } from "./celebrity";
 import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
 import { LIFESTYLES, RENT_TIERS, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
@@ -198,36 +200,16 @@ function processAssets(p: PlayerState, rng: Rng) {
 // Finance
 // ---------------------------------------------------------------------------
 
-function releaseAlbum(p: PlayerState, rng: Rng, notices: Notices) {
-  const pending = p.music.pendingAlbum;
-  if (!pending) return;
-  const score = rng.int(0, 60) + p.fame * 0.4 + p.skills.music * 0.25;
-  const r = albumRating(score);
-  const sales = Math.round(r.sales * rng.float(0.8, 1.25));
-  const royalty = Math.round(r.royalty * rng.float(0.8, 1.2));
-  p.music.albums.push({ title: pending.title, genre: pending.genre, rating: r.rating, sales, royalty, year: p.year });
-  p.music.pendingAlbum = null;
-  changeStat(p, "fame", r.fame);
-  const body = `Your ${pending.genre} album "${pending.title}" sold ${sales.toLocaleString()} copies and was rated ${r.rating.toUpperCase()}. Royalties: ${money(royalty)}.`;
-  addLog(p, body);
-  notices.push(info(`Album Released: ${r.rating}`, body, r.fame >= 7 ? "jackpot" : r.fame > 0 ? "good" : "bad"));
-}
-
 function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
-  releaseAlbum(p, rng, notices);
-  const royalties = p.music.albums.reduce((s, a) => s + a.royalty, 0);
   let gross = 0;
   if (p.currentJob && !p.isInPrison) gross += p.currentJob.salary;
   if (p.pension > 0) gross += p.pension;
-  if (p.music.signed) gross += 25_000;
-  gross += royalties;
-  gross += processInfluencer(p);
+  gross += processCreative(p, rng, notices); // creator, music and screen income
   gross += hobbyIncome(p);
   processInvestments(p, rng, notices);
   const profit = processBusiness(p, rng, notices);
   if (profit > 0) gross += profit;
   else p.bankBalance += profit;
-  for (const a of p.music.albums) a.royalty = a.royalty < 500 ? 0 : Math.round(a.royalty * 0.55);
 
   const adult = p.age >= 18;
   if (adult && p.age < 65 && !p.currentJob && !isRoyal(p) && !p.isInPrison && !p.music.signed && p.pension === 0) {
@@ -461,7 +443,7 @@ function processEntertainment(p: PlayerState) {
   if (job?.lineId === "astronaut" && job.tier >= 1) changeStat(p, "fame", 1);
   const athleteActive = job?.lineId === "athlete" && job.tier >= 1;
   if (athleteActive) changeStat(p, "fame", job!.tier);
-  const active = actorActive || athleteActive || job?.lineId === "creator" || job?.lineId === "model" || job?.lineId === "astronaut" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
+  const active = actorActive || athleteActive || job?.lineId === "creator" || job?.lineId === "model" || job?.lineId === "astronaut" || isRoyal(p) || creativeFameFloor(p) > 0 || job?.lineId === "athlete";
   if (!active) changeStat(p, "fame", p.fame > 0 ? -2 : 0);
 }
 
@@ -616,6 +598,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
     processCareer(p, rng, notices);
     applyEffortCosts(p, rng, notices);
     processEntertainment(p);
+    processCelebrity(p, rng, notices);
     processRoyalty(p, rng, notices);
     processJustice(p, rng, notices);
     processMilestones(p, notices);

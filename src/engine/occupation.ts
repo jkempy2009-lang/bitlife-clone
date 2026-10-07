@@ -10,7 +10,7 @@ import type { CareerLine } from "@/data/careersRegistry";
 import type { Rng } from "@/lib/rng";
 import { addLog, changeStat, getPartner, isRoyal, livingRelatives } from "./state";
 
-export type Commitment = "job" | "business" | "music" | "office" | "study" | "athlete";
+export type Commitment = "job" | "business" | "music" | "office" | "study" | "athlete" | "creator";
 
 export const isStudying = (p: PlayerState) => p.education.stage !== "None";
 
@@ -28,27 +28,39 @@ export function blockerFor(p: PlayerState, want: Commitment): string | null {
   const biz = p.business;
   if (isRoyal(p) && want !== "office") return "Royal duties leave no room for that.";
   if (p.isInPrison) return "You're in prison.";
+  const creatorFT = p.influencer.fullTime ? "You're a full-time creator. Step back to part-time creating first." : null;
   switch (want) {
+    case "creator":
+      if (fullTimeJob) return `You can't go full-time as a creator while working as a ${job.title}. Quit first.`;
+      if (biz) return `You can't go full-time as a creator while running ${biz.name}.`;
+      if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
+      if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't go full-time as a creator while studying full time.";
+      return null;
     case "business":
+      if (creatorFT) return creatorFT;
       if (job) return `You can't run a business while working as a ${job.title}. Quit first.`;
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
       if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't start a company while studying full time. Finish or drop out first.";
       return null;
     case "job":
     case "athlete":
+      if (creatorFT) return creatorFT;
       if (biz) return `You can't hold a job while running ${biz.name}. Sell or close it first.`;
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
       return null;
     case "music":
+      if (creatorFT) return "You can't sign a record deal while running a full-time channel. Step back to part-time creating first.";
       if (fullTimeJob) return `You can't tour while working as a ${job.title}. Quit first.`;
       if (biz) return `You can't sign a record deal while running ${biz.name}.`;
       if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't sign a record deal while studying full time.";
       return null;
     case "office":
+      if (creatorFT) return creatorFT;
       if (biz) return `You can't hold public office while running ${biz.name}. Sell or close it first.`;
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
       return null;
     case "study":
+      if (creatorFT) return creatorFT;
       if (fullTimeJob) return `You can't study full time while working as a ${job.title}. Quit or go part-time first.`;
       if (biz) return `You can't study full time while running ${biz.name}.`;
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
@@ -64,7 +76,7 @@ export const EFFORT_INFO: Record<Effort, { label: string; emoji: string; blurb: 
 
 /** Does the player currently have anything that effort applies to? */
 export function hasCommitment(p: PlayerState): boolean {
-  return !!p.currentJob || !!p.business || isStudying(p) || p.music.signed;
+  return !!p.currentJob || !!p.business || isStudying(p) || p.music.signed || p.influencer.fullTime;
 }
 
 /** Performance drift for jobs, per effort level (before smarts adjustment). */
