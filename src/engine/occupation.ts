@@ -21,6 +21,16 @@ export function partTimeFriendly(line: CareerLine): boolean {
 
 export const PART_TIME_FACTOR = 0.45;
 
+/** Bankruptcy bars founding a new company for a few years (see `bankruptcyOf` in business.ts). */
+export function bankruptcyCooloff(p: PlayerState): string | null {
+  for (const f of p.flags) {
+    if (!f.startsWith("biz_cooloff:")) continue;
+    const until = Number(f.slice("biz_cooloff:".length));
+    if (p.year < until) return `Your bankruptcy bars you from founding a company until ${until}.`;
+  }
+  return null;
+}
+
 /** Reason a new commitment can't start right now, or null. */
 export function blockerFor(p: PlayerState, want: Commitment): string | null {
   const job = p.currentJob;
@@ -31,6 +41,7 @@ export function blockerFor(p: PlayerState, want: Commitment): string | null {
   switch (want) {
     case "business":
       if (job) return `You can't run a business while working as a ${job.title}. Quit first.`;
+      if (bankruptcyCooloff(p)) return bankruptcyCooloff(p);
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
       if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't start a company while studying full time. Finish or drop out first.";
       return null;
@@ -64,7 +75,8 @@ export const EFFORT_INFO: Record<Effort, { label: string; emoji: string; blurb: 
 
 /** Does the player currently have anything that effort applies to? */
 export function hasCommitment(p: PlayerState): boolean {
-  return !!p.currentJob || !!p.business || isStudying(p) || p.music.signed;
+  // A business with a general manager runs without you, so your effort setting doesn't drive it (or cost you).
+  return !!p.currentJob || (!!p.business && !p.business.manager) || isStudying(p) || p.music.signed;
 }
 
 /** Performance drift for jobs, per effort level (before smarts adjustment). */

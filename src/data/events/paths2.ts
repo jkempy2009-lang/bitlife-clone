@@ -134,10 +134,6 @@ export const PATHS2_EVENTS: LifeEvent[] = [
     opt("Spend it", "You bought something you didn't need. It felt great.", { bankBalanceDelta: 1200, happinessDelta: 4 }),
     opt("Save it", "You stashed it in savings.", { bankBalanceDelta: 1200, smartsDelta: 1 }),
   ], { requires: { climate: ["recession"] }, cooldown: 4 }),
-  ev("small_business_loan", "money", 22, 65, "Small Business Boost", "A government scheme offers cheap loans to entrepreneurs.", [
-    opt("Apply", "You got $20,000 at a low rate. Time to hustle.", { bankBalanceDelta: 20000, happinessDelta: 3 }),
-    opt("Skip", "You skipped the paperwork.", {}),
-  ], { requires: { flagsAll: ["business_owner"], climate: ["recession", "normal"] }, cooldown: 6 }),
 
   // ---------- hobbies & growth ----------
   ev("art_commission", "career", 18, 80, "A Commission", "A stranger asks you to paint a portrait for $1,500.", [

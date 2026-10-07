@@ -1,4 +1,5 @@
 import type { PlayerState } from "@/types/game.types";
+import { upgradeBusiness } from "./business";
 
 const KEY = "lifeline-save-v1";
 const PREV_KEY = "lifeline-save-prev";
@@ -77,7 +78,7 @@ function hydrate(p: PlayerState): PlayerState {
     matureContent: p.matureContent ?? true,
     effort: p.effort ?? "steady",
     lifestyle: p.lifestyle ?? 1,
-    business: p.business ? { ...p.business, staff: p.business.staff ?? 0, locations: p.business.locations ?? 1 } : null,
+    business: p.business ? upgradeBusiness({ ...p.business }) : null,
     achievements: p.achievements ?? [],
     history: p.history ?? [],
     goalsDone: p.goalsDone ?? [],

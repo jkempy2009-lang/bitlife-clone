@@ -86,6 +86,13 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "perfect_crime", name: "The Perfect Crime", emoji: "🕵️", desc: "Let a murder investigation go cold.", check: (p) => has(p, "killer") && !has(p, "under_investigation") && p.stats.kills > 0 && p.age >= 40 },
   { id: "pet_parent", name: "Pet Parent", emoji: "🐾", desc: "Adopt a pet.", check: (p) => p.relatives.some((r) => r.relation === "Pet") },
   { id: "empire", name: "Empire Builder", emoji: "🏪", desc: "Run a business with three or more locations.", check: (p) => (p.business?.locations ?? 0) >= 3 },
+  { id: "biz_profit", name: "In the Black", emoji: "🟢", desc: "Post your first profitable year as a business owner.", check: (p) => has(p, "biz_profit_year") },
+  { id: "biz_decade", name: "Built to Last", emoji: "🏛️", desc: "Keep a business going for ten years.", check: (p) => has(p, "biz_survive_10") },
+  { id: "biz_franchise", name: "Franchisor", emoji: "🍔", desc: "Sell three franchise units of your brand.", check: (p) => has(p, "biz_franchise") },
+  { id: "biz_exit", name: "Exit Strategy", emoji: "🚪", desc: "Sell, float or be acquired at a profit.", check: (p) => has(p, "biz_exit") },
+  { id: "biz_bankrupt", name: "Chapter Closed", emoji: "📉", desc: "Watch a business go bankrupt.", check: (p) => has(p, "biz_bankrupt") },
+  { id: "biz_comeback", name: "Phoenix", emoji: "🔥", desc: "Run three profitable years after a bankruptcy.", check: (p) => has(p, "biz_comeback") },
+  { id: "biz_unicorn", name: "Unicorn", emoji: "🦄", desc: "Own a business stake worth $50,000,000 or more.", check: (p) => has(p, "biz_unicorn") },
   { id: "partisan", name: "Party Loyalist", emoji: "🗳️", desc: "Join a political party.", check: (p) => p.politics.party !== null },
   // Longevity
   { id: "octogenarian", name: "Still Going", emoji: "🎂", desc: "Live to 80.", check: (p) => p.age >= 80 },
