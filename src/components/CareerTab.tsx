@@ -12,6 +12,7 @@ import {
   applyForJob,
   askForRaise,
   dropOut,
+  enrollCertificate,
   enrollProgram,
   executeCitizen,
   goFullTime,
@@ -28,6 +29,7 @@ import {
 } from "@/engine/career";
 import { isRoyal } from "@/engine/state";
 import { EFFORT_INFO, hasCommitment } from "@/engine/occupation";
+import { CERTIFICATES, CERT_BY_ID } from "@/data/certificates";
 import { money } from "@/lib/format";
 import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
 import { MovieStarSection } from "./career/MovieStarSection";
@@ -109,6 +111,7 @@ const STAGE_LABEL: Record<string, string> = {
   University: "University",
   MedicalSchool: "Medical School",
   LawSchool: "Law School",
+  Certificate: "Vocational Course",
 };
 
 function Academics() {
@@ -127,7 +130,7 @@ function Academics() {
             <div className="text-lg font-bold">{STAGE_LABEL[e.stage]}</div>
             {enrolled && (
               <div className="text-sm text-slate-400">
-                {e.yearsLeft} year{e.yearsLeft === 1 ? "" : "s"} left{e.major ? ` · ${UNIVERSITY_MAJORS.find((m) => m.id === e.major)?.name}` : ""}
+                {e.yearsLeft} year{e.yearsLeft === 1 ? "" : "s"} left{e.major ? ` · ${UNIVERSITY_MAJORS.find((m) => m.id === e.major)?.name ?? CERT_BY_ID[e.major]?.name ?? ""}` : ""}{(e.scholarship ?? 0) > 0 ? ` · ${Math.round((e.scholarship ?? 0) * 100)}% scholarship (keep grades 70+)` : ""}
               </div>
             )}
           </div>
@@ -152,7 +155,7 @@ function Academics() {
           <div className="mt-3 flex flex-wrap gap-1.5">
             {e.degrees.map((d) => (
               <Pill key={d} tone="green">
-                {d === "highschool" ? "High School Diploma" : d === "md" ? "Medical Degree" : d === "jd" ? "Law Degree" : d === "masters" ? "Master\'s Degree" : `BA/BS ${UNIVERSITY_MAJORS.find((m) => m.id === d.slice(9))?.name ?? ""}`}
+                {d === "highschool" ? "High School Diploma" : d === "md" ? "Medical Degree" : d === "jd" ? "Law Degree" : d === "masters" ? "Master\'s Degree" : d.startsWith("cert:") ? (CERT_BY_ID[d.slice(5)]?.name ?? d) : `BA/BS ${UNIVERSITY_MAJORS.find((m) => m.id === d.slice(9))?.name ?? ""}`}
               </Pill>
             ))}
           </div>
@@ -194,6 +197,16 @@ function Academics() {
             <p className="mb-2 text-xs text-slate-400">3 years · {money(PROGRAMS.LawSchool.tuition)}/yr · needs a Bachelor's & {PROGRAMS.LawSchool.minSmarts}+ Smarts.</p>
             <Button variant="primary" className="w-full" onClick={() => act((pl, rng) => enrollProgram(pl, "LawSchool", null, rng))}>Apply</Button>
           </Card>
+          <SectionTitle hint="fit around a full-time job">Vocational Courses</SectionTitle>
+          {CERTIFICATES.map((c) => (
+            <Card key={c.id}>
+              <div className="mb-1 font-semibold">{c.emoji} {c.name}</div>
+              <p className="mb-2 text-xs text-slate-400">{c.years} year{c.years > 1 ? "s" : ""} · {money(c.tuition)}/yr · {c.minSmarts}+ Smarts. {c.blurb}</p>
+              <Button variant="secondary" className="w-full" disabled={e.degrees.includes(`cert:${c.id}`)} onClick={() => act((pl, rng) => enrollCertificate(pl, c.id, rng))}>
+                {e.degrees.includes(`cert:${c.id}`) ? "✓ Qualified" : "Enrol"}
+              </Button>
+            </Card>
+          ))}
         </>
       )}
     </div>

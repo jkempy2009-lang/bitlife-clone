@@ -114,7 +114,7 @@ export const CAREER_LINES: CareerLine[] = [
   {
     id: "nurse", name: "Healthcare Nursing", emoji: "🩺", category: "Healthcare", blurb: "The backbone of every hospital.",
     companies: ["St. Mary's Hospital", "General Medical Center", "Sunrise Clinic"], minAge: 22,
-    requirements: { degrees: ["bachelor:nursing", "bachelor:science"], minSmarts: 55 },
+    requirements: { degrees: ["bachelor:nursing", "bachelor:science", "cert:nursing"], minSmarts: 55 },
     ladder: [
       { title: "Registered Nurse", salary: 74_000 },
       { title: "Charge Nurse", salary: 92_000 },
@@ -149,7 +149,7 @@ export const CAREER_LINES: CareerLine[] = [
   {
     id: "software", name: "Technology", emoji: "💻", category: "Technology", blurb: "Ship code. Break prod. Get free snacks.",
     companies: ["Byteforge", "NimbusSoft", "Quantum Loop", "Pixelhaus"], minAge: 20,
-    requirements: { degrees: ["bachelor:cs", "bachelor:engineering"], minSmarts: 60 },
+    requirements: { degrees: ["bachelor:cs", "bachelor:engineering", "cert:bootcamp"], minSmarts: 60 },
     ladder: [
       { title: "Junior Developer", salary: 82_000 },
       { title: "Software Engineer", salary: 128_000 },
@@ -228,7 +228,7 @@ export const CAREER_LINES: CareerLine[] = [
   {
     id: "pilot", name: "Aviation", emoji: "✈️", category: "Transport", blurb: "Your captain is speaking.",
     companies: ["SkyBridge Airlines", "Meridian Air", "Pacific Wings"], minAge: 23,
-    requirements: { degrees: ["bachelor"], minSmarts: 62 },
+    requirements: { degrees: ["bachelor", "cert:pilot"], minSmarts: 62 },
     ladder: [
       { title: "First Officer", salary: 95_000 },
       { title: "Captain", salary: 180_000 },
@@ -347,7 +347,7 @@ export const CAREER_LINES: CareerLine[] = [
   {
     id: "gamedev", name: "Game Development", emoji: "🎮", category: "Technology", blurb: "Crunch time forever.",
     companies: ["Pixel Forge", "Dragonfly Games", "Hyperloop Interactive"], minAge: 20,
-    requirements: { degrees: ["bachelor:cs", "bachelor:arts"], minSmarts: 55 },
+    requirements: { degrees: ["bachelor:cs", "bachelor:arts", "cert:bootcamp"], minSmarts: 55 },
     ladder: [
       { title: "QA Tester", salary: 38_000 },
       { title: "Game Programmer", salary: 92_000 },

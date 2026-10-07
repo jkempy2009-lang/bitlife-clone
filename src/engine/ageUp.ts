@@ -8,6 +8,7 @@ import {
   MORTGAGE_RATE,
 } from "@/data/assetsCatalog";
 import { CAREER_BY_ID, PROGRAMS, ROYAL_ALLOWANCE } from "@/data/careersRegistry";
+import { CERT_BY_ID } from "@/data/certificates";
 import {
   addLog,
   changeStat,
@@ -268,7 +269,9 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   }
 
   const prog = PROGRAMS[p.education.stage as keyof typeof PROGRAMS];
-  const tuition = prog && !p.isInPrison ? prog.tuition : 0;
+  const certTuition = p.education.stage === "Certificate" ? (CERT_BY_ID[p.education.major ?? ""]?.tuition ?? 0) : 0;
+  const fullTuition = prog ? prog.tuition : certTuition;
+  const tuition = fullTuition && !p.isInPrison ? Math.round(fullTuition * (1 - (p.education.scholarship ?? 0))) : 0;
   p.bankBalance -= tuition;
 
   if (p.bankBalance > 0) p.bankBalance = Math.round(p.bankBalance * 1.015);
@@ -377,6 +380,13 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
   e.grades = clamp(Math.round(e.grades * 0.5 + 0.5 * (p.smarts * 0.6 + 25 + e.studyEffort * 6 + rng.int(-10, 10))));
   const effort = e.studyEffort;
   e.studyEffort = Math.max(0, e.studyEffort * 0.5);
+  if ((e.scholarship ?? 0) > 0 && e.grades < 70) {
+    e.scholarship = 0;
+    const body = "Your grades slipped below 70 and the university withdrew your scholarship. Tuition is now due in full.";
+    addLog(p, body);
+    notices.push(info("Scholarship Lost", body, "bad"));
+  }
+  if (e.stage === "Certificate") changeStat(p, "happiness", p.currentJob ? -1 : 0);
   e.yearsLeft -= 1;
   if (e.yearsLeft > 0) return;
 
@@ -399,6 +409,12 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
   }
   let degree = "highschool";
   let label = "high school";
+  if (e.stage === "Certificate") {
+    const cert = CERT_BY_ID[e.major ?? ""];
+    degree = `cert:${e.major}`;
+    label = cert ? `the ${cert.name}` : "your course";
+    for (const [line, yrs] of Object.entries(cert?.experience ?? {})) p.careerYears[line] = (p.careerYears[line] ?? 0) + yrs;
+  }
   if (e.stage === "University") {
     degree = `bachelor:${e.major ?? "arts"}`;
     label = "university";

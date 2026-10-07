@@ -13,6 +13,8 @@ import { addLog, changeStat, getPartner, isRoyal, livingRelatives } from "./stat
 export type Commitment = "job" | "business" | "music" | "office" | "study" | "athlete";
 
 export const isStudying = (p: PlayerState) => p.education.stage !== "None";
+/** Evening courses (certificates) fit around a full-time job; degrees don't. */
+export const isStudyingFullTime = (p: PlayerState) => p.education.stage !== "None" && p.education.stage !== "Certificate";
 
 /** Entry-level, no-qualification lines a student can work around classes. */
 export function partTimeFriendly(line: CareerLine): boolean {
@@ -32,7 +34,7 @@ export function blockerFor(p: PlayerState, want: Commitment): string | null {
     case "business":
       if (job) return `You can't run a business while working as a ${job.title}. Quit first.`;
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
-      if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't start a company while studying full time. Finish or drop out first.";
+      if (isStudyingFullTime(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't start a company while studying full time. Finish or drop out first.";
       return null;
     case "job":
     case "athlete":
@@ -42,7 +44,7 @@ export function blockerFor(p: PlayerState, want: Commitment): string | null {
     case "music":
       if (fullTimeJob) return `You can't tour while working as a ${job.title}. Quit first.`;
       if (biz) return `You can't sign a record deal while running ${biz.name}.`;
-      if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't sign a record deal while studying full time.";
+      if (isStudyingFullTime(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't sign a record deal while studying full time.";
       return null;
     case "office":
       if (biz) return `You can't hold public office while running ${biz.name}. Sell or close it first.`;

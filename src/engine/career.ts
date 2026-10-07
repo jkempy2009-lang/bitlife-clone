@@ -12,7 +12,8 @@ import {
 } from "@/data/careersRegistry";
 import { addLog, changeStat, clone, hasAnyDegree, hasFlag, isRoyal, setFlag } from "./state";
 import { hiringModifier } from "./world";
-import { PART_TIME_FACTOR, blockerFor, isStudying, partTimeFriendly } from "./occupation";
+import { PART_TIME_FACTOR, blockerFor, isStudyingFullTime, partTimeFriendly } from "./occupation";
+import { CERT_BY_ID } from "@/data/certificates";
 
 // ---------------------------------------------------------------------------
 // Corporate career
@@ -72,7 +73,7 @@ export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
   const blocked = line.pack === "politics" ? null : blockerFor(p, "job");
   if (blocked) return { ok: false, reason: blocked };
   let partTime = false;
-  if (isStudying(p)) {
+  if (isStudyingFullTime(p)) {
     if (!partTimeFriendly(line)) return { ok: false, reason: "You're studying. Only part-time work fits around classes." };
     partTime = true;
   }
@@ -100,6 +101,7 @@ export function degreeName(id: string): string {
   if (id === "md") return "a Medical Degree";
   if (id === "masters") return "a Master's Degree";
   if (id === "jd") return "a Law Degree";
+  if (id.startsWith("cert:")) return `the ${CERT_BY_ID[id.slice(5)]?.name ?? id}`;
   if (id.startsWith("bachelor:")) {
     const major = UNIVERSITY_MAJORS.find((m) => m.id === id.slice(9));
     return `a Bachelor's in ${major?.name ?? id.slice(9)}`;
@@ -259,7 +261,7 @@ export function convertToFullTime(p: PlayerState): string | null {
 export function goFullTime(p0: PlayerState): ActionResult {
   const p = clone(p0);
   if (!p.currentJob?.partTime) return { player: p0 };
-  if (isStudying(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") {
+  if (isStudyingFullTime(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") {
     return { player: p0, notices: [{ kind: "info", title: "Still Studying", body: "You can't work full time while enrolled.", tone: "bad" }] };
   }
   const body = convertToFullTime(p)!;
@@ -373,10 +375,36 @@ export function enrollProgram(
   p.education.stage = stage;
   p.education.yearsLeft = prog.years;
   p.education.major = major;
+  p.education.scholarship = p.education.grades >= 93 ? 1 : p.education.grades >= 85 ? 0.5 : p.education.grades >= 78 ? 0.25 : 0;
   const majorName = UNIVERSITY_MAJORS.find((m) => m.id === major)?.name;
-  const body = `You were accepted into ${prog.label}${majorName ? ` to study ${majorName}` : ""}! Tuition is ${money(prog.tuition)} a year.`;
+  const sch = p.education.scholarship ?? 0;
+  const body = `You were accepted into ${prog.label}${majorName ? ` to study ${majorName}` : ""}! Tuition is ${money(prog.tuition)} a year${sch > 0 ? `, and your grades earned a ${Math.round(sch * 100)}% scholarship` : ""}.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Accepted!", body, tone: "good" }] };
+}
+
+/** Evening / short vocational course. Works alongside a job. */
+export function enrollCertificate(p0: PlayerState, certId: string, rng: Rng): ActionResult {
+  const p = clone(p0);
+  const cert = CERT_BY_ID[certId];
+  const reject = (body: string): ActionResult => ({ player: p0, notices: [{ kind: "info", title: "Can't Enrol", body, tone: "bad" }] });
+  if (!cert) return { player: p0 };
+  if (p.education.stage !== "None") return reject("You're already studying.");
+  if (p.isInPrison) return reject("You're in prison.");
+  if (p.age < 17) return reject("You're too young.");
+  if (!p.education.degrees.includes("highschool")) return reject("You need a high school diploma.");
+  if (p.education.degrees.includes(`cert:${cert.id}`)) return reject("You already hold that qualification.");
+  if (p.smarts < cert.minSmarts) return reject(`${cert.name} requires ${cert.minSmarts}+ Smarts.`);
+  if (p.music.signed) return reject("Your record contract is a full-time commitment.");
+  if (p.business) return reject(`You can't find the time while running ${p.business.name}.`);
+  p.education.stage = "Certificate";
+  p.education.yearsLeft = cert.years;
+  p.education.major = cert.id;
+  p.education.scholarship = 0;
+  const body = `You enrolled in the ${cert.name} (${cert.years} year${cert.years > 1 ? "s" : ""}, ${money(cert.tuition)} a year). Classes fit around work.`;
+  addLog(p, body);
+  void rng;
+  return { player: p, notices: [{ kind: "info", title: "Enrolled", body, tone: "good" }] };
 }
 
 // ---------------------------------------------------------------------------

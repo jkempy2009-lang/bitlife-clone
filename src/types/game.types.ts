@@ -107,7 +107,8 @@ export type EducationStage =
   | "University"
   | "MedicalSchool"
   | "LawSchool"
-  | "Masters";
+  | "Masters"
+  | "Certificate";
 
 export interface EducationState {
   stage: EducationStage;
@@ -117,6 +118,8 @@ export interface EducationState {
   /** Hidden variable that modifies graduation odds. Decays yearly. */
   studyEffort: number;
   degrees: string[];
+  /** Fraction of tuition covered (0–1). Lost if grades slip. */
+  scholarship?: number;
 }
 
 export interface Skills {
