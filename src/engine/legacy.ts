@@ -7,7 +7,6 @@ import {
   createNewPlayer,
   educationForAge,
   isRoyal,
-  livingRelatives,
   logHeader,
   makeRelativeBase,
   netWorth,
@@ -147,6 +146,5 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     addLog(next, `You also inherited ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}. The estate tax took ${money(Math.round(Math.max(0, old.bankBalance) * 0.1))}.`);
   }
   if (royalParent) addLog(next, crowned ? `The crown passes to you. Long live the ${next.royalRank}!` : `You remain in the royal line as a ${next.royalRank}.`);
-  void livingRelatives;
   return next;
 }

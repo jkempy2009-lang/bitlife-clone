@@ -22,7 +22,6 @@ import {
   netWorth,
   setFlag,
   summarizeDelta,
-  royalRankFor,
 } from "./state";
 import { killPlayer } from "./mortality";
 import { addRelative, endRelationship, firstName } from "./social";
@@ -215,7 +214,7 @@ export function resolveEvent(p0: PlayerState, event: LifeEvent, optionIndex: num
   const before = clone(p);
   const { fx, success } = pickBranch(p, option, rng);
   const text = fillTokens(fx.logText, p);
-  addLog(p, text);
+  addLog(p, `${event.title}: ${text}`);
   p.seenEvents[event.id] = p.age;
   applyEffects(p, fx, rng);
   const chips: Chip[] = summarizeDelta(before, p);
@@ -235,4 +234,3 @@ export function resolveEvent(p0: PlayerState, event: LifeEvent, optionIndex: num
   };
 }
 
-export { royalRankFor };

@@ -8,7 +8,6 @@ import {
   changeStat,
   clone,
   getPartner,
-  livingRelatives,
   makeRelativeBase,
   netWorth,
   partnerGenderFor,
@@ -108,10 +107,9 @@ export function interact(p0: PlayerState, relId: string, action: SocialAction, r
   const n = firstName(rel);
   const fill = (s: string) => s.replace("{n}", n);
   const used = p.annual[CAP_KEY(rel.id)] ?? 0;
-  const tone: "good" | "bad" | "neutral" = "neutral";
   let title = `${n}`;
   let body = "";
-  let outcome: "good" | "bad" | "neutral" = tone;
+  let outcome: "good" | "bad" | "neutral" = "neutral";
 
   if (action !== "insult" && action !== "askMoney" && used >= INTERACTION_CAP) {
     return {
@@ -316,8 +314,4 @@ export function meetSomeone(p0: PlayerState, kind: "friend" | "date", rng: Rng):
     ],
   };
   return { player: p, notices: [{ kind: "event", event }] };
-}
-
-export function worthKeeping(p: PlayerState) {
-  return livingRelatives(p);
 }

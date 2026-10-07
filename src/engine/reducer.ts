@@ -60,7 +60,7 @@ export function reducer(state: GameState, action: Action): GameState {
       const result = action.run(state.player, rng);
       if (result.player === state.player && !result.notices?.length) return state;
       const extra: NonNullable<ActionResult["notices"]> = [];
-      const player = result.player === state.player ? result.player : result.player;
+      const player = result.player;
       if (player !== state.player) finalize(player, extra);
       const incoming = withIds(rng, [...(result.notices ?? []), ...extra]);
       return {

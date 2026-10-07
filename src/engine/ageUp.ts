@@ -76,7 +76,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
       : rng.int(0, 3);
     r.relationshipBar = clamp(r.relationshipBar - decay - (p.isInPrison ? 3 : 0));
     // Mortality: spec asks for a death roll for the elderly; we use a graded curve so younger deaths are possible but rare.
-    if ((r.age > 75 || r.age > 40) && rng.chance(deathChance(r.age, r.health))) {
+    if (r.age > 40 && rng.chance(deathChance(r.age, r.health))) {
       r.alive = false;
       r.deathAge = r.age;
       r.deathYear = p.year;
@@ -108,7 +108,6 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
     changeStat(p, "happiness", -10);
     notices.push(info(married ? "Divorce" : "Breakup", body, "bad"));
   }
-  const before = p.relatives.length;
   p.relatives = p.relatives.filter((r) => {
     if (r.relation === "Friend" && r.alive && r.relationshipBar <= 0) {
       addLog(p, `You and ${r.name} drifted apart.`);
@@ -116,7 +115,6 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
     }
     return true;
   });
-  void before;
   if (p.age < 18 && !hasFlag(p, "orphan") && livingRelatives(p, "Parent").length === 0) {
     p.flags.push("orphan");
     changeStat(p, "happiness", -12);
