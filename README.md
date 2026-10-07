@@ -32,6 +32,13 @@ Your game autosaves to `localStorage` (no backend). Use the gear icon to export/
   assault, blackmail, arson, kidnapping, fraud, smuggling, tax evasion.
 - **Legacy:** tombstone, epitaph, life chart, continue as your child (estate tax), plus a Hall of Lives and 50+
   achievements that persist across characters. Copy your life story as plain text from the tombstone.
+- **Commitments are exclusive:** you can't run a business and hold a job, sign a record deal while employed, or study full time
+  while working. Students take part-time jobs; evening courses (certificates) fit around work. Effort (coast / steady / grind),
+  living standard, exercise and diet are standing choices with real costs and payoffs.
+- **Scenario challenges:** fixed starts with goals and deadlines (Rags to Riches, Rise to Power, Dynasty, ...).
+- **Adult relationships (mature setting):** set the age range (adults only), genders and interests you're open to; share a menu of
+  experiences with partners and lovers; learn what each person enjoys and where their limits are by talking; open or polyamorous
+  agreements. Everyone involved is an adult and a willing participant, and text is suggestive.
 - **Quality of life:** a "past year" strip on the dashboard, milestone notices at key ages, contextual tips,
   **Skip** (fast-forward up to 10 years until something happens), text-size and reduce-motion settings,
   a rolling one-year backup save with crash recovery, and offline play (service worker, production build).
