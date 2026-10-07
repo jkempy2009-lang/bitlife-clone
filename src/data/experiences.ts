@@ -95,6 +95,59 @@ export const EXPERIENCES: Experience[] = [
     risk: { chance: 0.03, title: "Leaked Message", body: "A screenshot ended up where it shouldn't. Mortifying, but survivable.", happiness: -5 },
     lines: ["Midnight turned into two a.m. You both had work in the morning.", "{n} sent you something that made you forget your own name.", "A very long phone call, with a very short conversation."],
   },
+  {
+    id: "bath", label: "Candlelit Bath for Two", emoji: "🛁", tag: "sensual", cost: 30, cap: 3, minBar: 35, intimate: true,
+    blurb: "Bubbles, a bottle of something cold, and nowhere to be.",
+    lines: ["The water went cold long before you noticed.", "Steam, laughter and very little talking.", "{n} fell asleep on your shoulder afterwards, which you counted as a compliment."],
+  },
+  {
+    id: "dance", label: "Dance Lesson, Then Home", emoji: "💃", tag: "sensual", cost: 90, cap: 2, minBar: 25, intimate: true,
+    blurb: "Salsa, tango or a slow dance in the kitchen. Guaranteed to end well.",
+    lines: ["You stepped on each other's toes and then, somehow, stopped.", "{n} led. You let them. The walk home took forever.", "The instructor said you two had chemistry. They weren't wrong."],
+  },
+  {
+    id: "stripdance", label: "A Private Performance", emoji: "🎶", tag: "playful", cost: 40, cap: 2, minBar: 40, intimate: true,
+    blurb: "A playlist, dimmed lights and a lot of nerve. Someone gets a private show.",
+    lines: ["The nerves lasted about a minute, and then you were having the time of your life.", "{n} applauded, then stopped applauding for other reasons.", "You'll never hear that song the same way again."],
+  },
+  {
+    id: "lingerie", label: "The Surprise", emoji: "🎁", tag: "playful", cost: 120, cap: 2, minBar: 35, intimate: true, partnerOnly: true,
+    blurb: "A box with a ribbon, left on the bed with a note.",
+    lines: ["The note said 'open me'. {n} did, and the evening got a lot shorter.", "{n} came home, found the box, and sent you a one-word text: 'Wow.'", "A surprise that was gratefully received."],
+  },
+  {
+    id: "stories", label: "Read Something Steamy Together", emoji: "📖", tag: "digital", cost: 15, cap: 3, minBar: 25, intimate: true,
+    blurb: "Take turns reading aloud from a very good (very smutty) novel.",
+    lines: ["You got through two chapters. The rest of the book is still on the nightstand.", "{n} did all the voices. It was ridiculous and wonderful.", "Reading aloud turned out to be an excellent warm-up."],
+  },
+  {
+    id: "camping", label: "A Night Under the Stars", emoji: "⛺", tag: "adventurous", cost: 80, cap: 2, minBar: 35, intimate: true,
+    blurb: "A tent, a sleeping bag for two, and nobody for miles.",
+    risk: { chance: 0.07, title: "Rained Off", body: "A storm flattened the tent at 2 a.m. You both ended up soaked and laughing in the car.", happiness: -1 },
+    lines: ["The stars were spectacular. You paid them very little attention.", "{n} said the ground was uncomfortable, then said it was worth it.", "Smoke, stars and a very quiet campsite."],
+  },
+  {
+    id: "hotel", label: "A Night in a Hotel", emoji: "🏨", tag: "sensual", cost: 220, cap: 2, minBar: 30, intimate: true,
+    blurb: "Room service, a bigger bed than yours, and a do-not-disturb sign on the door.",
+    lines: ["Checkout was at eleven. You made it at five to.", "A night away, with nobody to impress and nowhere to be.", "The do-not-disturb sign earned its keep."],
+  },
+  {
+    id: "retreat", label: "Tantra & Mindfulness Retreat", emoji: "🧘", tag: "sensual", cost: 650, cap: 1, minBar: 45, intimate: false, partnerOnly: true,
+    blurb: "A weekend in the hills learning to slow down, breathe together and really listen.",
+    lines: ["Three days, no phones, and the most honest conversations of your relationship.", "You came back calmer, and more connected than you have been in years."],
+  },
+  {
+    id: "photoshoot2", label: "Couples' Boudoir Shoot", emoji: "🖼️", tag: "photo", cost: 450, cap: 1, minBar: 55, intimate: true, partnerOnly: true,
+    blurb: "A professional, discreet studio, tasteful photos just for the two of you.",
+    risk: { chance: 0.03, title: "Photos Shared", body: "A hacked cloud account put them in the wrong hands for a few awful hours. Legal threats worked.", happiness: -8, fame: 1, money: -300 },
+    lines: ["The photographer was a professional. You were not, and had a ball.", "{n} looked at the proofs and went quiet. Then went very pink.", "A keepsake for decades."],
+  },
+  {
+    id: "secret_hotel", label: "Secret Meet-up", emoji: "🤫", tag: "adventurous", cost: 180, cap: 3, minBar: 30, intimate: true,
+    blurb: "A discreet room, a quiet arrival, and a lot of trust in whoever you're meeting.",
+    risk: { chance: 0.05, title: "Recognised", body: "Someone you know saw you walk into the hotel. Word travels.", happiness: -4 },
+    lines: ["You arrived separately and left separately. In between, you didn't speak much.", "{n} had booked the room under a ridiculous name.", "A few hours that belonged entirely to the two of you."],
+  },
 ];
 
 export const EXPERIENCE_BY_ID: Record<string, Experience> = Object.fromEntries(EXPERIENCES.map((e) => [e.id, e]));
