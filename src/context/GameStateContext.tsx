@@ -14,7 +14,7 @@ import type { ActionResult, GameState, PlayerState, TabId } from "@/types/game.t
 import type { Rng } from "@/lib/rng";
 import { freshSeed } from "@/lib/rng";
 import { initialState, reducer } from "@/engine/reducer";
-import { recordAchievements, recordLife } from "@/engine/hall";
+import { recordAchievements, recordChallenge, recordLife } from "@/engine/hall";
 import { clearSave, exportSave, exportShareCode, hasSaveSnapshot, loadGame, parseSave, saveGame, subscribeSave } from "@/engine/save";
 import type { NewLifeOptions } from "@/engine/state";
 import { consumeIntro } from "@/lib/prefs";
@@ -64,6 +64,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const pl = state.player;
     if (!pl) return;
     recordAchievements(pl.achievements);
+    if (pl.challenge?.status === "won") recordChallenge(pl.challenge.id);
     if (!pl.alive) recordLife(pl);
   }, [state.player]);
 

@@ -83,6 +83,7 @@ function hydrate(p: PlayerState): PlayerState {
     achievements: p.achievements ?? [],
     history: p.history ?? [],
     goalsDone: p.goalsDone ?? [],
+    challenge: p.challenge ?? null,
     lastYear: p.lastYear ?? null,
     recentCats: p.recentCats ?? [],
     stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0, kills: p.stats.kills ?? 0, affairs: p.stats.affairs ?? 0, hookups: p.stats.hookups ?? 0, yearsWorked: p.stats.yearsWorked ?? Math.max(0, p.age - 22) },

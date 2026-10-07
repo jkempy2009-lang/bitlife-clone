@@ -167,6 +167,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     criminalRecord: [],
     achievements: [],
     goalsDone: [],
+    challenge: old.challenge && old.challenge.status === "active" ? { ...old.challenge } : null,
     lastYear: null,
     recentCats: [],
     history: [],

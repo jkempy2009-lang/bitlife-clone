@@ -1,10 +1,11 @@
 import type { ActionResult, GameState, Notice, PlayerState, TabId } from "@/types/game.types";
 import { makeRng, type Rng } from "@/lib/rng";
 import { ageUp, finalize, isMilestoneAge } from "./ageUp";
-import { createNewPlayer, type NewLifeOptions } from "./state";
+import { addLog, createNewPlayer, type NewLifeOptions } from "./state";
 import { resolveEvent } from "./events";
 import { continueAsChild } from "./legacy";
 import type { LifeEvent } from "@/data/lifeEventsEngine";
+import { CHALLENGE_BY_ID } from "@/data/challenges";
 
 export type Action =
   | { type: "NEW_GAME"; opts: NewLifeOptions; seed: number; intro?: boolean }
@@ -48,6 +49,11 @@ export function reducer(state: GameState, action: Action): GameState {
             },
           ]
         : [];
+      const ch = action.opts.challenge ? CHALLENGE_BY_ID[action.opts.challenge] : undefined;
+      if (ch) {
+        addLog(player, `🎯 Challenge: ${ch.name}. ${ch.goal}`);
+        notices.push({ id: "challenge", kind: "info", title: `${ch.emoji} ${ch.name}`, body: `${ch.blurb} Your goal: ${ch.goal}`, tone: "neutral" });
+      }
       return { ...initialState, screen: "game", player, rngState: rng.state(), notices };
     }
     case "LOAD":

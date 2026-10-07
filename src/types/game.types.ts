@@ -260,6 +260,11 @@ export interface LifetimeStats {
   yearsWorked: number;
 }
 
+export interface ChallengeState {
+  id: string;
+  status: "active" | "won" | "failed";
+}
+
 export interface YearSummary {
   age: number;
   happiness: number;
@@ -360,6 +365,8 @@ export interface PlayerState {
   // Engine bookkeeping
   achievements: string[];
   goalsDone: string[];
+  /** The scenario challenge this life is attempting, if any (carries across generations). */
+  challenge: ChallengeState | null;
   /** What changed during the last Age Up (before you made any choices). */
   lastYear: YearSummary | null;
   /** Categories of the last few events, used to keep years varied. */

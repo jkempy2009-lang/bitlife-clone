@@ -29,6 +29,7 @@ import { startTrial } from "./crime";
 import { selectEvents } from "./events";
 import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
 import { checkAchievements } from "./achievements";
+import { checkChallenge } from "./challenges";
 import { processVices } from "./vices";
 import { escortIsIllegal, processAdultWork, processIntimacy } from "./intimacy";
 import { processPolitics } from "./politics";
@@ -69,6 +70,7 @@ export function finalize(p: PlayerState, notices: Notices) {
   }
   p.stats.peakNetWorth = Math.max(p.stats.peakNetWorth, netWorth(p));
   checkAchievements(p, notices);
+  checkChallenge(p, notices);
   clampAll(p);
 }
 

@@ -21,6 +21,8 @@ export interface HallLife {
 export interface Hall {
   lives: HallLife[];
   achievements: string[];
+  /** Scenario challenges won (ids). */
+  challenges?: string[];
 }
 
 const EMPTY: Hall = { lives: [], achievements: [] };
@@ -83,6 +85,12 @@ export function recordAchievements(ids: string[]) {
   const hall = readHall();
   const merged = Array.from(new Set([...hall.achievements, ...ids]));
   if (merged.length !== hall.achievements.length) write({ ...hall, achievements: merged });
+}
+
+export function recordChallenge(id: string) {
+  const hall = readHall();
+  if (hall.challenges?.includes(id)) return;
+  write({ ...hall, challenges: [...(hall.challenges ?? []), id] });
 }
 
 export function clearHall() {

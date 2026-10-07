@@ -151,6 +151,8 @@ export interface NewLifeOptions {
   country?: string | "random";
   scenario: "random" | "average" | "wealthy" | "struggling" | "celebrity" | "royal";
   startYear: number;
+  /** Optional scenario challenge id (see data/challenges.ts). */
+  challenge?: string;
 }
 
 const TRAITS: Record<string, { open: number; jealous: number }> = {
@@ -327,6 +329,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     criminalRecord: [],
     achievements: [],
     goalsDone: [],
+    challenge: opts.challenge ? { id: opts.challenge, status: "active" } : null,
     lastYear: null,
     recentCats: [],
     history: [],

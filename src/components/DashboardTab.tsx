@@ -8,6 +8,7 @@ import { Card, Pill, SectionTitle, StatBar } from "./ui";
 import { ACHIEVEMENTS } from "@/data/achievements";
 import { AchievementGrid } from "./HallOfLives";
 import { suggestTips } from "@/lib/tips";
+import { CHALLENGE_BY_ID } from "@/data/challenges";
 
 interface YearGroup {
   header: string;
@@ -125,6 +126,21 @@ export default function DashboardTab() {
           <div className="text-sm font-bold tabular-nums">{p.creditScore}</div>
         </Card>
       </div>
+
+      {p.challenge && CHALLENGE_BY_ID[p.challenge.id] && (() => {
+        const c = CHALLENGE_BY_ID[p.challenge.id];
+        const tone = p.challenge.status === "won" ? "border-amber-400/50 bg-amber-500/10" : p.challenge.status === "failed" ? "border-rose-500/40 bg-rose-500/10" : "border-emerald-500/30 bg-emerald-500/5";
+        return (
+          <div className={`rounded-2xl border p-3 ${tone}`}>
+            <div className="flex items-center justify-between text-sm font-semibold">
+              <span>{c.emoji} Challenge: {c.name}</span>
+              <span className="text-xs text-slate-400">{p.challenge.status === "active" ? `by age ${Math.min(c.byAge, 100)}` : p.challenge.status === "won" ? "🏅 won" : "failed"}</span>
+            </div>
+            <div className="mt-0.5 text-xs text-slate-400">{c.goal}</div>
+            {p.challenge.status === "active" && <div className="mt-1 text-xs font-medium text-emerald-300">{c.progress(p)}</div>}
+          </div>
+        );
+      })()}
 
       {tips.length > 0 && (
         <div className="flex flex-col gap-1.5">

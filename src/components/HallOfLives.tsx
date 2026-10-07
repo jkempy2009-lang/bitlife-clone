@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { ACHIEVEMENTS } from "@/data/achievements";
+import { CHALLENGES } from "@/data/challenges";
 import { clearHall, hallServerSnapshot, readHall, subscribeHall } from "@/engine/hall";
 import { money } from "@/lib/format";
 import { Button, Card, SectionTitle } from "./ui";
@@ -41,6 +42,20 @@ export default function HallOfLives({ onClose }: { onClose: () => void }) {
         </div>
         <SectionTitle hint={`${hall.achievements.length}/${ACHIEVEMENTS.length} unlocked`}>Achievements</SectionTitle>
         <AchievementGrid unlocked={hall.achievements} />
+        <div className="mt-5">
+          <SectionTitle hint={`${hall.challenges?.length ?? 0}/${CHALLENGES.length} won`}>Challenges</SectionTitle>
+          <div className="grid grid-cols-1 gap-1.5">
+            {CHALLENGES.map((c) => {
+              const on = hall.challenges?.includes(c.id);
+              return (
+                <div key={c.id} className={`flex items-center gap-3 rounded-xl border p-2.5 ${on ? "border-amber-500/50 bg-amber-950/20" : "border-slate-700/60 bg-slate-800/40 opacity-60"}`}>
+                  <span className="text-2xl">{on ? c.emoji : "🔒"}</span>
+                  <div className="min-w-0"><div className="text-sm font-semibold">{c.name}</div><div className="text-xs text-slate-400">{c.goal}</div></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
         <div className="mt-5">
           <SectionTitle hint={`${hall.lives.length} remembered`}>Lives Lived</SectionTitle>
           {hall.lives.length === 0 && <Card><p className="text-sm text-slate-400">No lives lived yet. Go live one.</p></Card>}

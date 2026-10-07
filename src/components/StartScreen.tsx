@@ -7,6 +7,7 @@ import type { NewLifeOptions } from "@/engine/state";
 import { Button } from "./ui";
 import HallOfLives, { useHall } from "./HallOfLives";
 import { ACHIEVEMENTS } from "@/data/achievements";
+import { CHALLENGES } from "@/data/challenges";
 
 const SCENARIOS: { id: NewLifeOptions["scenario"]; label: string; blurb: string }[] = [
   { id: "random", label: "🎲 Surprise Me", blurb: "Fate decides (1% chance of royalty)." },
@@ -20,6 +21,7 @@ const SCENARIOS: { id: NewLifeOptions["scenario"]; label: string; blurb: string 
 export default function StartScreen() {
   const { newGame, continueSave, hasSave, deleteSave } = useGame();
   const [designing, setDesigning] = useState(false);
+  const [challenging, setChallenging] = useState(false);
   const [showHall, setShowHall] = useState(false);
   const hall = useHall();
   const [firstName, setFirstName] = useState("");
@@ -37,7 +39,33 @@ export default function StartScreen() {
           <p className="mt-2 text-slate-400">Live a thousand lives. Every choice has a price.</p>
         </div>
 
-        {!designing ? (
+        {challenging ? (
+          <div className="rounded-3xl border border-slate-700 bg-slate-800/80 p-4">
+            <h2 className="mb-1 text-lg font-bold">🎯 Scenario Challenges</h2>
+            <p className="mb-3 text-xs text-slate-400">A fixed starting point, a goal and a deadline. Win to earn a place in the Hall of Lives.</p>
+            <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">
+              {CHALLENGES.map((c) => {
+                const won = hall.challenges?.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => newGame({ scenario: c.scenario, challenge: c.id })}
+                    className="rounded-xl border border-slate-700 bg-slate-900/50 px-3 py-2 text-left transition-colors hover:border-emerald-500"
+                  >
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span>{c.emoji} {c.name}</span>
+                      {won && <span className="text-xs text-amber-300">🏅 won</span>}
+                    </div>
+                    <div className="text-xs text-slate-400">{c.blurb}</div>
+                    <div className="mt-1 text-xs font-medium text-emerald-300">{c.goal}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <Button variant="ghost" className="mt-3 w-full" onClick={() => setChallenging(false)}>Back</Button>
+          </div>
+        ) : !designing ? (
           <div className="flex flex-col gap-3">
             {hasSave && (
               <Button variant="primary" className="py-3.5 text-base" onClick={continueSave}>
@@ -49,6 +77,9 @@ export default function StartScreen() {
             </Button>
             <Button variant="secondary" className="py-3.5 text-base" onClick={() => setDesigning(true)}>
               ✏️ Design a Life
+            </Button>
+            <Button variant="secondary" className="py-3.5 text-base" onClick={() => setChallenging(true)}>
+              🎯 Scenario Challenges
             </Button>
             <Button variant="ghost" onClick={() => setShowHall(true)}>
               🏆 Hall of Lives · {hall.achievements.length}/{ACHIEVEMENTS.length}
