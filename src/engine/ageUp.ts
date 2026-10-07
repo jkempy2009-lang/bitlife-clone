@@ -26,6 +26,7 @@ import {
 import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
 import { processFriendLoans } from "./friends";
+import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
 import { startTrial } from "./crime";
@@ -267,7 +268,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
     const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
     const ls = LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1];
     living = BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope;
-    living += childSupportDue(p, gross);
+    living += childSupportDue(p, gross) + schoolCosts(p);
   }
   living = Math.round(living);
   p.bankBalance -= living;
@@ -670,6 +671,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
 
   processSocial(p, rng, notices); // 2. social graph
   processFriendLoans(p, rng, notices);
+  processChildren(p, rng, notices);
   processIntimacy(p, prevAnnual, rng, notices);
   processAssets(p, rng); // 3. asset economics
   processFinance(p, rng, notices); // 4. financial balance sheet

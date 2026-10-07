@@ -55,6 +55,11 @@ export interface Relative {
   marriedYear?: number;
   /** Short occupation blurb for flavour ("Nurse", "Electrician"). */
   occupation?: string;
+  /** Children: schooling and what they're passionate about. */
+  school?: "public" | "private";
+  interest?: "sport" | "music" | "art" | "science" | "none";
+  /** Children: how much trouble they've been in lately. */
+  trouble?: number;
 }
 
 export interface Property {

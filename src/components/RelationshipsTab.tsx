@@ -39,6 +39,7 @@ import { discussDesires, knownTastes, setIntimacyPrefs, shareExperience, toggleG
 import { adultRange } from "@/engine/people";
 import { closeRelationship, type Intent } from "@/engine/intimacy";
 import { supportAction } from "@/engine/friends";
+import { ACTIVITY_COST, INTERESTS as KID_INTERESTS, PRIVATE_SCHOOL_COST, TUTOR_COST, childAction } from "@/engine/parenting";
 import { money } from "@/lib/format";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
@@ -394,6 +395,28 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
               <Button variant="secondary" disabled={(p.annual[`support:help:${rel.id}`] ?? 0) >= 1 || p.bankBalance < 1_500} onClick={() => act((pl, rng) => supportAction(pl, rel.id, "help", rng, 1_500))}>🤲 Help with Bills ($1,500)</Button>
             )}
           </div>
+        </>
+      )}
+
+      {rel.relation === "Child" && rel.age < 18 && (
+        <>
+          <SectionTitle hint="shape how they turn out">Parenting</SectionTitle>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" disabled={(p.annual[`kid:family:${rel.id}`] ?? 0) >= 1} onClick={() => act((pl, rng) => childAction(pl, rel.id, "family", rng))}>👨‍👩‍👧 Family Weekend</Button>
+            <Button variant="secondary" disabled={(p.annual[`kid:talk:${rel.id}`] ?? 0) >= 1} onClick={() => act((pl, rng) => childAction(pl, rel.id, "talk", rng))}>🗣️ Heart-to-Heart{(rel.trouble ?? 0) > 0 ? " ⚠️" : ""}</Button>
+            {rel.age >= 5 && <Button variant="secondary" disabled={(p.annual[`kid:tutor:${rel.id}`] ?? 0) >= 1 || p.bankBalance < TUTOR_COST} onClick={() => act((pl, rng) => childAction(pl, rel.id, "tutor", rng))}>📚 Tutor (${TUTOR_COST.toLocaleString()})</Button>}
+            {rel.age >= 5 && <Button variant="secondary" onClick={() => act((pl, rng) => childAction(pl, rel.id, "school", rng))}>🏫 {rel.school === "private" ? "Move to public school" : `Private school ($${PRIVATE_SCHOOL_COST.toLocaleString()}/yr)`}</Button>}
+          </div>
+          {rel.age >= 4 && (
+            <div className="grid grid-cols-4 gap-1.5">
+              {KID_INTERESTS.map((i) => (
+                <Button key={i.id} variant="ghost" className="px-1 py-2 text-xs" disabled={(p.annual[`kid:activity:${rel.id}`] ?? 0) >= 1 || p.bankBalance < ACTIVITY_COST} onClick={() => act((pl, rng) => childAction(pl, rel.id, "activity", rng, i.id))}>
+                  {i.emoji}<br />{i.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-slate-500">Activities cost ${ACTIVITY_COST} a year. {rel.interest && rel.interest !== "none" ? `${rel.name.split(" ")[0]} loves ${rel.interest}.` : ""} Neglected teenagers get into trouble.</p>
         </>
       )}
 

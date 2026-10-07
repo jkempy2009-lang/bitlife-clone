@@ -153,3 +153,37 @@ describe("retirement account", () => {
     expect(p.retirementSavings).toBe(0);
   });
 });
+
+describe("parenting", () => {
+  it("tutoring helps, private school costs and helps, neglected teens get into trouble, 18-year-olds launch", async () => {
+    const { childAction, schoolCosts, processChildren } = await import("../parenting");
+    const { p } = married(14, 3);
+    const kid: Relative = { id: "K", relation: "Child", name: "Kay Kid", age: 10, relationshipBar: 70, health: 90, alive: true, incomeTier: 3, gender: "Female", smarts: 50, looks: 50 };
+    p.relatives.push(kid);
+    const t = childAction(p, "K", "tutor", makeRng(1)).player;
+    expect(t.relatives.find((r) => r.id === "K")!.smarts).toBeGreaterThan(50);
+    expect(childAction(t, "K", "tutor", makeRng(1)).notices?.[0]).toMatchObject({ title: "Already Done" });
+    const s = childAction(p, "K", "school", makeRng(1)).player;
+    expect(schoolCosts(s)).toBe(12_000);
+    expect(schoolCosts(childAction(s, "K", "school", makeRng(1)).player)).toBe(0);
+    // trouble
+    let trouble = 0;
+    for (let i = 1; i <= 40; i++) {
+      const q = structuredClone(p);
+      const k = q.relatives.find((r) => r.id === "K")!;
+      k.age = 15;
+      k.relationshipBar = 15;
+      processChildren(q, makeRng(i), []);
+      if ((k.trouble ?? 0) > 0) trouble++;
+    }
+    expect(trouble).toBeGreaterThan(2);
+    // launch
+    const q = structuredClone(p);
+    const k = q.relatives.find((r) => r.id === "K")!;
+    k.age = 18;
+    k.smarts = 80;
+    processChildren(q, makeRng(5), []);
+    expect(k.occupation).toBeTruthy();
+    expect(k.incomeTier).toBeGreaterThanOrEqual(2);
+  });
+});
