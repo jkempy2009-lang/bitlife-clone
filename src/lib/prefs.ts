@@ -60,3 +60,16 @@ export function usePrefs(): Prefs {
     () => DEFAULTS,
   );
 }
+
+const INTRO_KEY = "lifeline-intro-seen";
+
+/** True once, on the very first life this browser starts. */
+export function consumeIntro(): boolean {
+  try {
+    if (localStorage.getItem(INTRO_KEY)) return false;
+    localStorage.setItem(INTRO_KEY, "1");
+    return true;
+  } catch {
+    return false;
+  }
+}

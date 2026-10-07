@@ -7,7 +7,7 @@ import { continueAsChild } from "./legacy";
 import type { LifeEvent } from "@/data/lifeEventsEngine";
 
 export type Action =
-  | { type: "NEW_GAME"; opts: NewLifeOptions; seed: number }
+  | { type: "NEW_GAME"; opts: NewLifeOptions; seed: number; intro?: boolean }
   | { type: "LOAD"; player: PlayerState; rngState: number }
   | { type: "AGE_UP" }
   | { type: "FAST_FORWARD"; years?: number }
@@ -37,7 +37,18 @@ export function reducer(state: GameState, action: Action): GameState {
     case "NEW_GAME": {
       const rng = makeRng(action.seed);
       const player = createNewPlayer(action.opts, rng);
-      return { ...initialState, screen: "game", player, rngState: rng.state() };
+      const notices: Notice[] = action.intro
+        ? [
+            {
+              id: "intro",
+              kind: "info",
+              title: "Welcome to Lifeline",
+              body: "Tap Age Up to live the next year. Events will ask you to decide. Use the tabs to meet people, work, study, buy things and get into trouble. Skip fast-forwards through quiet years. Everything is saved automatically.",
+              tone: "neutral",
+            },
+          ]
+        : [];
+      return { ...initialState, screen: "game", player, rngState: rng.state(), notices };
     }
     case "LOAD":
       return { ...initialState, screen: "game", player: action.player, rngState: action.rngState, tab: action.player.isInPrison ? "prison" : "dashboard" };

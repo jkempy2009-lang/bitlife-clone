@@ -27,6 +27,14 @@ describe("year summary & milestones", () => {
   });
 });
 
+describe("intro", () => {
+  it("only shows the welcome notice when asked", () => {
+    const withIntro = reducer(initialState, { type: "NEW_GAME", opts: { scenario: "average", startYear: 2026 }, seed: 1, intro: true });
+    expect(withIntro.notices).toHaveLength(1);
+    expect(newGame().notices).toHaveLength(0);
+  });
+});
+
 describe("fast forward", () => {
   it("skips quiet years and stops at an event, milestone or death", () => {
     let s = newGame();

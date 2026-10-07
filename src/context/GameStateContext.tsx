@@ -17,6 +17,7 @@ import { initialState, reducer } from "@/engine/reducer";
 import { recordAchievements, recordLife } from "@/engine/hall";
 import { clearSave, exportSave, exportShareCode, hasSaveSnapshot, loadGame, parseSave, saveGame, subscribeSave } from "@/engine/save";
 import type { NewLifeOptions } from "@/engine/state";
+import { consumeIntro } from "@/lib/prefs";
 
 interface GameContextValue {
   state: GameState;
@@ -82,7 +83,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       dismissNotice: (id) => dispatch({ type: "DISMISS_NOTICE", id }),
       clearBanner: () => dispatch({ type: "CLEAR_BANNER" }),
       newGame: (opts) => {
-        dispatch({ type: "NEW_GAME", opts: { ...opts, startYear: new Date().getFullYear() }, seed: freshSeed() });
+        dispatch({ type: "NEW_GAME", opts: { ...opts, startYear: new Date().getFullYear() }, seed: freshSeed(), intro: consumeIntro() });
       },
       continueSave: () => {
         const data = loadGame();
