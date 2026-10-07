@@ -81,6 +81,34 @@ export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
   return kid;
 }
 
+const PET_NAMES = ["Biscuit", "Luna", "Max", "Bella", "Charlie", "Milo", "Daisy", "Rocky", "Pepper", "Waffles", "Ziggy", "Olive"];
+
+export const PET_COST = 150;
+
+export function addPet(p: PlayerState, species: "dog" | "cat", rng: Rng): Relative {
+  const name = rng.pick(PET_NAMES);
+  const pet = makeRelativeBase(rng, "Pet", name, rng.int(0, 3), "Unknown", 1, rng.int(70, 95));
+  pet.species = species;
+  pet.name = name;
+  p.relatives.push(pet);
+  const flag = species === "cat" ? "has_cat" : "has_dog";
+  if (!p.flags.includes(flag)) p.flags.push(flag);
+  addLog(p, `You adopted a ${species} named ${name}.`);
+  return pet;
+}
+
+export function adoptPet(p0: PlayerState, species: "dog" | "cat", rng: Rng): ActionResult {
+  const p = clone(p0);
+  const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") => ({ kind: "info" as const, title, body, tone });
+  if (p.age < 8) return { player: p0, notices: [info("Too Young", "Ask your parents.", "neutral")] };
+  if (p.bankBalance < PET_COST) return { player: p0, notices: [info("Insufficient Funds", `Adoption fees come to ${money(PET_COST)}.`, "bad")] };
+  if (p.relatives.filter((r) => r.relation === "Pet" && r.alive).length >= 4) return { player: p0, notices: [info("Full House", "Four pets is plenty.")] };
+  p.bankBalance -= PET_COST;
+  const pet = addPet(p, species, rng);
+  changeStat(p, "happiness", 8);
+  return { player: p, notices: [info("New Best Friend", `You adopted ${pet.name}, a ${species}. Your life just got furrier.`, "good")] };
+}
+
 export const livingGrandchildren = (p: PlayerState) => p.relatives.filter((r) => r.relation === "Grandchild" && r.alive).length;
 
 export const ADOPTION_COST = 15_000;
@@ -137,6 +165,8 @@ const CONVERSE: Record<string, string[]> = {
   Partner: ["You and {n} discussed your plans for the future.", "You and {n} talked about where to travel next."],
   Friend: ["You and {n} talked about life.", "You and {n} argued about sports."],
 };
+SPEND.Pet = ["You took {n} for a long walk.", "You played fetch with {n} until you were both exhausted.", "{n} curled up in your lap and purred (or snored)."];
+CONVERSE.Pet = ["You told {n} all your problems. {n} listened.", "{n} tilted their head at you in total understanding."];
 SPEND.Grandparent = ["You baked cookies with {n} and heard the old family stories.", "{n} taught you a card game and then cheated.", "You and {n} sat on the porch and watched the world go by."];
 SPEND.Grandchild = ["You read {n} a bedtime story.", "You took {n} to the zoo.", "You let {n} beat you at a board game (barely)."];
 CONVERSE.Grandparent = ["{n} told you what life was like \"back in the day\".", "{n} gave you some questionable advice about love."];
@@ -285,12 +315,17 @@ export function tryForBaby(p0: PlayerState, rng: Rng): ActionResult {
     const body = partner.age > 45 || p.age > 52 ? `At your age, conceiving naturally isn't likely.` : "You're not in a position to have a baby right now.";
     return { player: p0, notices: [{ kind: "info", title: "Not Possible", body, tone: "neutral" }] };
   }
+  if (p.pregnancy) {
+    return { player: p0, notices: [{ kind: "info", title: "Already Expecting", body: "A baby is already on the way.", tone: "neutral" }] };
+  }
   if (rng.chance(0.4)) {
-    const kid = addRelative(p, { relation: "Child" }, rng);
-    changeStat(p, "happiness", 15);
+    const carrier = p.gender === "Female" ? "self" : partner.gender === "Female" ? partner.id : rng.chance(0.5) ? "self" : partner.id;
+    p.pregnancy = { carrier, other: partner.name };
+    changeStat(p, "happiness", 12);
     partner.relationshipBar = clamp(partner.relationshipBar + 8);
-    const body = `${partner.name} gave birth to a baby ${kid.gender === "Male" ? "boy" : "girl"}: ${kid.name}!`;
-    return { player: p, notices: [{ kind: "info", title: "It's a baby!", body, tone: "good" }] };
+    const body = `${carrier === "self" ? "You're" : `${partner.name} is`} expecting! The baby is due by next year.`;
+    addLog(p, body);
+    return { player: p, notices: [{ kind: "info", title: "We're Expecting!", body, tone: "good" }] };
   }
   const body = `You and ${partner.name} tried for a baby this year. No luck.`;
   addLog(p, body);

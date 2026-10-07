@@ -235,8 +235,4 @@ export const LIFE2_EVENTS: LifeEvent[] = [
     opt("Split the difference ($1,500)", "You paid $1,500 to keep the peace.", { bankBalanceDelta: -1500, relationshipDelta: { target: "Sibling", delta: 12 } }),
     opt("Stop speaking to them", "You haven't talked in a year.", { relationshipDelta: { target: "Sibling", delta: -25 }, happinessDelta: -3 }),
   ], { requires: { hasSibling: true, parentAlive: true }, cooldown: 8 }),
-  ev("pet_loss", "family", 10, 90, "Goodbye, Old Friend", "Your beloved pet passed away peacefully.", [
-    opt("Hold a small funeral", "You buried them under their favourite tree.", { happinessDelta: -8, karmaDelta: 1 }),
-    opt("Adopt a new pet right away", "You adopted another one. They'll never replace the last, but they help.", { happinessDelta: -3, bankBalanceDelta: -150 }),
-  ], { requires: { flagsAll: ["has_dog"] }, once: true, weight: 0.5 }),
 ];

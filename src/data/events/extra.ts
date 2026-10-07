@@ -14,8 +14,8 @@ export const EXTRA_EVENTS: LifeEvent[] = [
     opt("Ignore the leash", "You ignored it. The dog sighed audibly.", { happinessDelta: -2 }),
   ], { requires: { flagsAll: ["has_dog"] }, cooldown: 3 }),
   ev("adopt_pet", "general", 12, 85, "Shelter Visit", "You walk past an animal shelter full of hopeful faces.", [
-    opt("Adopt a dog", "You adopted a scruffy dog named Biscuit. Life is better.", { setFlags: ["has_dog"], happinessDelta: 10, bankBalanceDelta: -150, karmaDelta: 3 }),
-    opt("Adopt a cat", "You adopted a cat who immediately ignored you. Perfect.", { setFlags: ["has_cat"], happinessDelta: 8, bankBalanceDelta: -100, karmaDelta: 3 }),
+    opt("Adopt a dog", "You adopted a scruffy dog named Biscuit. Life is better.", { addPet: "dog", happinessDelta: 10, bankBalanceDelta: -150, karmaDelta: 3 }),
+    opt("Adopt a cat", "You adopted a cat who immediately ignored you. Perfect.", { addPet: "cat", happinessDelta: 8, bankBalanceDelta: -100, karmaDelta: 3 }),
     opt("Volunteer for an afternoon", "You walked dogs for a few hours and left smelling like fur.", { karmaDelta: 4, happinessDelta: 3 }),
   ], { requires: { flagsNone: ["has_dog"], minBank: 200 }, cooldown: 8 }),
   ev("science_fair", "school", 8, 17, "Science Fair", "The school science fair is coming up and you need a project.", [
@@ -90,7 +90,7 @@ export const EXTRA_EVENTS: LifeEvent[] = [
     opt("Bootstrap on your own", "You declined. It's your baby.", { smartsDelta: 1 }),
   ], { requires: { flagsAll: ["business_owner"] }, cooldown: 8 }),
   ev("windfall_inheritance", "money", 25, 80, "Distant Relative", "A lawyer calls: a great-aunt you barely knew left you something.", [
-    opt("Accept the estate", "You inherited $30,000 and a very old cat.", { bankBalanceDelta: 30000, happinessDelta: 6, setFlags: ["has_cat"] }),
+    opt("Accept the estate", "You inherited $30,000 and a very old cat.", { bankBalanceDelta: 30000, happinessDelta: 6, addPet: "cat" }),
     opt("Donate it all", "You donated the inheritance to charity.", { karmaDelta: 12, happinessDelta: 4 }),
   ], { once: true, weight: 0.6 }),
   ev("crypto_boom", "money", 20, 70, "Crypto Mania", "Everyone at work is talking about a new coin.", [

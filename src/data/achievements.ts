@@ -71,6 +71,22 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "boss", name: "Capo di Tutti Capi", emoji: "🔫", desc: "Become a crime boss.", check: (p) => jobLine(p, "mafia", 4) },
   { id: "saint", name: "Saint", emoji: "😇", desc: "Reach 95 Karma.", check: (p) => p.karma >= 95 },
   { id: "recovered", name: "Clean and Sober", emoji: "🌅", desc: "Beat a serious addiction.", check: (p) => has(p, "was_addict") && Object.values(p.vices).every((v) => v < 5) },
+  // Adult life (mature content)
+  { id: "hookup_artist", name: "Social Butterfly", emoji: "🦋", desc: "Have ten casual encounters.", check: (p) => p.stats.hookups >= 10 },
+  { id: "cheater", name: "Two-Timer", emoji: "🎭", desc: "Cheat on a partner.", check: (p) => has(p, "cheater") },
+  { id: "open_rel", name: "Open Book", emoji: "🔓", desc: "Open up a relationship.", check: (p) => has(p, "open_relationship") },
+  { id: "threesome", name: "Three's Company", emoji: "👥", desc: "Try a threesome.", check: (p) => has(p, "threesome") },
+  { id: "swinger", name: "Club Regular", emoji: "🪩", desc: "Visit a swinger club.", check: (p) => has(p, "swinger") },
+  { id: "adult_work", name: "Night Shift", emoji: "🔞", desc: "Work in the adult industry.", check: (p) => ["dancer", "escort", "creator"].includes(p.currentJob?.lineId ?? "") },
+  { id: "sti_survivor", name: "Learned the Hard Way", emoji: "🩹", desc: "Catch an STI.", check: (p) => has(p, "had_sti") },
+  // Darker paths
+  { id: "murderer", name: "Blood on Your Hands", emoji: "🩸", desc: "Take a life.", check: (p) => p.stats.kills >= 1 },
+  { id: "serial", name: "Serial Offender", emoji: "🕳️", desc: "Kill three people.", check: (p) => p.stats.kills >= 3 },
+  { id: "death_row", name: "Dead Man Walking", emoji: "☠️", desc: "Be sentenced to death.", check: (p) => !!p.prison?.deathRow },
+  { id: "perfect_crime", name: "The Perfect Crime", emoji: "🕵️", desc: "Let a murder investigation go cold.", check: (p) => has(p, "killer") && !has(p, "under_investigation") && p.stats.kills > 0 && p.age >= 40 },
+  { id: "pet_parent", name: "Pet Parent", emoji: "🐾", desc: "Adopt a pet.", check: (p) => p.relatives.some((r) => r.relation === "Pet") },
+  { id: "empire", name: "Empire Builder", emoji: "🏪", desc: "Run a business with three or more locations.", check: (p) => (p.business?.locations ?? 0) >= 3 },
+  { id: "partisan", name: "Party Loyalist", emoji: "🗳️", desc: "Join a political party.", check: (p) => p.politics.party !== null },
   // Longevity
   { id: "octogenarian", name: "Still Going", emoji: "🎂", desc: "Live to 80.", check: (p) => p.age >= 80 },
   { id: "centenarian", name: "Centenarian", emoji: "🧓", desc: "Live to 100.", check: (p) => p.age >= 100 },

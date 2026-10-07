@@ -24,8 +24,9 @@ import {
   summarizeDelta,
 } from "./state";
 import { killPlayer } from "./mortality";
-import { addRelative, endRelationship, firstName } from "./social";
+import { addPet, addRelative, endRelationship, firstName } from "./social";
 import { startTrial } from "./crime";
+import { exposeAffair } from "./intimacy";
 import { promoteJob } from "./career";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,7 @@ export function meetsRequirements(p: PlayerState, req: EventRequirements | undef
 export function isEligible(p: PlayerState, e: LifeEvent): boolean {
   if (p.age < e.minAge || p.age > e.maxAge) return false;
   if (!!e.prisonOnly !== p.isInPrison) return false;
+  if (e.mature && (!p.matureContent || p.age < 18)) return false;
   if (e.once && p.seenEvents[e.id] !== undefined) return false;
   const last = p.seenEvents[e.id];
   if (last !== undefined && p.age - last < (e.cooldown ?? 3)) return false;
@@ -137,6 +139,7 @@ export function addDisease(p: PlayerState, id: string, rng: Rng): boolean {
   const t = DISEASE_BY_ID[id];
   if (!t || p.diseases.some((d) => d.id === id)) return false;
   p.diseases.push(instantiateDisease(t, (a, b) => rng.int(a, b)));
+  if (["chlamydia", "herpes", "hiv"].includes(id) && !p.flags.includes("had_sti")) p.flags.push("had_sti");
   addLog(p, `You were diagnosed with ${t.name}.`);
   return true;
 }
@@ -175,9 +178,24 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng) {
   if (e.relationshipDelta) {
     const { target, delta } = e.relationshipDelta;
     for (const r of livingRelatives(p)) {
-      if (target === "All" || r.relation === target) r.relationshipBar = clamp(r.relationshipBar + delta);
+      if (target === "All" ? r.relation !== "Pet" && r.relation !== "Lover" : r.relation === target) r.relationshipBar = clamp(r.relationshipBar + delta);
     }
   }
+  if (e.addPet) addPet(p, e.addPet, rng);
+  if (e.kill) {
+    p.stats.kills += 1;
+    p.karma = Math.max(0, p.karma - 40);
+    if (!p.flags.includes("killer")) p.flags.push("killer");
+    if (!p.flags.includes("under_investigation")) p.flags.push("under_investigation");
+  }
+  if (e.pregnancy && !p.pregnancy) {
+    const other = e.pregnancy === "lover" ? p.relatives.find((r) => r.relation === "Lover" && r.alive && r.partnerStatus !== "ex") : getPartner(p);
+    if (other) {
+      const carrier = p.gender === "Female" ? "self" : other.gender === "Female" ? other.id : "self";
+      p.pregnancy = { carrier, other: other.name };
+    }
+  }
+  if (e.exposeAffair) exposeAffair(p, rng, []);
   if (e.marry) {
     const partner = getPartner(p);
     if (partner && partner.partnerStatus !== "married") {

@@ -152,6 +152,30 @@ export interface NewLifeOptions {
   startYear: number;
 }
 
+const TRAITS: Record<string, { open: number; jealous: number }> = {
+  Loyal: { open: -10, jealous: 5 },
+  Adventurous: { open: 30, jealous: -5 },
+  Jealous: { open: -10, jealous: 40 },
+  Romantic: { open: 5, jealous: 10 },
+  Ambitious: { open: 0, jealous: 0 },
+  Easygoing: { open: 10, jealous: -20 },
+  Wild: { open: 30, jealous: 0 },
+  Reserved: { open: -25, jealous: 5 },
+  Kind: { open: 0, jealous: -10 },
+  "Hot-tempered": { open: 0, jealous: 20 },
+};
+
+export function rollPersonality(rng: Rng): { traits: string[]; openness: number; jealousy: number } {
+  const names = Object.keys(TRAITS);
+  const a = rng.pick(names);
+  let b = rng.pick(names);
+  if (b === a) b = names[(names.indexOf(a) + 3) % names.length];
+  const traits = [a, b];
+  const openness = clamp(Math.round(35 + TRAITS[a].open + TRAITS[b].open + rng.int(-15, 15)));
+  const jealousy = clamp(Math.round(40 + TRAITS[a].jealous + TRAITS[b].jealous + rng.int(-15, 15)));
+  return { traits, openness, jealousy };
+}
+
 export function makeRelativeBase(
   rng: Rng,
   relation: Relative["relation"],
@@ -173,6 +197,7 @@ export function makeRelativeBase(
     gender,
     smarts: rng.int(20, 90),
     looks: rng.int(20, 90),
+    ...rollPersonality(rng),
   };
 }
 
@@ -277,12 +302,15 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     influencer: { active: false, followers: 0, lastPostYear: 0 },
     athlete: { sport: null },
     hobbies: {},
-    politics: { popularity: 30, yearsInOffice: 0 },
+    politics: { popularity: 30, yearsInOffice: 0, party: null },
     economy: { climate: rng.pick(["normal", "normal", "boom", "recession"] as const), yearsLeft: rng.int(1, 4) },
     residence: { country: country.name, city: "", rentTier: 1 },
     investments: {},
     vices: { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
     probation: null,
+    pregnancy: null,
+    blackjack: null,
+    matureContent: true,
     isInPrison: false,
     isFugitive: false,
     prison: null,
@@ -303,6 +331,9 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
       childrenBorn: 0,
       peakNetWorth: 0,
       yearsInPrison: 0,
+      kills: 0,
+      affairs: 0,
+      hookups: 0,
     },
     generation: 1,
     alive: true,

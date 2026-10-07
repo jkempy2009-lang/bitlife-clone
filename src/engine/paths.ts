@@ -49,7 +49,7 @@ export function startBusiness(p0: PlayerState, kindId: string, name: string): Ac
   if (p.bankBalance < kind.cost) return { player: p0, notices: [info("Insufficient Funds", `You need ${money(kind.cost)} in cash to open a ${kind.name.toLowerCase()}.`, "bad")] };
   p.bankBalance -= kind.cost;
   const label = name.trim() || `${p.lastName} ${kind.name}`;
-  p.business = { kind: kind.id, name: label, value: kind.cost, lastProfit: 0, boost: 0, founded: p.year };
+  p.business = { kind: kind.id, name: label, value: kind.cost, staff: 0, locations: 1, lastProfit: 0, boost: 0, founded: p.year };
   setFlag(p, "business_owner");
   changeStat(p, "happiness", 8);
   const body = `You opened "${label}" for ${money(kind.cost)}. Time to be your own boss.`;
@@ -80,6 +80,65 @@ export function workOnBusiness(p0: PlayerState): ActionResult {
   return { player: p, notices: [info("Hustle Mode", body, "good")] };
 }
 
+export const STAFF_SALARY = 12_000;
+export const MARKETING_COST = 10_000;
+export const MAX_LOCATIONS = 4;
+
+export const maxStaff = (locations: number) => 10 + 5 * (locations - 1);
+
+export function hireStaff(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  const biz = p.business;
+  if (!biz) return { player: p0 };
+  if (biz.staff >= maxStaff(biz.locations)) return { player: p0, notices: [info("Fully Staffed", "You've hit your headcount limit. Expand to add more.")] };
+  if (p.bankBalance < 3_000) return { player: p0, notices: [info("Insufficient Funds", "Recruiting costs $3,000.", "bad")] };
+  p.bankBalance -= 3_000;
+  biz.staff += 1;
+  const body = `You hired a new employee at ${biz.name}. Headcount: ${biz.staff}.`;
+  addLog(p, body);
+  return { player: p, notices: [info("New Hire", body, "good")] };
+}
+
+export function fireStaff(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  const biz = p.business;
+  if (!biz || biz.staff <= 0) return { player: p0 };
+  biz.staff -= 1;
+  changeStat(p, "karma", -1);
+  const body = `You let someone go at ${biz.name}. Headcount: ${biz.staff}.`;
+  addLog(p, body);
+  return { player: p, notices: [info("Layoff", body, "neutral")] };
+}
+
+export function runMarketing(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  const biz = p.business;
+  if (!biz) return { player: p0 };
+  if (p.bankBalance < MARKETING_COST) return { player: p0, notices: [info("Insufficient Funds", `A campaign costs ${money(MARKETING_COST)}.`, "bad")] };
+  if ((p.annual.marketing ?? 0) >= 1) return { player: p0, notices: [info("Campaign Running", "One marketing push per year.")] };
+  p.annual.marketing = 1;
+  p.bankBalance -= MARKETING_COST;
+  biz.boost += 0.1;
+  const body = `A new marketing campaign for ${biz.name} is live. Expect +10% profit this year.`;
+  addLog(p, body);
+  return { player: p, notices: [info("Marketing Push", body, "good")] };
+}
+
+export function expandBusiness(p0: PlayerState): ActionResult {
+  const p = clone(p0);
+  const biz = p.business;
+  if (!biz) return { player: p0 };
+  if (biz.locations >= MAX_LOCATIONS) return { player: p0, notices: [info("Empire Complete", "You already operate the maximum number of locations.")] };
+  const cost = Math.round(biz.value * 0.6);
+  if (p.bankBalance < cost) return { player: p0, notices: [info("Insufficient Funds", `Opening another location costs ${money(cost)}.`, "bad")] };
+  p.bankBalance -= cost;
+  biz.locations += 1;
+  biz.value = Math.round(biz.value * 1.6);
+  const body = `${biz.name} opened location #${biz.locations}. Valuation: ${money(biz.value)}.`;
+  addLog(p, body);
+  return { player: p, notices: [info("Expansion!", body, "good")] };
+}
+
 export function sellBusiness(p0: PlayerState): ActionResult {
   const p = clone(p0);
   if (!p.business) return { player: p0 };
@@ -98,8 +157,9 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: NonNullable<A
   if (!biz) return 0;
   const kind = BUSINESS_TYPES.find((b) => b.id === biz.kind)!;
   const skillBonus = (p.smarts - 50) / 1000;
-  const raw = biz.value * (kind.mean + skillBonus + rng.float(-kind.vol, kind.vol)) * (1 + biz.boost);
-  const profit = Math.round(raw);
+  const locationRisk = 1 + (biz.locations - 1) * 0.15;
+  const raw = biz.value * (kind.mean + skillBonus + rng.float(-kind.vol * locationRisk, kind.vol * locationRisk)) * (1 + biz.boost) * (1 + 0.04 * biz.staff);
+  const profit = Math.round(raw - biz.staff * STAFF_SALARY);
   biz.boost = 0;
   biz.lastProfit = profit;
   biz.value = Math.max(0, Math.round(biz.value * (1 + clamp(profit / Math.max(1, biz.value), -0.5, 1) * 0.35)));

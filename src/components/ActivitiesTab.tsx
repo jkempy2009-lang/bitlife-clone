@@ -14,9 +14,7 @@ import {
   buyLotteryTicket,
   doLeisure,
   doWellness,
-  placeWager,
   plasticSurgery,
-  settleBlackjack,
   visitDoctor,
   visitWitchDoctor,
   type LeisureId,
@@ -27,9 +25,10 @@ import { HOBBIES, MAX_HOBBY_SESSIONS, hobbyIncome, practiceHobby } from "@/engin
 import { REHAB_COST, VICE_INFO, hasAnyVice, quitVice, rehab } from "@/engine/vices";
 import type { Vices } from "@/types/game.types";
 import { CRIMES } from "@/data/crimes";
-import { handValue, isBlackjack, newDeck, settle, type Card as PlayingCard } from "@/engine/blackjack";
+import { blackjackClear, blackjackDeal, blackjackHit, blackjackStand, handValue, type Card as PlayingCard } from "@/engine/blackjack";
 import { money } from "@/lib/format";
 import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
+import ViolencePanel from "./ViolencePanel";
 
 type Panel = "medical" | "wellness" | "hobbies" | "casino" | "crime" | "surgery" | "leisure";
 
@@ -211,25 +210,45 @@ function Leisure() {
 
 function CrimeRings() {
   const { player: p, act } = useGame();
+  const [tab, setTab] = useState<"Theft" | "Fraud" | "Underworld" | "Violence">("Theft");
+  const list = CRIMES.filter((c) => c.category === tab);
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle hint="each repeat this year is riskier">Crime Rings</SectionTitle>
-      {CRIMES.map((c) => (
-        <div key={c.id} className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
-          <span className="text-2xl">{c.emoji}</span>
-          <div className="min-w-0 flex-1">
-            <div className="font-semibold">{c.name}</div>
-            <div className="text-xs text-slate-400">{c.blurb}</div>
-            <div className="mt-1 flex gap-1.5">
-              <Pill tone={c.risk === "Low" ? "green" : c.risk === "Medium" ? "amber" : "red"}>{c.risk} risk</Pill>
-              <Pill>{c.reward[0] === c.reward[1] ? money(c.reward[0]) : `${money(c.reward[0])}–${money(c.reward[1])}`}</Pill>
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        options={[
+          { id: "Theft", label: "🛍️ Theft" },
+          { id: "Fraud", label: "🧾 Fraud" },
+          { id: "Underworld", label: "📦 Underworld" },
+          { id: "Violence", label: "🗡️ Violence" },
+        ]}
+      />
+      {tab === "Violence" ? (
+        <ViolencePanel />
+      ) : (
+        list.map((c) => {
+          const reason = c.requires?.(p) ?? null;
+          return (
+            <div key={c.id} className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
+              <span className="text-2xl">{c.emoji}</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{c.name}</div>
+                <div className="text-xs text-slate-400">{c.blurb}</div>
+                <div className="mt-1 flex gap-1.5">
+                  <Pill tone={c.risk === "Low" ? "green" : c.risk === "Medium" ? "amber" : "red"}>{c.risk} risk</Pill>
+                  <Pill>{c.reward[0] === c.reward[1] ? money(c.reward[0]) : `${money(c.reward[0])}–${money(c.reward[1])}`}</Pill>
+                </div>
+                {reason && <div className="mt-1 text-xs font-medium text-rose-300">🔒 {reason}</div>}
+              </div>
+              <Button variant="danger" className="shrink-0 px-3 py-1.5" disabled={p.age < c.minAge || !!reason} onClick={() => act((pl, rng) => commitCrime(pl, c.id, rng))}>
+                {p.age < c.minAge ? `${c.minAge}+` : "Do it"}
+              </Button>
             </div>
-          </div>
-          <Button variant="danger" className="shrink-0 px-3 py-1.5" disabled={p.age < c.minAge} onClick={() => act((pl, rng) => commitCrime(pl, c.id, rng))}>
-            {p.age < c.minAge ? `${c.minAge}+` : "Do it"}
-          </Button>
-        </div>
-      ))}
+          );
+        })
+      )}
     </div>
   );
 }
@@ -272,54 +291,16 @@ function CardView({ c, hidden }: { c: PlayingCard; hidden?: boolean }) {
 }
 
 function GamblingDen() {
-  const { player: p, act, blackjack, setBlackjack } = useGame();
+  const { player: p, act } = useGame();
   const [wagerText, setWagerText] = useState("100");
   const wager = Math.floor(Number(wagerText) || 0);
   const tickets = p.annual.lottery ?? 0;
-
-  const finish = (playerHand: PlayingCard[], dealerHand: PlayingCard[], deck: PlayingCard[], stake: number) => {
-    const res = settle(playerHand, dealerHand, deck);
-    const payout = Math.round(stake * res.multiplier);
-    const msg =
-      res.outcome === "blackjack" ? `Blackjack! You win ${money(payout - stake)}.`
-      : res.outcome === "win" ? `You win ${money(payout - stake)}!`
-      : res.outcome === "push" ? "Push. Your wager is returned."
-      : `You lose ${money(stake)}.`;
-    setBlackjack({ phase: "done", deck: res.deck, player: playerHand, dealer: res.dealer, wager: stake, message: msg });
-    act((pl) => settleBlackjack(pl, payout, `Blackjack: ${msg}`));
-  };
-
-  const deal = () => {
-    if (wager <= 0 || wager > p.bankBalance || p.age < 18) return;
-    const deck = newDeck();
-    const ph = [deck.pop()!, deck.pop()!];
-    const dh = [deck.pop()!, deck.pop()!];
-    act((pl) => placeWager(pl, wager));
-    if (isBlackjack(ph) || isBlackjack(dh)) {
-      finish(ph, dh, deck, wager);
-    } else {
-      setBlackjack({ phase: "play", deck, player: ph, dealer: dh, wager, message: "" });
-    }
-  };
-
-  const hit = () => {
-    if (!blackjack || blackjack.phase !== "play") return;
-    const deck = [...blackjack.deck];
-    const ph = [...blackjack.player, deck.pop()!];
-    if (handValue(ph) >= 21) finish(ph, blackjack.dealer, deck, blackjack.wager);
-    else setBlackjack({ ...blackjack, deck, player: ph });
-  };
-
-  const stand = () => {
-    if (!blackjack || blackjack.phase !== "play") return;
-    finish(blackjack.player, blackjack.dealer, blackjack.deck, blackjack.wager);
-  };
-
+  const blackjack = p.blackjack;
   const inPlay = blackjack?.phase === "play";
 
   return (
     <div className="flex flex-col gap-3">
-      <SectionTitle>Blackjack</SectionTitle>
+      <SectionTitle hint={p.vices.gambling >= 30 ? "⚠️ you may have a problem" : undefined}>Blackjack</SectionTitle>
       <Card>
         {p.age < 18 ? (
           <p className="text-sm text-slate-400">You must be 18 to gamble.</p>
@@ -334,7 +315,7 @@ function GamblingDen() {
                 onChange={(e) => setWagerText(e.target.value.replace(/[^0-9]/g, ""))}
                 className="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-base outline-none focus:border-emerald-500"
               />
-              <Button variant="primary" onClick={deal} disabled={wager <= 0 || wager > p.bankBalance}>Deal</Button>
+              <Button variant="primary" onClick={() => act((pl, rng) => blackjackDeal(pl, wager, rng))} disabled={wager <= 0 || wager > p.bankBalance}>Deal</Button>
             </div>
           </>
         ) : (
@@ -352,13 +333,13 @@ function GamblingDen() {
             </div>
             {inPlay ? (
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="primary" onClick={hit}>Hit</Button>
-                <Button variant="secondary" onClick={stand}>Stand</Button>
+                <Button variant="primary" onClick={() => act((pl) => blackjackHit(pl))}>Hit</Button>
+                <Button variant="secondary" onClick={() => act((pl) => blackjackStand(pl))}>Stand</Button>
               </div>
             ) : (
               <>
                 <p className="mb-2 text-sm font-semibold text-amber-300">{blackjack.message}</p>
-                <Button variant="primary" className="w-full" onClick={() => setBlackjack(null)}>New Hand</Button>
+                <Button variant="primary" className="w-full" onClick={() => act((pl) => blackjackClear(pl))}>New Hand</Button>
               </>
             )}
           </div>

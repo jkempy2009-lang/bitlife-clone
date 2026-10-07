@@ -16,6 +16,8 @@ import { LIFE2_EVENTS } from "./events/life2";
 import { PATHS2_EVENTS } from "./events/paths2";
 import { EARLY2_EVENTS } from "./events/early2";
 import { LIFE3_EVENTS } from "./events/life3";
+import { MATURE_EVENTS } from "./events/mature";
+import { LIFE4_EVENTS } from "./events/life4";
 
 export type EventCategory =
   | "general"
@@ -77,6 +79,14 @@ export interface ChoiceEffects {
   cureAll?: boolean;
   /** Changes addiction levels (0-100). */
   viceDelta?: Partial<Vices>;
+  /** Kills someone (adult). Triggers the murder investigation machinery. */
+  kill?: boolean;
+  /** Starts a pregnancy with your partner or lover. */
+  pregnancy?: "partner" | "lover";
+  /** Your partner learns about the affair. */
+  exposeAffair?: boolean;
+  /** Adopt a pet (adds a Pet relative). */
+  addPet?: "dog" | "cat";
   /** Adds to hobby skill levels. */
   hobbyDelta?: Record<string, number>;
 }
@@ -143,6 +153,8 @@ export interface LifeEvent {
   requires?: EventRequirements;
   /** Only appears while serving a sentence. */
   prisonOnly?: boolean;
+  /** Adult-themed scenario: only offered when mature content is on and the player is 18+. */
+  mature?: boolean;
 }
 
 export const LIFE_EVENTS: LifeEvent[] = [
@@ -157,6 +169,8 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...PATHS2_EVENTS,
   ...EARLY2_EVENTS,
   ...LIFE3_EVENTS,
+  ...MATURE_EVENTS,
+  ...LIFE4_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

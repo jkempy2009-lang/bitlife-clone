@@ -24,10 +24,12 @@ import {
 } from "./state";
 import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
+import { startTrial } from "./crime";
 import { selectEvents } from "./events";
 import { albumRating, maybeCoup, promotionEvent } from "./career";
 import { checkAchievements } from "./achievements";
 import { processVices } from "./vices";
+import { escortIsIllegal, processAdultWork, processIntimacy } from "./intimacy";
 import { processPolitics } from "./politics";
 import { processMob } from "./underworld";
 import { hobbyIncome, processHobbies } from "./hobbies";
@@ -75,6 +77,23 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
     if (!r.alive) continue;
     r.age += 1;
     if (r.partnerStatus === "ex") continue;
+    if (r.relation === "Lover") continue; // handled in processIntimacy
+    if (r.relation === "Pet") {
+      r.relationshipBar = clamp(r.relationshipBar - rng.int(0, 2));
+      if (r.age >= 9 && rng.chance(clamp((r.age - 8) * 0.07, 0, 0.7))) {
+        r.alive = false;
+        r.deathAge = r.age;
+        r.deathYear = p.year;
+        changeStat(p, "happiness", -Math.round(5 + r.relationshipBar / 10));
+        const body = `Your ${r.species ?? "pet"}, ${r.name}, passed away at age ${r.age}. They were a very good ${r.species === "cat" ? "cat" : "friend"}.`;
+        addLog(p, body);
+        notices.push(info("Goodbye, Old Friend", body, "bad"));
+        if (!p.relatives.some((x) => x.relation === "Pet" && x.alive && x.species === r.species && x.id !== r.id)) {
+          p.flags = p.flags.filter((f) => f !== (r.species === "cat" ? "has_cat" : "has_dog"));
+        }
+      }
+      continue;
+    }
     r.health = clamp(r.health + rng.int(r.age > 60 ? -4 : -1, 1));
     const decay =
       r.relation === "Partner" ? rng.int(0, 4)
@@ -215,7 +234,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   }
   const allowance = isRoyal(p) ? Math.round(ROYAL_ALLOWANCE[p.royalRank] * (p.royalRespect < 20 ? 0.5 : 1)) : 0;
   // Royal allowances are state-funded and tax exempt; all other income is taxed progressively.
-  const offBooks = p.currentJob?.lineId === "mafia" && !p.isInPrison ? p.currentJob.salary : 0;
+  const offBooks = (p.currentJob?.lineId === "mafia" || escortIsIllegal(p)) && !p.isInPrison ? p.currentJob!.salary : 0;
   const tax = incomeTaxFor(p.residence.country, gross - offBooks);
   p.taxesPaidThisYear = tax;
   p.bankBalance += gross - tax + allowance;
@@ -378,6 +397,7 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
 
 function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   processAthlete(p, rng, notices);
+  processAdultWork(p, rng, notices);
   processPolitics(p, rng, notices);
   processMob(p, rng, notices);
   const job = p.currentJob;
@@ -434,7 +454,7 @@ function processEntertainment(p: PlayerState) {
   if (job?.lineId === "astronaut" && job.tier >= 1) changeStat(p, "fame", 1);
   const athleteActive = job?.lineId === "athlete" && job.tier >= 1;
   if (athleteActive) changeStat(p, "fame", job!.tier);
-  const active = actorActive || athleteActive || job?.lineId === "model" || job?.lineId === "astronaut" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
+  const active = actorActive || athleteActive || job?.lineId === "creator" || job?.lineId === "model" || job?.lineId === "astronaut" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
   if (!active) changeStat(p, "fame", p.fame > 0 ? -2 : 0);
 }
 
@@ -459,6 +479,11 @@ function processJustice(p: PlayerState, rng: Rng, notices: Notices) {
     p.prison.yearsServed += 1;
     p.stats.yearsInPrison += 1;
     changeStat(p, "happiness", -3);
+    if (p.prison.deathRow && p.prison.yearsServed >= p.prison.sentenceYears) {
+      killPlayer(p, "execution");
+      addLog(p, "You were executed by the state.");
+      return;
+    }
     if (p.prison.yearsServed >= p.prison.sentenceYears) {
       const charge = p.prison.charge;
       p.isInPrison = false;
@@ -470,6 +495,26 @@ function processJustice(p: PlayerState, rng: Rng, notices: Notices) {
       notices.push(info("Released!", body, "good"));
     }
     return;
+  }
+  if (p.flags.includes("under_investigation") && !p.pendingTrial && !p.isInPrison) {
+    const risk = clamp(0.08 + p.stats.kills * 0.04 - (p.smarts - 50) / 400, 0.03, 0.35);
+    const coldKey = p.flags.find((f) => f.startsWith("cold:"));
+    const years = coldKey ? Number(coldKey.slice(5)) : 0;
+    if (rng.chance(risk)) {
+      p.flags = p.flags.filter((f) => f !== "under_investigation" && !f.startsWith("cold:"));
+      p.karma = 0;
+      startTrial(p, { name: "Murder", description: "A detective finally connected the dots. DNA, cameras, and a patient investigator did the rest.", years: 32, severity: "heinous", capital: true });
+      notices.push(info("The Detective Was Patient", "Years later, the police arrived with a warrant. You're being charged with murder.", "bad"));
+    } else if (years + 1 >= 8) {
+      p.flags = p.flags.filter((f) => f !== "under_investigation" && !f.startsWith("cold:"));
+      const body = "The investigation into the death went cold. You're probably safe now.";
+      addLog(p, body);
+      notices.push(info("Cold Case", body, "neutral"));
+    } else {
+      p.flags = p.flags.filter((f) => !f.startsWith("cold:"));
+      p.flags.push(`cold:${years + 1}`);
+      changeStat(p, "happiness", -2);
+    }
   }
   if (p.probation) {
     p.probation.yearsLeft -= 1;
@@ -535,6 +580,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   advanceClimate(p, rng, notices);
 
   processSocial(p, rng, notices); // 2. social graph
+  processIntimacy(p, prevAnnual, rng, notices);
   processAssets(p, rng); // 3. asset economics
   processFinance(p, rng, notices); // 4. financial balance sheet
   processHobbies(p, prevAnnual, notices);

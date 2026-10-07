@@ -10,6 +10,8 @@ export interface Disease {
   id: string;
   name: string;
   severity: Severity;
+  /** Cannot be cured, only managed. */
+  incurable?: boolean;
   /** Magnitudes (positive numbers) subtracted from the player every year. */
   happinessImpact: number;
   healthImpact: number;
@@ -17,8 +19,8 @@ export interface Disease {
   yearsLeft?: number;
 }
 
-export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend" | "Grandparent" | "Grandchild";
-export type PartnerStatus = "dating" | "married" | "ex";
+export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend" | "Grandparent" | "Grandchild" | "Pet" | "Lover";
+export type PartnerStatus = "dating" | "married" | "ex" | "affair" | "fling";
 
 export interface Relative {
   id: string;
@@ -34,6 +36,15 @@ export interface Relative {
   smarts: number;
   looks: number;
   partnerStatus?: PartnerStatus;
+  /** 0-100: how adventurous they are. Drives threesome / open-relationship consent. */
+  openness?: number;
+  /** 0-100: how badly they react to betrayal. */
+  jealousy?: number;
+  traits?: string[];
+  /** Pets only: "dog", "cat", etc. */
+  species?: string;
+  /** Times you've been intimate this life (lovers and partners). */
+  encounters?: number;
   deathAge?: number;
   deathYear?: number;
 }
@@ -110,6 +121,10 @@ export interface Business {
   kind: string;
   name: string;
   value: number;
+  /** Employees: each adds profit but costs a salary. */
+  staff: number;
+  /** Extra locations (each scales value and risk). */
+  locations: number;
   lastProfit: number;
   /** Bonus to next year's profit from hands-on work (consumed on Age Up). */
   boost: number;
@@ -155,6 +170,23 @@ export interface Vices {
 export interface PoliticsState {
   popularity: number;
   yearsInOffice: number;
+  party: string | null;
+}
+
+export interface Pregnancy {
+  /** "self" or the relative id of whoever is carrying the baby. */
+  carrier: string;
+  /** Name of the other parent, for the log. */
+  other: string;
+}
+
+export interface BlackjackHand {
+  phase: "play" | "done";
+  deck: { rank: string; suit: string }[];
+  player: { rank: string; suit: string }[];
+  dealer: { rank: string; suit: string }[];
+  wager: number;
+  message: string;
 }
 
 export interface Probation {
@@ -189,12 +221,16 @@ export interface CrimeCharge {
   description: string;
   years: number;
   severity: "minor" | "serious" | "heinous";
+  /** Punishable by death in some countries. */
+  capital?: boolean;
 }
 
 export interface PrisonState {
   charge: string;
   sentenceYears: number;
   yearsServed: number;
+  /** Sentenced to death: the sentence is a countdown to execution unless an appeal succeeds. */
+  deathRow?: boolean;
 }
 
 export interface LifetimeStats {
@@ -205,6 +241,9 @@ export interface LifetimeStats {
   childrenBorn: number;
   peakNetWorth: number;
   yearsInPrison: number;
+  kills: number;
+  affairs: number;
+  hookups: number;
 }
 
 export interface HistoryPoint {
@@ -268,6 +307,10 @@ export interface PlayerState {
   athlete: AthleteState;
   hobbies: Record<string, number>;
   politics: PoliticsState;
+  pregnancy: Pregnancy | null;
+  blackjack: BlackjackHand | null;
+  /** Mature (18+) content: sexual choices, adult careers, and graphic-ish crime options. */
+  matureContent: boolean;
 
   // World & lifestyle
   economy: EconomyState;

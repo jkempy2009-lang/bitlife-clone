@@ -40,6 +40,7 @@ function recordCareerPeak(p: PlayerState) {
 }
 
 export function jobEligibility(p: PlayerState, line: CareerLine): { ok: boolean; reason?: string } {
+  if (line.pack === "adult" && (!p.matureContent || p.age < 18)) return { ok: false, reason: "Mature content is off" };
   if (isRoyal(p)) return { ok: false, reason: "Royals can't hold ordinary jobs" };
   if (p.isInPrison) return { ok: false, reason: "You're in prison" };
   if (p.isFugitive) return { ok: false, reason: "Fugitives can't get hired" };
@@ -89,7 +90,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
     return { player: p0, notices: [{ kind: "info", title: "Already Applied", body: "You've already applied to this field this year.", tone: "neutral" }] };
   }
   p.annual[key] = 1;
-  const guaranteed = line.pack === "actor";
+  const guaranteed = line.pack === "actor" || line.id === "creator";
   const chance = clamp(
     0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 - (hasFlag(p, "ex_con") ? 0.25 : 0) + hiringModifier(p.economy.climate),
     0.15,

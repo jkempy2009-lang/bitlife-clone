@@ -4,6 +4,9 @@ import { clamp, money } from "@/lib/format";
 import { CRIME_BY_ID, LAWYERS } from "@/data/crimes";
 import { addLog, changeStat, clone, hasFlag, setFlag } from "./state";
 
+/** Countries that still apply the death penalty for the worst crimes. */
+export const DEATH_PENALTY = new Set(["United States", "Japan", "India", "Nigeria"]);
+
 export function startTrial(p: PlayerState, charge: CrimeCharge) {
   if (p.pendingTrial || p.isInPrison) return;
   if (p.probation) {
@@ -23,6 +26,8 @@ export function commitCrime(p0: PlayerState, crimeId: string, rng: Rng): ActionR
   const p = clone(p0);
   const crime = CRIME_BY_ID[crimeId];
   if (!crime || p.age < crime.minAge) return { player: p0 };
+  const blocked = crime.requires?.(p);
+  if (blocked) return { player: p0, notices: [{ kind: "info", title: "Can't Do That", body: blocked, tone: "neutral" }] };
   const repeat = p.annual[`crime:${crime.id}`] ?? 0;
   p.annual[`crime:${crime.id}`] = repeat + 1;
   // Each repeat in the same year makes the cops warier.
@@ -71,12 +76,17 @@ export function resolveTrial(p0: PlayerState, lawyerId: string, rng: Rng): Actio
     return { player: p, notices: [{ kind: "info", title: "Probation", body, tone: "bad" }] };
   }
   p.isInPrison = true;
-  p.prison = { charge: charge.name, sentenceYears: years, yearsServed: 0 };
+  const capital = !!charge.capital && !plea && DEATH_PENALTY.has(p.residence.country) && rng.chance(0.3);
+  p.prison = capital
+    ? { charge: charge.name, sentenceYears: rng.int(3, 7), yearsServed: 0, deathRow: true }
+    : { charge: charge.name, sentenceYears: years, yearsServed: 0 };
   p.currentJob = null;
   p.annualSalary = 0;
   changeStat(p, "happiness", -15);
   changeStat(p, "fame", -5);
-  const body = `GUILTY. The judge sentenced you to ${years} year${years > 1 ? "s" : ""} in prison for ${charge.name}. You lost your job.`;
+  const body = capital
+    ? `GUILTY. The judge sentenced you to DEATH for ${charge.name}. You have about ${p.prison.sentenceYears} years of appeals left.`
+    : `GUILTY. The judge sentenced you to ${years} year${years > 1 ? "s" : ""} in prison for ${charge.name}. You lost your job.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Found Guilty", body, tone: "bad" }] };
 }
@@ -165,9 +175,26 @@ export function startRiot(p0: PlayerState, rng: Rng): ActionResult {
   return { player: p, notices: [{ kind: "info", title: "RIOT!", body, tone }] };
 }
 
+export function appealSentence(p0: PlayerState, rng: Rng): ActionResult {
+  const p = clone(p0);
+  if (!p.prison?.deathRow) return { player: p0 };
+  if ((p.annual.appeal ?? 0) >= 1) return { player: p0, notices: [{ kind: "info", title: "Pending", body: "Your lawyers have already filed this year.", tone: "neutral" }] };
+  p.annual.appeal = 1;
+  if (rng.chance(clamp(0.15 + p.smarts / 500, 0.1, 0.4))) {
+    p.prison.deathRow = false;
+    p.prison.sentenceYears = p.prison.yearsServed + 30;
+    const body = "Your appeal succeeded. The death sentence was commuted to 30 more years in prison.";
+    addLog(p, body);
+    return { player: p, notices: [{ kind: "info", title: "Commuted", body, tone: "good" }] };
+  }
+  const body = "The court rejected your appeal. The execution date draws closer.";
+  addLog(p, body);
+  return { player: p, notices: [{ kind: "info", title: "Appeal Denied", body, tone: "bad" }] };
+}
+
 export function requestParole(p0: PlayerState, rng: Rng): ActionResult {
   const p = clone(p0);
-  if (!p.prison) return { player: p0 };
+  if (!p.prison || p.prison.deathRow) return { player: p0 };
   if ((p.annual.parole ?? 0) >= 1) {
     return { player: p0, notices: [{ kind: "info", title: "Already heard", body: "The board only hears one case a year.", tone: "neutral" }] };
   }

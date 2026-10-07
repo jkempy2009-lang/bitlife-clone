@@ -15,6 +15,43 @@ export const CAMPAIGN_COST = [5_000, 25_000, 100_000, 400_000, 1_500_000];
 export const MIN_AGE = [25, 28, 35, 40, 45];
 export const TERM_YEARS = 4;
 
+export const PARTIES = [
+  { id: "progressive", name: "Progressive Alliance", emoji: "🌹", blurb: "Strong in steady times. +4% odds when the economy is normal." },
+  { id: "conservative", name: "Conservative Union", emoji: "🏛️", blurb: "Trusted when the economy is stable or booming. +4% odds." },
+  { id: "centrist", name: "Centrist Pact", emoji: "⚖️", blurb: "Moderate and dependable. +3% odds in any climate." },
+  { id: "populist", name: "People's Front", emoji: "📢", blurb: "Thrives in recessions (+8%), struggles in booms (−3%)." },
+  { id: "green", name: "Green Party", emoji: "🌿", blurb: "Rewards good character: +5% odds if your Karma is 60+." },
+] as const;
+
+export function partyBonus(p: PlayerState): number {
+  const c = p.economy.climate;
+  switch (p.politics.party) {
+    case "progressive": return c === "normal" ? 0.04 : c === "boom" ? 0.02 : 0;
+    case "conservative": return c === "recession" ? 0 : 0.04;
+    case "centrist": return 0.03;
+    case "populist": return c === "recession" ? 0.08 : c === "boom" ? -0.03 : 0.01;
+    case "green": return p.karma >= 60 ? 0.05 : 0;
+    default: return 0;
+  }
+}
+
+export function joinParty(p0: PlayerState, id: string): ActionResult {
+  const p = clone(p0);
+  const party = PARTIES.find((x) => x.id === id);
+  if (!party || p.politics.party === id) return { player: p0 };
+  const switching = p.politics.party !== null;
+  p.politics.party = id;
+  if (switching) {
+    p.politics.popularity = clamp(p.politics.popularity - 15);
+    changeStat(p, "karma", -3);
+  } else {
+    p.politics.popularity = clamp(p.politics.popularity + 5);
+  }
+  const body = switching ? `You defected to the ${party.name}. Your old allies called you a turncoat.` : `You joined the ${party.name}.`;
+  addLog(p, body);
+  return { player: p, notices: [info("Party Politics", body, switching ? "bad" : "good")] };
+}
+
 export function currentTier(p: PlayerState): number {
   return p.currentJob?.lineId === "politics" ? p.currentJob.tier : -1;
 }
@@ -25,7 +62,7 @@ export function nextTier(p: PlayerState): number {
 
 export function electionChance(p: PlayerState, tier: number): number {
   return clamp(
-    0.2 + p.politics.popularity / 130 + p.skills.charisma / 300 + p.fame / 400 + (p.karma - 50) / 300 - (hasFlag(p, "ex_con") ? 0.3 : 0) - tier * 0.06,
+    0.2 + p.politics.popularity / 130 + p.skills.charisma / 300 + p.fame / 400 + (p.karma - 50) / 300 + partyBonus(p) - (hasFlag(p, "ex_con") ? 0.3 : 0) - tier * 0.06,
     0.03,
     0.85,
   );
@@ -106,7 +143,7 @@ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
   if (job.tier >= 3) changeStat(p, "fame", 2);
   if (p.politics.yearsInOffice >= TERM_YEARS) {
     p.politics.yearsInOffice = 0;
-    const chance = clamp(p.politics.popularity / 100 + 0.15 + (p.karma - 50) / 300, 0.1, 0.92);
+    const chance = clamp(p.politics.popularity / 100 + 0.15 + (p.karma - 50) / 300 + partyBonus(p), 0.1, 0.92);
     if (rng.chance(chance)) {
       p.politics.popularity = clamp(p.politics.popularity + 6);
       const body = `Voters re-elected you as ${job.title}. Another term begins.`;

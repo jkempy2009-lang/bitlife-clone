@@ -18,7 +18,7 @@ import TombstoneOverlay from "./TombstoneOverlay";
 import { Button } from "./ui";
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { exportCurrent, importFromText, quitToMenu } = useGame();
+  const { exportCurrent, exportCode, importFromText, quitToMenu, player, act } = useGame();
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
   return (
@@ -26,9 +26,22 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
       <div className="pop-in w-full max-w-md rounded-3xl border border-slate-600 bg-slate-800 p-5">
         <h2 className="text-xl font-bold">Settings</h2>
         <p className="mt-1 text-xs text-slate-400">Your game autosaves in this browser. Export a backup to move it between devices.</p>
+        <label className="mt-3 flex items-start gap-2 rounded-xl border border-slate-600 bg-slate-900/60 p-3 text-sm">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-rose-500" checked={player.matureContent} onChange={() => act((p) => ({ player: { ...p, matureContent: !p.matureContent } }))} />
+          <span>
+            <span className="font-semibold">Mature content (18+)</span>
+            <span className="block text-xs text-slate-400">Adult relationships, adult careers, and violent crimes. Always requires an adult character and consenting adults. Suggestive, never explicit.</span>
+          </span>
+        </label>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={async () => { try { await navigator.clipboard.writeText(exportCurrent()); setMsg("Save copied to clipboard."); } catch { setText(exportCurrent()); setMsg("Clipboard unavailable. Copy the text below."); } }}>📋 Export save</Button>
           <Button variant="secondary" onClick={() => { if (importFromText(text)) onClose(); else setMsg("That doesn't look like a valid save."); }} disabled={!text.trim()}>📥 Import save</Button>
+          <Button variant="secondary" onClick={async () => { try { await navigator.clipboard.writeText(exportCode()); setMsg("Share code copied. Paste it on another device to continue."); } catch { setText(exportCode()); setMsg("Clipboard unavailable. Copy the code below."); } }}>🔗 Copy share code</Button>
+          <Button variant="secondary" onClick={() => { const blob = new Blob([exportCurrent()], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "lifeline-save.json"; a.click(); URL.revokeObjectURL(url); }}>💾 Download file</Button>
+          <label className="cursor-pointer rounded-xl bg-slate-700 px-3 py-2 text-center text-sm font-semibold text-slate-100 hover:bg-slate-600">
+            📂 Load from file
+            <input type="file" accept="application/json,.json" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const t = await f.text(); if (importFromText(t)) onClose(); else setMsg("That file isn't a valid save."); }} />
+          </label>
         </div>
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a save here to import it…" className="mt-2 h-24 w-full rounded-xl border border-slate-600 bg-slate-900 p-2 text-xs outline-none focus:border-emerald-500" aria-label="Save data" />
         {msg && <p className="mt-1 text-xs text-amber-300">{msg}</p>}

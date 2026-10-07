@@ -24,6 +24,12 @@ Your game autosaves to `localStorage` (no backend). Use the gear icon to export/
 - **Live:** hobbies with milestones, addictions and rehab, relocate abroad, adopt, grandchildren, pets, faith.
 - **Break the law:** shoplifting to bank robbery, trial with lawyers or a plea bargain, probation and fines,
   prison (riot, escape, parole), life on the run.
+- **Adult life (mature-content setting, on by default, 18+):** intimacy with partners, protection choices,
+  pregnancy and STIs, open relationships, threesomes (their consent depends on personality), hookups at venues,
+  flings, secret affairs and the fallout, adult careers (dancer, companion, content creator). Suggestive, never
+  explicit, adults only.
+- **Darker paths:** murder (five methods, cover-ups, detectives, cold cases, death row where it exists),
+  assault, blackmail, arson, kidnapping, fraud, smuggling, tax evasion.
 - **Legacy:** tombstone, epitaph, life chart, continue as your child (estate tax), plus a Hall of Lives and 50+
   achievements that persist across characters.
 

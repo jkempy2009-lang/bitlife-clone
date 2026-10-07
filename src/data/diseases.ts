@@ -7,6 +7,7 @@ export interface DiseaseTemplate {
   happinessImpact: number;
   healthImpact: number;
   minAge: number;
+  incurable?: boolean;
   /** Baseline yearly chance of contracting (before age/health scaling). */
   baseChance: number;
   /** Fatal diseases: [min, max] years left. */
@@ -31,6 +32,9 @@ export const DISEASE_CATALOG: DiseaseTemplate[] = [
   { id: "early_cancer", name: "Early-Stage Cancer", severity: "chronic", happinessImpact: 6, healthImpact: 3, minAge: 25, baseChance: 0 },
   { id: "liver_disease", name: "Liver Disease", severity: "fatal", happinessImpact: 5, healthImpact: 6, minAge: 25, baseChance: 0, fatalYears: [3, 8] },
   { id: "ptsd", name: "PTSD", severity: "chronic", happinessImpact: 7, healthImpact: 1, minAge: 18, baseChance: 0 },
+  { id: "chlamydia", name: "Chlamydia", severity: "mild", happinessImpact: 3, healthImpact: 3, minAge: 14, baseChance: 0 },
+  { id: "herpes", name: "Herpes", severity: "chronic", incurable: true, happinessImpact: 3, healthImpact: 0, minAge: 14, baseChance: 0 },
+  { id: "hiv", name: "HIV", severity: "chronic", incurable: true, happinessImpact: 4, healthImpact: 3, minAge: 14, baseChance: 0 },
   { id: "cancer", name: "Cancer", severity: "fatal", happinessImpact: 8, healthImpact: 10, minAge: 25, baseChance: 0.0016, fatalYears: [2, 6] },
   { id: "kidney_failure", name: "Kidney Failure", severity: "fatal", happinessImpact: 5, healthImpact: 8, minAge: 35, baseChance: 0.0015, fatalYears: [2, 5] },
   { id: "stroke", name: "Stroke Complications", severity: "fatal", happinessImpact: 6, healthImpact: 9, minAge: 55, baseChance: 0.004, fatalYears: [1, 4] },
@@ -49,6 +53,7 @@ export function instantiateDisease(
     id: t.id,
     name: t.name,
     severity: t.severity,
+    ...(t.incurable ? { incurable: true } : {}),
     happinessImpact: t.happinessImpact,
     healthImpact: t.healthImpact,
     ...(t.fatalYears ? { yearsLeft: rollYears(t.fatalYears[0], t.fatalYears[1]) } : {}),

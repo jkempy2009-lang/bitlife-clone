@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
-import { ESCAPE_PATHS, attemptEscape, requestParole, startRiot, studyInPrison, workOutYard } from "@/engine/crime";
+import { ESCAPE_PATHS, appealSentence, attemptEscape, requestParole, startRiot, studyInPrison, workOutYard } from "@/engine/crime";
 import { Button, Card, SectionTitle, StatBar } from "./ui";
 
 /** Penitentiary Dashboard. */
@@ -20,6 +20,12 @@ export default function PrisonView() {
         <div className="mb-1 text-xs uppercase tracking-widest text-rose-300">State Penitentiary</div>
         <div className="text-2xl font-bold">Inmate #{p.id.slice(0, 5).toUpperCase()}</div>
         <div className="text-sm text-slate-400">{p.firstName} {p.lastName} · Convicted of {prison.charge}</div>
+        {prison.deathRow && (
+          <div className="mt-3 rounded-xl border border-rose-500/60 bg-rose-950/40 p-3 text-sm text-rose-200">
+            ☠️ <strong>Death row.</strong> Execution in about {remaining} year{remaining === 1 ? "" : "s"} unless an appeal succeeds.
+            <Button variant="danger" className="mt-2 w-full" disabled={(p.annual.appeal ?? 0) >= 1} onClick={() => act((pl, rng) => appealSentence(pl, rng))}>⚖️ File an Appeal</Button>
+          </div>
+        )}
         <div className="mt-4">
           <div className="mb-1 flex justify-between text-sm">
             <span className="font-semibold text-slate-200">Sentence</span>

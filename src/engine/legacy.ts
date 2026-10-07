@@ -43,6 +43,8 @@ export function summarize(p: PlayerState): DeathSummary {
 export function epitaph(p: PlayerState): string {
   const nw = netWorth(p);
   if (p.age < 18) return "Gone far too soon, but never forgotten.";
+  if (p.stats.kills >= 3) return "A name whispered in fear long after the lights went out.";
+  if (p.stats.kills >= 1 && p.karma < 30) return "They took their darkest secret to the grave.";
   if (p.karma < 20) return "A notorious rogue who terrified the public.";
   if (p.royalRank === "King" || p.royalRank === "Queen") return "A sovereign whose name echoes through the halls of history.";
   if (nw > 10_000_000) return "A brilliant tycoon who amassed massive family fortunes.";
@@ -131,7 +133,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     influencer: { active: false, followers: 0, lastPostYear: 0 },
     athlete: { sport: null },
     hobbies: {},
-    politics: { popularity: 30, yearsInOffice: 0 },
+    politics: { popularity: 30, yearsInOffice: 0, party: null },
     economy: { ...old.economy },
     residence: { ...old.residence },
     investments: Object.fromEntries(
@@ -139,6 +141,9 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     ),
     vices: { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
     probation: null,
+    pregnancy: null,
+    blackjack: null,
+    matureContent: old.matureContent,
     isInPrison: false,
     isFugitive: false,
     prison: null,

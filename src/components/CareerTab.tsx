@@ -34,9 +34,9 @@ import {
 import { isRoyal } from "@/engine/state";
 import { money } from "@/lib/format";
 import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
-import { AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, SpySection, UnderworldSection } from "./CareerPaths";
+import { AdultWorkSection, AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, SpySection, UnderworldSection } from "./CareerPaths";
 
-type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "spy" | "stardom" | "music";
+type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "spy" | "adult" | "stardom" | "music";
 
 export default function CareerTab() {
   const { player: p } = useGame();
@@ -49,7 +49,7 @@ export default function CareerTab() {
     { id: "school", label: "🎓 Academics" },
     ...(royal ? [] : [{ id: "business" as const, label: "🏢 Business" }, { id: "sports" as const, label: "🏅 Athlete" }]),
     { id: "online", label: "📱 Influencer" },
-    ...(royal ? [] : [{ id: "politics" as const, label: "🏛️ Politics" }, { id: "underworld" as const, label: "🕴️ Underworld" }, { id: "spy" as const, label: "🕵️ Agent" }]),
+    ...(royal ? [] : [{ id: "politics" as const, label: "🏛️ Politics" }, { id: "underworld" as const, label: "🕴️ Underworld" }, { id: "spy" as const, label: "🕵️ Agent" }, ...(p.matureContent && p.age >= 18 ? [{ id: "adult" as const, label: "🔞 Adult Work" }] : [])]),
     ...(royal ? [] : [{ id: "stardom" as const, label: "🎬 Movie Star" }]),
     { id: "music", label: "🎸 Rock Star" },
   ];
@@ -64,6 +64,7 @@ export default function CareerTab() {
       {section === "politics" && <PoliticsSection />}
       {section === "underworld" && <UnderworldSection />}
       {section === "spy" && <SpySection />}
+      {section === "adult" && <AdultWorkSection />}
       {section === "stardom" && <MovieStar />}
       {section === "music" && <RockStar />}
     </div>

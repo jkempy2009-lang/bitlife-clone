@@ -102,7 +102,7 @@ export const EARLY_EVENTS: LifeEvent[] = [
     opt("Walk away", "You walked away. You were called chicken for a week. You're still alive.", { happinessDelta: -2, smartsDelta: 1 }),
   ]),
   ev("stray_dog", "general", 6, 14, "Stray Dog", "A scruffy stray dog followed you home from school.", [
-    opt("Convince your parents to keep it", "You pleaded your case with the skill of a lawyer. You have a dog now.", { happinessDelta: 10, karmaDelta: 4, setFlags: ["has_dog"], relationshipDelta: { target: "Parent", delta: -2 } }),
+    opt("Convince your parents to keep it", "You pleaded your case with the skill of a lawyer. You have a dog now.", { happinessDelta: 10, karmaDelta: 4, addPet: "dog", relationshipDelta: { target: "Parent", delta: -2 } }),
     opt("Feed it and let it go", "You gave it a sandwich and waved goodbye.", { karmaDelta: 2, happinessDelta: 1 }),
     opt("Call animal control", "Animal control took the dog to a shelter. Hopefully it found a home.", { karmaDelta: 1 }),
   ], { once: true }),

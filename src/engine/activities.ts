@@ -32,6 +32,12 @@ export function visitDoctor(p0: PlayerState, diseaseId: string | null, rng: Rng)
     addLog(p, body);
     return { player: p, notices: [info("Checkup", body, "good")] };
   }
+  if (target.incurable) {
+    changeStat(p, "health", 2);
+    const body = `There is no cure for ${target.name}, but the doctor put you on a treatment plan that keeps it under control.`;
+    addLog(p, body);
+    return { player: p, notices: [info("Managed", body, "good")] };
+  }
   const chance = CURE_CHANCE[target.severity];
   if (rng.chance(chance)) {
     p.diseases = p.diseases.filter((d) => d.id !== target.id);
@@ -211,23 +217,6 @@ export function buyLotteryTicket(p0: PlayerState, rng: Rng): ActionResult {
   }
   addLog(p, "You bought a lottery ticket. It didn't win.");
   return { player: p, notices: [info("No Luck", "Not a winner. Better luck next time.", "neutral")] };
-}
-
-/** Called when a blackjack hand ends. `delta` is net change vs. stake already deducted: +2*wager, +wager (push), 0. */
-export function settleBlackjack(p0: PlayerState, payout: number, summary: string): ActionResult {
-  const p = clone(p0);
-  p.bankBalance += payout;
-  addLog(p, summary);
-  return { player: p };
-}
-
-export function placeWager(p0: PlayerState, wager: number): ActionResult {
-  const p = clone(p0);
-  if (p.age < 18) return { player: p0, notices: [info("Too Young", "You must be 18 to gamble.")] };
-  if (wager <= 0 || wager > p.bankBalance) return { player: p0 };
-  p.bankBalance -= wager;
-  p.vices.gambling = clamp(p.vices.gambling + 1);
-  return { player: p };
 }
 
 // ---------------------------------------------------------------------------

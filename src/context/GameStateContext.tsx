@@ -7,7 +7,6 @@ import {
   useEffect,
   useMemo,
   useReducer,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -16,17 +15,8 @@ import type { Rng } from "@/lib/rng";
 import { freshSeed } from "@/lib/rng";
 import { initialState, reducer } from "@/engine/reducer";
 import { recordAchievements, recordLife } from "@/engine/hall";
-import { clearSave, exportSave, hasSaveSnapshot, loadGame, parseSave, saveGame, subscribeSave } from "@/engine/save";
+import { clearSave, exportSave, exportShareCode, hasSaveSnapshot, loadGame, parseSave, saveGame, subscribeSave } from "@/engine/save";
 import type { NewLifeOptions } from "@/engine/state";
-
-export interface BlackjackHand {
-  phase: "play" | "done";
-  deck: { rank: string; suit: string }[];
-  player: { rank: string; suit: string }[];
-  dealer: { rank: string; suit: string }[];
-  wager: number;
-  message: string;
-}
 
 interface GameContextValue {
   state: GameState;
@@ -34,8 +24,6 @@ interface GameContextValue {
   player: PlayerState;
   ready: boolean;
   hasSave: boolean;
-  blackjack: BlackjackHand | null;
-  setBlackjack: (h: BlackjackHand | null) => void;
   act: (run: (p: PlayerState, rng: Rng) => ActionResult) => void;
   ageUp: () => void;
   setTab: (tab: TabId) => void;
@@ -48,6 +36,7 @@ interface GameContextValue {
   quitToMenu: () => void;
   deleteSave: () => void;
   exportCurrent: () => string;
+  exportCode: () => string;
   importFromText: (text: string) => boolean;
 }
 
@@ -55,7 +44,6 @@ const Ctx = createContext<GameContextValue | null>(null);
 
 export function GameStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const [blackjack, setBlackjack] = useState<BlackjackHand | null>(null);
   // Server snapshot is false, client snapshot is true: avoids hydration mismatches without setState-in-effect.
   const ready = useSyncExternalStore(
     () => () => {},
@@ -85,8 +73,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       player: state.player as PlayerState,
       ready,
       hasSave,
-      blackjack,
-      setBlackjack,
       act,
       ageUp: () => dispatch({ type: "AGE_UP" }),
       setTab: (tab) => dispatch({ type: "SET_TAB", tab }),
@@ -94,7 +80,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       dismissNotice: (id) => dispatch({ type: "DISMISS_NOTICE", id }),
       clearBanner: () => dispatch({ type: "CLEAR_BANNER" }),
       newGame: (opts) => {
-        setBlackjack(null);
         dispatch({ type: "NEW_GAME", opts: { ...opts, startYear: new Date().getFullYear() }, seed: freshSeed() });
       },
       continueSave: () => {
@@ -102,26 +87,24 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         if (data) dispatch({ type: "LOAD", player: data.player, rngState: data.rngState });
       },
       continueAsChild: (childId) => {
-        setBlackjack(null);
         dispatch({ type: "CONTINUE_AS_CHILD", childId });
       },
       quitToMenu: () => {
-        setBlackjack(null);
         dispatch({ type: "QUIT_TO_MENU" });
       },
       deleteSave: () => {
         clearSave();
       },
       exportCurrent: () => exportSave(state.player as PlayerState, state.rngState),
+      exportCode: () => exportShareCode(state.player as PlayerState, state.rngState),
       importFromText: (text) => {
         const data = parseSave(text);
         if (!data) return false;
-        setBlackjack(null);
         dispatch({ type: "LOAD", player: data.player, rngState: data.rngState });
         return true;
       },
     }),
-    [state, ready, hasSave, blackjack, act],
+    [state, ready, hasSave, act],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

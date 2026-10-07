@@ -22,6 +22,13 @@ import { charityDrive, giveSpeech, runForOffice } from "../politics";
 import { joinMob, leaveMob } from "../underworld";
 import { adoptChild } from "../social";
 import { runMission } from "../spy";
+import { askThreesome, endLover, hookUp, leaveForLover, makeLove, proposeOpenRelationship, romanticGetaway, seduce, spiceItUp, swingerClub } from "../intimacy";
+import { arson, assault, blackmail, commitMurder, kidnap, targetsFor } from "../violence";
+import { appealSentence } from "../crime";
+import { adoptPet } from "../social";
+import { blackjackClear, blackjackDeal, blackjackHit, blackjackStand } from "../blackjack";
+import { joinParty, PARTIES } from "../politics";
+import { expandBusiness, fireStaff, hireStaff, runMarketing } from "../paths";
 import { COUNTRIES } from "@/data/countries";
 import type { ActionResult, Notice, PlayerState } from "@/types/game.types";
 
@@ -121,6 +128,33 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl, r) => joinMob(pl, r),
       (pl, r) => leaveMob(pl, r),
       (pl, r) => adoptChild(pl, r),
+      (pl, r) => makeLove(pl, (pl.relatives.find((x) => x.relation === "Partner" || x.relation === "Lover") ?? { id: "x" }).id, r.chance(0.5), r),
+      (pl, r) => spiceItUp(pl, (pl.relatives.find((x) => x.relation === "Partner") ?? { id: "x" }).id, r),
+      (pl) => romanticGetaway(pl, (pl.relatives.find((x) => x.relation === "Partner") ?? { id: "x" }).id),
+      (pl, r) => proposeOpenRelationship(pl, r),
+      (pl, r) => askThreesome(pl, r.chance(0.5), r),
+      (pl, r) => swingerClub(pl, r.chance(0.5), r),
+      (pl, r) => hookUp(pl, r.pick(["bar", "app", "party", "gym"] as const), r.chance(0.5), r),
+      (pl, r) => seduce(pl, r.pick(["friend", "coworker", "ex"] as const), r.chance(0.5), r),
+      (pl) => endLover(pl, (pl.relatives.find((x) => x.relation === "Lover") ?? { id: "x" }).id),
+      (pl, r) => leaveForLover(pl, (pl.relatives.find((x) => x.relation === "Lover") ?? { id: "x" }).id, r),
+      (pl, r) => commitMurder(pl, r.pick(targetsFor(pl)).id, r.pick(["poison", "stab", "shoot", "accident", "hitman"]), r),
+      (pl, r) => assault(pl, r.pick(targetsFor(pl)).id, r),
+      (pl, r) => blackmail(pl, r.pick(targetsFor(pl)).id, r),
+      (pl, r) => arson(pl, r.pick(["own", "rival"] as const), r),
+      (pl, r) => kidnap(pl, r),
+      (pl, r) => appealSentence(pl, r),
+      (pl, r) => adoptPet(pl, r.pick(["dog", "cat"] as const), r),
+      (pl, r) => blackjackDeal(pl, 200, r),
+      (pl) => blackjackHit(pl),
+      (pl) => blackjackStand(pl),
+      (pl) => blackjackClear(pl),
+      (pl) => joinParty(pl, rng.pick(PARTIES).id),
+      (pl) => hireStaff(pl),
+      (pl) => fireStaff(pl),
+      (pl) => runMarketing(pl),
+      (pl) => expandBusiness(pl),
+      (pl, r) => applyForJob(pl, r.pick(["dancer", "escort", "creator"]), r),
       (pl, r) => runMission(pl, r.pick(["stealth", "social", "force"]), r),
       (pl, r) => applyForJob(pl, "spy", r),
       (pl, r) => enrollProgram(pl, "Masters", null, r),
@@ -130,7 +164,7 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl) => workOutYard(pl),
       (pl, r) => requestParole(pl, r),
     ];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       p = run(p, rng, rng.pick(actions)).p;
       if (p.pendingTrial) p = run(p, rng, (pl, r) => resolveTrial(pl, "public", r)).p;
       if (!p.alive) break;

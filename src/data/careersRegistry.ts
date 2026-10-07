@@ -24,7 +24,7 @@ export interface CareerLine {
   };
   ladder: JobTier[];
   /** Special packs are hidden from the general corporate board. */
-  pack?: "actor" | "athlete" | "politics" | "crime" | "spy";
+  pack?: "actor" | "athlete" | "politics" | "crime" | "spy" | "adult";
 }
 
 export const CAREER_LINES: CareerLine[] = [
@@ -500,6 +500,42 @@ export const CAREER_LINES: CareerLine[] = [
       { title: "Field Agent", salary: 95_000 },
       { title: "Senior Agent", salary: 160_000 },
       { title: "Station Chief", salary: 250_000 },
+    ],
+  },
+  // ---- Special Job Pack: Adult Work (18+, mature content only) ----
+  {
+    id: "dancer", name: "Exotic Dancing", emoji: "💃", category: "Adult", blurb: "Club stages and big tips. Needs looks 55+.",
+    companies: ["Velvet Room", "Club Aurora", "The Gilded Cage", "Midnight Lounge"], minAge: 18,
+    requirements: { minSmarts: 0, minLooks: 55 },
+    pack: "adult",
+    ladder: [
+      { title: "Club Dancer", salary: 38_000 },
+      { title: "Headliner", salary: 95_000 },
+      { title: "Club Manager", salary: 150_000 },
+      { title: "Club Owner", salary: 320_000 },
+    ],
+  },
+  {
+    id: "escort", name: "Companionship", emoji: "🥂", category: "Adult", blurb: "High pay, real risks, and illegal in many countries. Needs looks 65+.",
+    companies: ["Discreet Escorts", "Elite Companions", "Private Society", "Velvet Agency"], minAge: 18,
+    requirements: { minSmarts: 15, minLooks: 65 },
+    pack: "adult",
+    ladder: [
+      { title: "Companion", salary: 60_000 },
+      { title: "Elite Companion", salary: 180_000 },
+      { title: "Agency Madam / Manager", salary: 420_000 },
+    ],
+  },
+  {
+    id: "creator", name: "Adult Content Creator", emoji: "📲", category: "Adult", blurb: "Run your own subscription page. Needs looks 50+. Fame and privacy trade-offs.",
+    companies: ["FanVault", "PrivateFeed", "SubStar", "OnlyYou"], minAge: 18,
+    requirements: { minSmarts: 10, minLooks: 50 },
+    pack: "adult",
+    ladder: [
+      { title: "New Creator", salary: 12_000 },
+      { title: "Rising Creator", salary: 65_000 },
+      { title: "Top Creator", salary: 360_000 },
+      { title: "Platform Megastar", salary: 2_400_000 },
     ],
   },
   // ---- Special Job Pack: The Underworld ----
