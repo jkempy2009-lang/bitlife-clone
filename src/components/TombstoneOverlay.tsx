@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useGame } from "@/context/GameStateContext";
-import { epitaph, heirs, summarize } from "@/engine/legacy";
+import { epitaph, heirs, lifeStoryText, summarize } from "@/engine/legacy";
 import { money } from "@/lib/format";
 import { Button } from "./ui";
 import LifeChart from "./LifeChart";
@@ -15,6 +15,16 @@ export default function TombstoneOverlay() {
   const kids = heirs(p);
   const [choosing, setChoosing] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyStory = async () => {
+    try {
+      await navigator.clipboard.writeText(lifeStoryText(p));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setShowLog(true);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-gradient-to-b from-slate-950 via-slate-900 to-black">
@@ -78,6 +88,9 @@ export default function TombstoneOverlay() {
               </Button>
               <Button variant="ghost" className="w-full" onClick={() => setShowLog((s) => !s)}>
                 {showLog ? "Hide" : "Read"} your life story
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={copyStory}>
+                {copied ? "✅ Copied!" : "📋 Copy life story"}
               </Button>
               <button
                 type="button"

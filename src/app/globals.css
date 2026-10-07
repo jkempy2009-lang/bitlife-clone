@@ -25,3 +25,17 @@ body {
 
 .scroll-thin::-webkit-scrollbar { width: 6px; }
 .scroll-thin::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+/* Display preferences (set from Settings via data attributes on <html>) */
+html[data-text="large"] { font-size: 112.5%; }
+html[data-text="huge"] { font-size: 125%; }
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .banner-flash { animation: none; }
+}

@@ -39,6 +39,22 @@ export function summarize(p: PlayerState): DeathSummary {
   };
 }
 
+/** A shareable plain-text obituary + life story. */
+export function lifeStoryText(p: PlayerState): string {
+  const sm = summarize(p);
+  const lines = [
+    `${p.firstName} ${p.lastName} (${sm.lifespan}), aged ${p.age}`,
+    `"${epitaph(p)}"`,
+    `Cause of death: ${p.causeOfDeath ?? "unknown"}`,
+    `Peak career: ${sm.highestCareer} · Final net worth: $${Math.round(sm.netWorth).toLocaleString("en-US")} · Children: ${sm.children}`,
+    `Achievements: ${p.achievements.length}`,
+    "",
+  ];
+  for (const l of p.lifeLog) lines.push(l.startsWith("## ") ? `\n${l.slice(3)}` : `  ${l}`);
+  lines.push("", "Played on Lifeline");
+  return lines.join("\n");
+}
+
 /** Dynamic Epitaph Engine. */
 export function epitaph(p: PlayerState): string {
   const nw = netWorth(p);

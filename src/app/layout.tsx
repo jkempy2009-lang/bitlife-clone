@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ServiceWorker from "@/components/ServiceWorker";
 
 export const metadata: Metadata = {
   title: "Lifeline — Text Life Simulator",
@@ -16,7 +17,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-slate-900 text-slate-100">{children}</body>
+      <body className="min-h-full bg-slate-900 text-slate-100">{children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }

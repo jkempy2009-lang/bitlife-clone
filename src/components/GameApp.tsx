@@ -15,15 +15,17 @@ import PrisonView from "./PrisonView";
 import ModalManager from "./ModalManager";
 import TrialView from "./TrialView";
 import TombstoneOverlay from "./TombstoneOverlay";
-import { Button } from "./ui";
+import { Button, Segmented } from "./ui";
+import { applyPrefs, setPrefs, usePrefs } from "@/lib/prefs";
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
   const { exportCurrent, exportCode, importFromText, quitToMenu, player, act } = useGame();
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
+  const prefs = usePrefs();
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/85 p-3 sm:items-center">
-      <div className="pop-in w-full max-w-md rounded-3xl border border-slate-600 bg-slate-800 p-5">
+      <div className="pop-in max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-600 bg-slate-800 p-5">
         <h2 className="text-xl font-bold">Settings</h2>
         <p className="mt-1 text-xs text-slate-400">Your game autosaves in this browser. Export a backup to move it between devices.</p>
         <label className="mt-3 flex items-start gap-2 rounded-xl border border-slate-600 bg-slate-900/60 p-3 text-sm">
@@ -32,6 +34,14 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             <span className="font-semibold">Mature content (18+)</span>
             <span className="block text-xs text-slate-400">Adult relationships, adult careers, and violent crimes. Always requires an adult character and consenting adults. Suggestive, never explicit.</span>
           </span>
+        </label>
+        <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-600 bg-slate-900/60 p-3 text-sm">
+          <span className="font-semibold">Text size</span>
+          <span className="[&>div]:mb-0 [&>div]:mx-0"><Segmented value={prefs.text} onChange={(v) => setPrefs({ text: v })} options={[{ id: "normal", label: "Normal" }, { id: "large", label: "Large" }, { id: "huge", label: "Huge" }]} /></span>
+        </div>
+        <label className="mt-2 flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-900/60 p-3 text-sm">
+          <input type="checkbox" className="h-4 w-4 accent-emerald-500" checked={prefs.reduceMotion} onChange={() => setPrefs({ reduceMotion: !prefs.reduceMotion })} />
+          <span className="font-semibold">Reduce motion</span>
         </label>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={async () => { try { await navigator.clipboard.writeText(exportCurrent()); setMsg("Save copied to clipboard."); } catch { setText(exportCurrent()); setMsg("Clipboard unavailable. Copy the text below."); } }}>📋 Export save</Button>
@@ -180,6 +190,10 @@ function Shell() {
 
 function Root() {
   const { state, ready } = useGame();
+  const prefs = usePrefs();
+  useEffect(() => {
+    applyPrefs(prefs);
+  }, [prefs]);
   if (!ready) {
     return <div className="flex min-h-dvh items-center justify-center text-slate-500">Loading…</div>;
   }
