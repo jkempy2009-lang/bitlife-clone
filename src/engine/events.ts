@@ -223,6 +223,7 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng) {
     p.annualSalary = 0;
   }
   if (e.stripRoyalty) stripRoyalty(p);
+  e.apply?.(p, rng);
   if (e.arrest) startTrial(p, e.arrest);
   if (e.die) killPlayer(p, e.die);
 }

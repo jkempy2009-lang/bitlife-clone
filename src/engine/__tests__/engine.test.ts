@@ -140,8 +140,9 @@ describe("justice", () => {
     const { rng, p } = newPlayer(11);
     p.age = 30;
     p.currentJob = { id: "j", title: "x", company: "y", salary: 50_000, performance: 50, tier: 0, lineId: "retail" };
-    p.smarts = 0; // guarantees bank robbery failure
-    const arrested = commitCrime(p, "bank_robbery", rng).player;
+    p.smarts = 0; // makes bank robbery failure ~97% likely
+    let arrested = commitCrime(p, "bank_robbery", rng).player;
+    for (let s = 1; s < 10 && !arrested.pendingTrial; s++) arrested = commitCrime(p, "bank_robbery", makeRng(s)).player;
     expect(arrested.pendingTrial).not.toBeNull();
     const sentenced = resolveTrial(arrested, "self", makeRng(1)).player;
     if (sentenced.isInPrison) {

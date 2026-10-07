@@ -8,6 +8,7 @@ import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { addLog, changeStat, clone } from "./state";
 import { startTrial } from "./crime";
+import { addHeat, adjustCatch, policingOf } from "./justice";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
@@ -60,7 +61,7 @@ export const METHODS = [
 export function coverChance(p: PlayerState, methodId: string, kind: Target["kind"], rel?: Relative): number {
   const m = METHODS.find((x) => x.id === methodId);
   if (!m) return 0;
-  let chance = m.hide + (p.smarts - 50) / 200 - p.stats.kills * 0.04;
+  let chance = m.hide + (p.smarts - 50) / 200 - p.stats.kills * 0.04 - p.justice.heat / 300 - (policingOf(p) - 1) * 0.2;
   if (kind === "stranger") chance += 0.1;
   if (rel?.relation === "Partner") chance -= 0.18;
   else if (rel) chance -= 0.12;
@@ -96,6 +97,7 @@ export function commitMurder(p0: PlayerState, targetId: string, methodId: string
   }
 
   // The deed is done.
+  addHeat(p, 25);
   p.stats.kills += 1;
   if (!p.flags.includes("killer")) p.flags.push("killer");
   if (rel) {
@@ -150,6 +152,7 @@ export function assault(p0: PlayerState, targetId: string, rng: Rng): ActionResu
   if (!target) return { player: p0 };
   if ((p.annual.assault ?? 0) >= 2) return { player: p0, notices: [info("Cool Off", "You've been in enough fights this year.")] };
   p.annual.assault = (p.annual.assault ?? 0) + 1;
+  addHeat(p, 8);
   changeStat(p, "karma", -10);
   const notices: Notices = [];
   const win = rng.chance(clamp(0.4 + (p.health - 50) / 200 + p.skills.athletics / 300, 0.15, 0.85));
@@ -166,7 +169,7 @@ export function assault(p0: PlayerState, targetId: string, rng: Rng): ActionResu
     body = `${target.label} fought back and you took a beating (Health −${dmg}).`;
   }
   addLog(p, body);
-  if (rng.chance(0.4)) {
+  if (rng.chance(adjustCatch(p, 0.4))) {
     startTrial(p, { name: "Assault", description: "Witnesses called the police and gave your description.", years: 3, severity: "serious" });
     notices.push(info("Arrested", "Someone saw the whole thing.", "bad"));
   }
@@ -193,7 +196,7 @@ export function blackmail(p0: PlayerState, targetId: string, rng: Rng): ActionRe
   }
   if (target.rel) target.rel.relationshipBar = clamp(target.rel.relationshipBar - 60);
   const notices: Notices = [];
-  if (rng.chance(0.35)) {
+  if (rng.chance(adjustCatch(p, 0.35))) {
     startTrial(p, { name: "Extortion", description: `${target.label} went to the police with your messages.`, years: 4, severity: "serious" });
     notices.push(info("Reported", "They took your threats to the police.", "bad"));
   }
@@ -213,7 +216,7 @@ export function arson(p0: PlayerState, mode: "own" | "rival", rng: Rng): ActionR
     p.annual.arson = 1;
     changeStat(p, "karma", -15);
     p.properties = p.properties.filter((h) => h.id !== prop.id);
-    if (rng.chance(clamp(0.55 + p.smarts / 300, 0.2, 0.85))) {
+    if (rng.chance(1 - adjustCatch(p, 1 - clamp(0.55 + p.smarts / 300, 0.2, 0.85)))) {
       const payout = Math.round(prop.currentValue * 0.8) - prop.mortgageBalance;
       p.bankBalance += payout;
       const body = `Your ${prop.name} went up in flames and the insurer paid out ${money(Math.max(0, payout))} after settling the mortgage.`;
@@ -227,7 +230,7 @@ export function arson(p0: PlayerState, mode: "own" | "rival", rng: Rng): ActionR
   p.annual.arson = 1;
   changeStat(p, "karma", -20);
   if (rng.chance(0.03)) changeStat(p, "health", -20);
-  if (rng.chance(0.65)) {
+  if (rng.chance(1 - adjustCatch(p, 0.35))) {
     changeStat(p, "happiness", 3);
     const body = "You torched a rival's business in the dead of night. Nobody was inside, and nobody saw you.";
     addLog(p, body);
@@ -243,8 +246,9 @@ export function kidnap(p0: PlayerState, rng: Rng): ActionResult {
   const p = clone(p0);
   if ((p.annual.kidnap ?? 0) >= 1) return { player: p0, notices: [info("Lie Low", "Too much heat for another.")] };
   p.annual.kidnap = 1;
+  addHeat(p, 25);
   changeStat(p, "karma", -25);
-  if (rng.chance(clamp(0.2 + p.smarts / 300, 0.1, 0.55))) {
+  if (rng.chance(1 - adjustCatch(p, 1 - clamp(0.2 + p.smarts / 300, 0.1, 0.55)))) {
     const ransom = rng.int(100_000, 1_000_000);
     p.bankBalance += ransom;
     const body = `You abducted a wealthy executive and collected a ${money(ransom)} ransom. The hostage was released unharmed.`;

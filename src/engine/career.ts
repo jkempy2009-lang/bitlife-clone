@@ -12,6 +12,7 @@ import {
 } from "@/data/careersRegistry";
 import { addLog, changeStat, clone, hasAnyDegree, hasFlag, isRoyal, setFlag } from "./state";
 import { hiringModifier } from "./world";
+import { careerBlocker, hiringPenalty } from "./justice";
 import { PART_TIME_FACTOR, blockerFor, isStudying, partTimeFriendly } from "./occupation";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,8 @@ export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
   if (isRoyal(p)) return { ok: false, reason: "Royals can't hold ordinary jobs" };
   if (p.isInPrison) return { ok: false, reason: "You're in prison" };
   if (p.isFugitive) return { ok: false, reason: "Fugitives can't get hired" };
+  const closed = careerBlocker(p, line.id);
+  if (closed) return { ok: false, reason: closed };
   let switching = false;
   if (p.currentJob) {
     const cur = CAREER_BY_ID[p.currentJob.lineId];
@@ -123,7 +126,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   const guaranteed = line.pack === "actor" || line.id === "creator";
   const exp = p.careerYears[line.id] ?? 0;
   const chance = clamp(
-    0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - (hasFlag(p, "ex_con") ? 0.25 : 0) + hiringModifier(p.economy.climate),
+    0.55 + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - hiringPenalty(p) + hiringModifier(p.economy.climate),
     0.15,
     0.95,
   );

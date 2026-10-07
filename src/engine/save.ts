@@ -1,4 +1,5 @@
 import type { PlayerState } from "@/types/game.types";
+import { hydrateCrimeLife } from "./justiceState";
 
 const KEY = "lifeline-save-v1";
 const PREV_KEY = "lifeline-save-prev";
@@ -72,6 +73,7 @@ function hydrate(p: PlayerState): PlayerState {
     investments: p.investments ?? {},
     vices: p.vices ?? { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
     probation: p.probation ?? null,
+    ...hydrateCrimeLife(p),
     pregnancy: p.pregnancy ?? null,
     blackjack: p.blackjack ?? null,
     careerYears: p.careerYears ?? (p.currentJob ? { [p.currentJob.lineId]: Math.round(p.stats?.yearsWorked ?? 0) } : {}),
