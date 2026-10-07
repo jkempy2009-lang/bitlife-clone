@@ -76,6 +76,8 @@ function hydrate(p: PlayerState): PlayerState {
     blackjack: p.blackjack ?? null,
     careerYears: p.careerYears ?? (p.currentJob ? { [p.currentJob.lineId]: Math.round(p.stats?.yearsWorked ?? 0) } : {}),
     intimacy: p.intimacy ?? { ageAuto: true, ageMin: 18, ageMax: 60, genders: [], interests: ["sensual", "playful"] },
+    retirementSavings: p.retirementSavings ?? 0,
+    savingsLevel: p.savingsLevel ?? 1,
     matureContent: p.matureContent ?? true,
     effort: p.effort ?? "steady",
     habits: p.habits ?? { exercise: 1, diet: 1 },

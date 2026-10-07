@@ -27,6 +27,7 @@ import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
 import { processFriendLoans } from "./friends";
 import { processLaterLife } from "./later";
+import { contributionFor, drawdownFor, growRetirement } from "./retirement";
 import { startTrial } from "./crime";
 import { selectEvents } from "./events";
 import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
@@ -244,9 +245,16 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   const allowance = isRoyal(p) ? Math.round(ROYAL_ALLOWANCE[p.royalRank] * (p.royalRespect < 20 ? 0.5 : 1)) : 0;
   // Royal allowances are state-funded and tax exempt; all other income is taxed progressively.
   const offBooks = (p.currentJob?.lineId === "mafia" || escortIsIllegal(p)) && !p.isInPrison ? p.currentJob!.salary : 0;
-  const tax = incomeTaxFor(p.residence.country, gross - offBooks);
+  // Retirement account: grows, funds retirees, and takes pre-tax contributions from workers (with an employer match).
+  growRetirement(p, rng);
+  const draw = drawdownFor(p);
+  p.retirementSavings -= draw;
+  gross += draw;
+  const { employee, employer } = contributionFor(p);
+  const tax = incomeTaxFor(p.residence.country, Math.max(0, gross - offBooks - employee));
   p.taxesPaidThisYear = tax;
-  p.bankBalance += gross - tax + allowance;
+  p.bankBalance += gross - tax + allowance - employee;
+  p.retirementSavings += employee + employer;
   // A spouse's earnings join the household pot (taxed at a flat effective rate), and sharing a home costs extra.
   const spouse = marriedPartner(p);
   const spouseNet = spouse && !p.isInPrison ? Math.round(spouseIncome(spouse) * (1 - SPOUSE_TAX)) : 0;

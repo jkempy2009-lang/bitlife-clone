@@ -47,7 +47,7 @@ export function netWorth(p: PlayerState): number {
   const props = p.properties.reduce((s, x) => s + x.currentValue - x.mortgageBalance, 0);
   const cars = p.vehicles.reduce((s, x) => s + x.currentValue - x.loanBalance, 0);
   const portfolio = Object.values(p.investments).reduce((sum, h) => sum + h.value, 0);
-  return Math.round(p.bankBalance + props + cars + portfolio + (p.business?.value ?? 0) - p.outstandingLoans);
+  return Math.round(p.bankBalance + props + cars + portfolio + (p.business?.value ?? 0) + p.retirementSavings - p.outstandingLoans);
 }
 
 export const isRoyal = (p: PlayerState) => p.royalRank !== "none";
@@ -293,6 +293,8 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     annualSalary: 0,
     taxesPaidThisYear: 0,
     pension: 0,
+    retirementSavings: 0,
+    savingsLevel: 1,
     relatives,
     properties: [],
     vehicles: [],

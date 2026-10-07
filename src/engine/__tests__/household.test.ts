@@ -119,3 +119,37 @@ describe("friends and family support", () => {
     expect(repaid).toBeGreaterThan(10);
   });
 });
+
+describe("retirement account", () => {
+  it("contributions are deducted, matched by the employer, grow, and fund retirees", async () => {
+    const { contributionFor, drawdownFor, withdrawRetirement, setSavingsLevel } = await import("../retirement");
+    const { p } = married(12, 3);
+    p.relatives = p.relatives.filter((r) => r.relation !== "Partner");
+    p.currentJob = { id: "j", title: "Manager", company: "X", salary: 80_000, performance: 70, tier: 2, lineId: "retail" };
+    const c = contributionFor(p);
+    expect(c.employee).toBe(4_000);
+    expect(c.employer).toBe(2_000);
+    expect(contributionFor(setSavingsLevel(p, 0).player).employee).toBe(0);
+    const aged = ageUp(p, makeRng(4)).player;
+    expect(aged.retirementSavings).toBeGreaterThanOrEqual(5_500);
+    // retirees draw down
+    const old = { ...structuredClone(p), age: 70, currentJob: null, retirementSavings: 500_000 };
+    expect(drawdownFor(old)).toBeGreaterThan(20_000);
+    expect(ageUp(old, makeRng(5)).player.retirementSavings).toBeLessThan(500_000 * 1.4);
+    // early withdrawal penalty
+    const young = { ...structuredClone(p), age: 40, retirementSavings: 50_000 };
+    const w = withdrawRetirement(young, 10_000).player;
+    expect(w.bankBalance - young.bankBalance).toBe(7_000);
+    expect(w.retirementSavings).toBe(40_000);
+  });
+
+  it("savings pass to the estate at death", async () => {
+    const { killPlayer } = await import("../mortality");
+    const { p } = married(13, 3);
+    p.retirementSavings = 100_000;
+    const before = p.bankBalance;
+    killPlayer(p, "old age");
+    expect(p.bankBalance).toBe(before + 85_000);
+    expect(p.retirementSavings).toBe(0);
+  });
+});

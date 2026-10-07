@@ -5,6 +5,7 @@ import { useGame } from "@/context/GameStateContext";
 import { buyCar, buyHouse, carInventory, houseInventory, maxLoan, renovate, repayLoan, sellCar, sellHouse, takeLoan } from "@/engine/assets";
 import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/data/assetsCatalog";
 import { money } from "@/lib/format";
+import { SAVINGS_LEVELS, contributionFor, drawdownFor, withdrawRetirement, setSavingsLevel } from "@/engine/retirement";
 import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
 import { COUNTRIES } from "@/data/countries";
 import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, LIFESTYLES, RENT_TIERS, divest, invest, portfolioValue, livesWithParents, relocate, setLifestyle, setRentTier, toggleFamilyHome } from "@/engine/world";
@@ -123,6 +124,31 @@ function Invest() {
   const total = portfolioValue(p);
   return (
     <div className="flex flex-col gap-3">
+      <SectionTitle hint="grows tax-deferred, funds your old age">Retirement Account</SectionTitle>
+      <Card>
+        <div className="text-center">
+          <div className="text-xs uppercase tracking-wider text-slate-400">Balance</div>
+          <div className="text-3xl font-black tabular-nums text-sky-300">{money(p.retirementSavings)}</div>
+          {contributionFor(p).employee + contributionFor(p).employer > 0 && (
+            <div className="text-xs text-slate-400">This year: you add {money(contributionFor(p).employee)}{contributionFor(p).employer > 0 ? `, your employer adds ${money(contributionFor(p).employer)}` : ""}</div>
+          )}
+          {drawdownFor(p) > 0 && <div className="text-xs text-emerald-300">Drawing about {money(drawdownFor(p))} a year in retirement</div>}
+        </div>
+        <div className="mt-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Share of pay you save</div>
+        <div className="mt-1 grid grid-cols-4 gap-1.5">
+          {SAVINGS_LEVELS.map((l, i) => (
+            <button key={l.label} type="button" disabled={p.age < 18} onClick={() => act((pl) => setSavingsLevel(pl, i))} className={`rounded-xl px-1 py-2 text-sm font-semibold transition-colors ${p.savingsLevel === i ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-400">{SAVINGS_LEVELS[p.savingsLevel].blurb}</p>
+        {p.retirementSavings > 0 && (
+          <Button variant="ghost" className="mt-2 w-full" onClick={() => act((pl) => withdrawRetirement(pl, Math.min(pl.retirementSavings, 10_000)))}>
+            Withdraw $10,000 {p.age < 60 ? "(30% penalty before 60)" : "(18% tax)"}
+          </Button>
+        )}
+      </Card>
       <SectionTitle hint="15% tax on gains when you sell">Portfolio</SectionTitle>
       <Card>
         <div className="text-center">

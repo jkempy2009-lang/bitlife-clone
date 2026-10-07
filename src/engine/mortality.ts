@@ -31,6 +31,11 @@ export function killPlayer(p: PlayerState, cause: string) {
   p.alive = false;
   p.causeOfDeath = cause;
   p.deathYear = p.year;
+  if (p.retirementSavings > 0) {
+    // Retirement savings pass to the estate (less tax).
+    p.bankBalance += Math.round(p.retirementSavings * 0.85);
+    p.retirementSavings = 0;
+  }
   addLog(p, `You died at age ${p.age} from ${cause}.`);
 }
 

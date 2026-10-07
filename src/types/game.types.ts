@@ -329,6 +329,10 @@ export interface PlayerState {
   annualSalary: number;
   taxesPaidThisYear: number;
   pension: number;
+  /** Tax-advantaged retirement account balance. */
+  retirementSavings: number;
+  /** Share of pay saved: index into SAVINGS_LEVELS (0 none … 3 high). */
+  savingsLevel: number;
 
   // Social graph
   relatives: Relative[];
