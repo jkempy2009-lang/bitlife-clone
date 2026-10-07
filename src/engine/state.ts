@@ -8,6 +8,7 @@ import type {
 import { clamp } from "@/lib/format";
 import { makeRng, type Rng } from "@/lib/rng";
 import { COUNTRIES, MONARCHIES, getCountry } from "@/data/countries";
+import { classicFirstName, lastNameFor } from "@/data/names";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { occupationFor } from "@/data/occupations";
 import { newRoyalLife, royalStyleText } from "./royalty";
@@ -133,7 +134,7 @@ export function randomName(
   const c = getCountry(countryName);
   const pool =
     gender === "Male" ? c.maleNames : gender === "Female" ? c.femaleNames : [...c.maleNames, ...c.femaleNames];
-  return { first: rng.pick(pool), last: rng.pick(c.lastNames) };
+  return { first: rng.pick(pool), last: lastNameFor(countryName, rng) };
 }
 
 export function randomGender(rng: Rng): string {
@@ -298,7 +299,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
   // Grandparents: each side may still be alive.
   for (const gender of ["Female", "Male"] as const) {
     if (rng.chance(0.65)) {
-      const gp = makeRelativeBase(rng, "Grandparent", `${randomName(countryName, gender, rng).first} ${rng.pick(country.lastNames)}`, relatives[0].age + rng.int(20, 30), gender, tier, rng.int(50, 90));
+      const gp = makeRelativeBase(rng, "Grandparent", `${classicFirstName(countryName, gender, rng) ?? randomName(countryName, gender, rng).first} ${lastNameFor(countryName, rng)}`, relatives[0].age + rng.int(20, 30), gender, tier, rng.int(50, 90));
       gp.health = rng.int(35, 90);
       relatives.push(gp);
     }

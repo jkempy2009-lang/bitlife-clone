@@ -14,6 +14,8 @@ export interface Country {
   lastNames: string[];
 }
 
+import { NAME_POOLS } from "./names";
+
 const INF = Number.POSITIVE_INFINITY;
 
 export const COUNTRIES: Country[] = [
@@ -245,6 +247,16 @@ export const COUNTRIES: Country[] = [
 export const COUNTRY_BY_NAME: Record<string, Country> = Object.fromEntries(
   COUNTRIES.map((c) => [c.name, c]),
 );
+
+// Name pools live in ./names.ts (much larger than the inline starter lists above).
+for (const c of COUNTRIES) {
+  const pool = NAME_POOLS[c.name];
+  if (pool) {
+    c.maleNames = pool.male;
+    c.femaleNames = pool.female;
+    c.lastNames = pool.last;
+  }
+}
 
 export const MONARCHIES = COUNTRIES.filter((c) => c.monarchy);
 

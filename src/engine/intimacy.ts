@@ -510,7 +510,7 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
     const { carrier, other } = p.pregnancy;
     p.pregnancy = null;
     const gender = randomGender(rng);
-    const first = randomName(p.birthCountry, gender, rng).first;
+    const first = randomName(p.residence.country, gender, rng).first;
     const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, 0, gender, 2, rng.int(70, 100));
     kid.smarts = clamp(Math.round((p.smarts + 50) / 2 + rng.int(-15, 15)));
     kid.looks = clamp(Math.round((p.looks + 50) / 2 + rng.int(-15, 15)));

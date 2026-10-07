@@ -5,11 +5,12 @@ import { ageUp } from "../ageUp";
 import { visitDoctor } from "../activities";
 import { habitCost, hasInsurance, illnessCosts, medicalPrice, riskMultiplier, setHabit } from "../health";
 import { instantiateDisease, DISEASE_CATALOG } from "@/data/diseases";
+import { NEUTRAL } from "./helpers/neutral";
 import type { PlayerState } from "@/types/game.types";
 
 const adult = (seed: number, country = "United States"): { rng: ReturnType<typeof makeRng>; p: PlayerState } => {
   const rng = makeRng(seed);
-  const p = createNewPlayer({ scenario: "average", startYear: 2026, country }, rng);
+  const p = createNewPlayer({ scenario: "average", startYear: 2026, country, talents: NEUTRAL }, rng);
   p.age = 40;
   p.health = 70;
   p.bankBalance = 100_000;

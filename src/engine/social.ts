@@ -1,8 +1,8 @@
+import { lastNameFor } from "@/data/names";
 import type { ActionResult, PlayerState, Relative } from "@/types/game.types";
 import type { NewRelativeSpec, LifeEvent } from "@/data/lifeEventsEngine";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
-import { getCountry } from "@/data/countries";
 import { npcName } from "./npc";
 import {
   addLog,
@@ -25,12 +25,11 @@ export function firstName(r: Relative) {
 
 export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Relative {
   if (spec.prebuilt) return { ...spec.prebuilt, id: rng.id() };
-  const country = getCountry(p.birthCountry);
   const tier = Math.min(5, Math.max(1, Math.round(1 + netWorth(p) / 400_000)));
   if (spec.relation === "Child") {
     const gender = randomGender(rng);
     const partner = getPartner(p);
-    const first = randomName(p.birthCountry, gender, rng).first;
+    const first = randomName(p.residence.country, gender, rng).first;
     const named = spec.npc ? npcName(p, spec.npc).first : first; // storyline characters keep their name
     const kid = makeRelativeBase(rng, "Child", `${named} ${p.lastName}`, spec.age ?? 0, gender, tier, rng.int(70, 100));
     kid.smarts = clamp(Math.round((p.smarts + (partner?.smarts ?? 50)) / 2 + rng.int(-15, 15)));
@@ -42,16 +41,16 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
     const gender = spec.gender ?? partnerGenderFor(p, rng);
     const [lo, hi] = spec.ageOffset ?? [-4, 5];
     const age = spec.ageRange ? rng.int(Math.max(18, spec.ageRange[0]), Math.max(18, spec.ageRange[1])) : Math.max(14, p.age + rng.int(lo, hi));
-    const first = randomName(p.birthCountry, gender, rng).first;
-    const rel = makeRelativeBase(rng, "Partner", `${first} ${rng.pick(country.lastNames)}`, age, gender, rng.int(1, 5), rng.int(55, 85));
+    const first = randomName(p.residence.country, gender, rng).first;
+    const rel = makeRelativeBase(rng, "Partner", `${first} ${lastNameFor(p.residence.country, rng)}`, age, gender, rng.int(1, 5), rng.int(55, 85));
     rel.partnerStatus = spec.partnerStatus ?? "dating";
     if (rel.partnerStatus === "married") rel.marriedYear = p.year;
     return rel;
   }
   const gender = rng.pick(["Male", "Female"]);
   const [lo, hi] = spec.ageOffset ?? [-2, 3];
-  const first = randomName(p.birthCountry, gender, rng).first;
-  const last = spec.relation === "Sibling" ? p.lastName : rng.pick(country.lastNames);
+  const first = randomName(p.residence.country, gender, rng).first;
+  const last = spec.relation === "Sibling" ? p.lastName : lastNameFor(p.residence.country, rng);
   const age = spec.age ?? Math.max(3, p.age + rng.int(lo, hi));
   return makeRelativeBase(rng, spec.relation, `${first} ${last}`, age, gender, rng.int(1, 4), rng.int(45, 80));
 }
@@ -79,7 +78,7 @@ export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
   if (parents.length === 0 || !rng.chance(0.07 * parents.length)) return null;
   const parent = rng.pick(parents);
   const gender = randomGender(rng);
-  const first = randomName(p.birthCountry, gender, rng).first;
+  const first = randomName(p.residence.country, gender, rng).first;
   const last = parent.name.split(" ").slice(1).join(" ") || p.lastName;
   const kid = makeRelativeBase(rng, "Grandchild", `${first} ${last}`, 0, gender, parent.incomeTier, rng.int(60, 95));
   kid.smarts = clamp(Math.round((parent.smarts + 50) / 2 + rng.int(-12, 12)));
@@ -131,7 +130,7 @@ export function adoptChild(p0: PlayerState, rng: Rng): ActionResult {
   p.annual.adopt = 1;
   p.bankBalance -= ADOPTION_COST;
   const gender = randomGender(rng);
-  const first = randomName(p.birthCountry, gender, rng).first;
+  const first = randomName(p.residence.country, gender, rng).first;
   const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, rng.int(0, 8), gender, 2, 65);
   p.relatives.push(kid);
   p.stats.childrenBorn += 1;

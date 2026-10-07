@@ -419,13 +419,18 @@ describe("valuation and exit", () => {
 
 describe("yearly processing", () => {
   it("pays owners through draws according to the payout policy", () => {
+    // Summed over several seeds so one unlucky year can't hide the policy.
     const run = (mode: "reinvest" | "salary") => {
-      const { rng, p } = established("barcafe", 19, (b) => {
-        b.staff = 3;
-        b.cash = 200_000;
-      });
-      const q = setPayout(p, mode).player;
-      return processBusiness(q, rng, []);
+      let total = 0;
+      for (let seed = 19; seed < 27; seed++) {
+        const { rng, p } = established("barcafe", seed, (b) => {
+          b.staff = 3;
+          b.cash = 200_000;
+        });
+        const q = setPayout(p, mode).player;
+        total += processBusiness(q, rng, []);
+      }
+      return total;
     };
     expect(run("reinvest")).toBe(0);
     expect(run("salary")).toBeGreaterThan(0);
