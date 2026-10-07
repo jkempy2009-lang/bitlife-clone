@@ -1,6 +1,7 @@
 import type { PlayerState, Relative } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { money } from "@/lib/format";
+import { newAthleteState } from "./athleteState";
 import {
   addLog,
   clone,
@@ -47,6 +48,7 @@ export function lifeStoryText(p: PlayerState): string {
     `"${epitaph(p)}"`,
     `Cause of death: ${p.causeOfDeath ?? "unknown"}`,
     `Peak career: ${sm.highestCareer} · Final net worth: $${Math.round(sm.netWorth).toLocaleString("en-US")} · Children: ${sm.children}`,
+    ...(p.athlete.record.seasons > 0 ? [`Sports career (${p.athlete.sport}): ${p.athlete.record.seasons} seasons, ${p.athlete.record.titles} titles, best rating ${Math.round(p.athlete.record.bestRating)}, ${money(p.athlete.record.earnings)} earned`] : []),
     `Achievements: ${p.achievements.length}`,
     "",
   ];
@@ -63,6 +65,9 @@ export function epitaph(p: PlayerState): string {
   if (p.stats.kills >= 1 && p.karma < 30) return "They took their darkest secret to the grave.";
   if (p.karma < 20) return "A notorious rogue who terrified the public.";
   if (p.royalRank === "King" || p.royalRank === "Queen") return "A sovereign whose name echoes through the halls of history.";
+  if (p.flags.includes("hall_of_fame")) return "A sporting legend, immortalised in the Hall of Fame.";
+  if (p.flags.includes("doping_caught") && p.athlete.record.proSeasons > 0) return "Won it all, lost it all. The asterisk stayed.";
+  if (p.athlete.record.titles >= 3 && p.fame >= 40) return "A champion whose trophies outlasted the cheers.";
   if (nw > 10_000_000) return "A brilliant tycoon who amassed massive family fortunes.";
   if (p.fame >= 70) return "A legend whose name was known in every household.";
   if (p.stats.crimesCommitted >= 5) return "A career criminal who always had one more scheme.";
@@ -147,7 +152,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     music: { status: "none", signed: false, pendingAlbum: null, albums: [] },
     business: null,
     influencer: { active: false, followers: 0, lastPostYear: 0 },
-    athlete: { sport: null },
+    athlete: newAthleteState(),
     hobbies: {},
     politics: { popularity: 30, yearsInOffice: 0, party: null },
     economy: { ...old.economy },

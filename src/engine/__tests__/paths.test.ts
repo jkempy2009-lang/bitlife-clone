@@ -33,15 +33,14 @@ describe("business", () => {
 });
 
 describe("athlete", () => {
-  it("needs athletics skill to sign", () => {
+  it("signing up starts a youth career, not a contract", () => {
     const { rng, p } = base(2);
-    p.skills.athletics = 10;
-    expect(signWithClub(p, "Soccer", rng).player.currentJob).toBeNull();
+    p.age = 16;
     p.skills.athletics = 95;
     p.health = 100;
-    let signed = false;
-    for (let s = 0; s < 20 && !signed; s++) signed = signWithClub(p, "Soccer", makeRng(s + 100)).player.currentJob?.lineId === "athlete";
-    expect(signed).toBe(true);
+    const res = signWithClub(p, "Soccer", rng).player;
+    expect(res.currentJob).toBeNull();
+    expect(res.athlete.stage).toBe("youth");
   });
   it("training is once a year", () => {
     const { rng, p } = base(3);

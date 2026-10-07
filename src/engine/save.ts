@@ -1,4 +1,5 @@
 import type { PlayerState } from "@/types/game.types";
+import { hydrateAthlete } from "./athleteState";
 
 const KEY = "lifeline-save-v1";
 const PREV_KEY = "lifeline-save-prev";
@@ -64,7 +65,7 @@ function hydrate(p: PlayerState): PlayerState {
     ...p,
     skills: { ...p.skills, athletics: p.skills.athletics ?? 0 },
     influencer: p.influencer ?? { active: false, followers: 0, lastPostYear: 0 },
-    athlete: p.athlete ?? { sport: null },
+    athlete: hydrateAthlete(p.athlete, p),
     hobbies: p.hobbies ?? {},
     politics: { ...p.politics, party: p.politics?.party ?? null },
     economy: p.economy ?? { climate: "normal", yearsLeft: 2 },

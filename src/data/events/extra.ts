@@ -57,23 +57,7 @@ export const EXTRA_EVENTS: LifeEvent[] = [
     risk("Play the game of your life", 0.45, ["You scored the winning point. The crowd chanted your name.", { happinessDelta: 12, fameDelta: 3, skillDeltas: { athletics: 4 } }], ["You missed the decisive shot. The silence on the bus home was long.", { happinessDelta: -8, skillDeltas: { athletics: 1 } }], "health"),
     opt("Play it safe", "You played a solid supporting role. The team lost, but not because of you.", { happinessDelta: 1, skillDeltas: { athletics: 2 } }),
   ], { requires: { flagsAll: ["athlete_dream"] }, cooldown: 3 }),
-  ev("pro_scout", "career", 17, 28, "Pro Scout", "A pro scout slips you a card. 'Call me, kid.'", [
-    opt("Call the scout", "The scout invites you to a training camp. Your sporting career could begin.", { skillDeltas: { athletics: 5 }, happinessDelta: 8, fameDelta: 2 }),
-    opt("Ignore it", "You let the chance pass.", { happinessDelta: -2 }),
-  ], { requires: { flagsAll: ["athlete_dream"], flagsNone: ["athlete"], minStat: { health: 60 } }, once: true }),
-  ev("pro_athlete_contract", "career", 18, 36, "Contract Talks", "Your agent says the club wants to renegotiate.", [
-    risk("Hold out for more", 0.45, ["You got a 25% raise!", { salaryPct: 25, happinessDelta: 6, fameDelta: 1 }], ["The club called your bluff. Salary cut.", { salaryPct: -10, happinessDelta: -6 }]),
-    opt("Sign the extension", "You signed a modest extension. Security feels good.", { salaryPct: 8, happinessDelta: 3 }),
-  ], { requires: { flagsAll: ["athlete"] }, cooldown: 4 }),
-  ev("doping_offer", "crime", 18, 35, "Performance Enhancement", "A trainer whispers about a 'supplement' that's untraceable.", [
-    risk("Take it", 0.55, ["Your numbers went through the roof. Nobody noticed.", { skillDeltas: { athletics: 8 }, healthDelta: -4, karmaDelta: -8 }], ["You failed a drug test. Banned and publicly shamed.", { loseJob: true, fameDelta: -15, karmaDelta: -8, happinessDelta: -15 }]),
-    opt("Report him", "You reported the trainer. Locker rooms are cold places now.", { karmaDelta: 6, happinessDelta: -2 }),
-    opt("Decline", "You trained clean.", { karmaDelta: 2 }),
-  ], { requires: { flagsAll: ["athlete"] }, once: true }),
-  ev("endorsement_sports", "fame", 18, 38, "Endorsement Deal", "A sportswear brand wants you in its next campaign.", [
-    opt("Sign the deal ($60,000)", "The ads were everywhere. So was your face.", { bankBalanceDelta: 60000, fameDelta: 4, happinessDelta: 5 }),
-    opt("Hold out for a bigger brand", "You waited. A bigger brand came knocking.", { bankBalanceDelta: 120000, fameDelta: 5, happinessDelta: 7 }),
-  ], { requires: { flagsAll: ["athlete"], minStat: { fame: 20 } }, cooldown: 4 }),
+  // Pro-athlete events (scouting, contracts, doping, endorsements) live in ./sports.ts
 
   // ---------- business & money ----------
   ev("biz_review", "money", 20, 80, "Bad Review", "A one-star review has gone viral for your business.", [

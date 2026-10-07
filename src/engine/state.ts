@@ -10,6 +10,7 @@ import type { Rng } from "@/lib/rng";
 import { COUNTRIES, MONARCHIES, getCountry } from "@/data/countries";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { occupationFor } from "@/data/occupations";
+import { newAthleteState } from "./athleteState";
 
 export const MAX_AGE = 120;
 
@@ -87,12 +88,14 @@ export function playerTitle(p: PlayerState): string {
   if (p.business) return "Business Owner";
   if (p.influencer.active && p.influencer.followers >= 10_000) return "Influencer";
   const st = p.education.stage;
+  if (p.athlete?.stage === "college") return "College Athlete";
   if (st === "University") return "University Student";
   if (st === "MedicalSchool") return "Medical Student";
   if (st === "LawSchool") return "Law Student";
   if (st === "HighSchool") return "High School Student";
   if (st === "Primary") return "Student";
   if (p.age < 5) return p.age < 2 ? "Infant" : "Toddler";
+  if (p.athlete?.stage === "retired" && p.pension === 0) return "Former Athlete";
   if (p.pension > 0) return "Retired";
   if (p.isFugitive) return "Fugitive";
   return "Unemployed";
@@ -310,7 +313,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     music: { status: "none", signed: false, pendingAlbum: null, albums: [] },
     business: null,
     influencer: { active: false, followers: 0, lastPostYear: 0 },
-    athlete: { sport: null },
+    athlete: newAthleteState(),
     hobbies: {},
     politics: { popularity: 30, yearsInOffice: 0, party: null },
     economy: { climate: rng.pick(["normal", "normal", "boom", "recession"] as const), yearsLeft: rng.int(1, 4) },

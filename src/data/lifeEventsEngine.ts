@@ -21,6 +21,7 @@ import { LIFE4_EVENTS } from "./events/life4";
 import { LIFE5_EVENTS } from "./events/life5";
 import { ADULT2_EVENTS } from "./events/adult2";
 import { LATER2_EVENTS } from "./events/later2";
+import { SPORTS_EVENTS } from "./events/sports";
 
 export type EventCategory =
   | "general"
@@ -181,6 +182,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...LIFE5_EVENTS,
   ...ADULT2_EVENTS,
   ...LATER2_EVENTS,
+  ...SPORTS_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

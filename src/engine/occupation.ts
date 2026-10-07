@@ -9,6 +9,7 @@ import type { Effort, PlayerState } from "@/types/game.types";
 import type { CareerLine } from "@/data/careersRegistry";
 import type { Rng } from "@/lib/rng";
 import { addLog, changeStat, getPartner, isRoyal, livingRelatives } from "./state";
+import { isAmateurAthlete, isContractedAthlete } from "./athleteState";
 
 export type Commitment = "job" | "business" | "music" | "office" | "study" | "athlete";
 
@@ -36,8 +37,13 @@ export function blockerFor(p: PlayerState, want: Commitment): string | null {
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
       if (isStudyingFullTime(p) && p.education.stage !== "Primary" && p.education.stage !== "HighSchool") return "You can't start a company while studying full time. Finish or drop out first.";
       return null;
-    case "job":
     case "athlete":
+      if (job && job.lineId !== "athlete") return `You can't play professionally while working as a ${job.title}. Quit first.`;
+      if (biz) return `You can't play professionally while running ${biz.name}. Sell or close it first.`;
+      if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
+      return null;
+    case "job":
+      if (p.athlete && isContractedAthlete(p)) return "Your sports contract is a full-time commitment. Retire or leave it first.";
       if (biz) return `You can't hold a job while running ${biz.name}. Sell or close it first.`;
       if (p.music.signed) return "Your record contract is a full-time commitment. Leave the label first.";
       return null;
@@ -66,7 +72,7 @@ export const EFFORT_INFO: Record<Effort, { label: string; emoji: string; blurb: 
 
 /** Does the player currently have anything that effort applies to? */
 export function hasCommitment(p: PlayerState): boolean {
-  return !!p.currentJob || !!p.business || isStudying(p) || p.music.signed;
+  return !!p.currentJob || !!p.business || isStudying(p) || p.music.signed || isAmateurAthlete(p);
 }
 
 /** Performance drift for jobs, per effort level (before smarts adjustment). */

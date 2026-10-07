@@ -270,7 +270,7 @@ function CorporateCareer() {
               <StatBar label={job.partTime ? "Performance (no promotions while part-time)" : "Performance (85+ earns a promotion offer)"} value={job.performance} color="green" />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="primary" onClick={() => act((pl, rng) => workHarder(pl, rng))} disabled={(p.annual.work ?? 0) >= 1}>
+              <Button variant="primary" onClick={() => act((pl, rng) => workHarder(pl, rng))} disabled={(p.annual.work ?? 0) >= 1 || job.lineId === "athlete"}>
                 💪 {(p.annual.work ?? 0) >= 1 ? "Pushed this year" : "Extra Push"}
               </Button>
               {!CAREER_LINES.find((l) => l.id === job.lineId)?.pack ? (
@@ -278,13 +278,14 @@ function CorporateCareer() {
                   💵 {(p.annual.raise ?? 0) >= 1 ? "Asked already" : "Ask for a Raise"}
                 </Button>
               ) : <span />}
+              {job.lineId === "athlete" && <p className="col-span-2 text-xs text-slate-400">Your sports contract is managed from the Athlete tab: re-sign, transfer, retire or quit there.</p>}
               {!job.partTime && !CAREER_LINES.find((l) => l.id === job.lineId)?.pack && (
                 <Button variant="secondary" onClick={() => act((pl) => goPartTime(pl))}>⏱️ Go Part-Time</Button>
               )}
               {job.partTime && (
                 <Button variant="secondary" onClick={() => act((pl) => goFullTime(pl))}>⏱️ Go Full-Time</Button>
               )}
-              <Button variant="ghost" onClick={() => act((pl) => quitJob(pl))}>Quit Job</Button>
+              <Button variant="ghost" onClick={() => act((pl) => quitJob(pl))} disabled={job.lineId === "athlete"}>Quit Job</Button>
               {p.age >= 60 && (
                 <Button variant="gold" className="col-span-2" onClick={() => act((pl) => retire(pl))}>🏖️ Retire (pension ≈ {money(pensionFor(p))}/yr)</Button>
               )}

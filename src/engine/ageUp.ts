@@ -466,7 +466,7 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   p.stats.yearsWorked += job.partTime ? 0.5 : 1;
   p.careerYears[job.lineId] = (p.careerYears[job.lineId] ?? 0) + (job.partTime ? 0.5 : 1);
   // Elected officials answer to voters, not managers.
-  if (CAREER_BY_ID[job.lineId]?.pack === "politics") return;
+  if (CAREER_BY_ID[job.lineId]?.pack === "politics" || job.lineId === "athlete") return; // athletes are driven by processAthlete
   job.performance = clamp(job.performance + effortPerformanceDelta(job.partTime ? "steady" : p.effort, rng) + Math.round((p.smarts - 50) / 25));
   if (job.performance < 20 && rng.chance(0.4)) {
     const body = `You were fired from your job as a ${job.title} for poor performance.`;
@@ -520,9 +520,7 @@ function processEntertainment(p: PlayerState) {
   if (actorActive && job.tier >= 2) changeStat(p, "fame", job.tier - 1);
   if (job?.lineId === "model" && job.tier >= 1) changeStat(p, "fame", job.tier);
   if (job?.lineId === "astronaut" && job.tier >= 1) changeStat(p, "fame", 1);
-  const athleteActive = job?.lineId === "athlete" && job.tier >= 1;
-  if (athleteActive) changeStat(p, "fame", job!.tier);
-  const active = actorActive || athleteActive || job?.lineId === "creator" || job?.lineId === "model" || job?.lineId === "astronaut" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
+  const active = actorActive || job?.lineId === "creator" || job?.lineId === "model" || job?.lineId === "astronaut" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
   if (!active) changeStat(p, "fame", p.fame > 0 ? -2 : 0);
 }
 
