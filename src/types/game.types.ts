@@ -138,18 +138,97 @@ export interface Skills {
   athletics: number;
 }
 
+export interface BusinessManager {
+  name: string;
+  /** 0-100. Drives how much of the owner's job they can cover. */
+  skill: number;
+  wage: number;
+  hired: number;
+}
+
+export interface BusinessYearRecord {
+  year: number;
+  revenue: number;
+  /** Operating profit after interest, before tax. */
+  profit: number;
+  cash: number;
+  reputation: number;
+}
+
+export type BusinessPayout = "reinvest" | "balanced" | "salary";
+
 export interface Business {
   kind: string;
   name: string;
+  /** The owner's stake: equity value (enterprise value + cash - debt) x owner share. Counted in net worth. */
   value: number;
-  /** Employees: each adds profit but costs a salary. */
+  /** Hired employees (the owner and manager are not counted). */
   staff: number;
-  /** Extra locations (each scales value and risk). */
+  /** Operating locations. */
   locations: number;
+  /** Last year's profit after interest, before tax. */
   lastProfit: number;
-  /** Bonus to next year's profit from hands-on work (consumed on Age Up). */
+  /** One-off bonus to this year's revenue from campaigns and sprints (consumed on Age Up). */
   boost: number;
   founded: number;
+
+  // ---- depth: the fields below were added later; save.ts upgrades old saves with defaults ----
+  /** 0-100. Builds slowly, crashes quickly. */
+  reputation: number;
+  /** 0-100 customer base index. Grows toward a target set by reputation, quality, marketing, price and market fit. */
+  customers: number;
+  /** 0-100 product quality. */
+  quality: number;
+  /** 0 budget, 1 market, 2 premium. */
+  price: number;
+  /** Staff morale 0-100. */
+  morale: number;
+  /** Staff training 0-100. */
+  training: number;
+  /** Premises condition 0-100. */
+  facility: number;
+  /** Product/equipment upgrade level 0-5. */
+  upgrades: number;
+  /** Business cash reserve (separate from the owner's savings). */
+  cash: number;
+  /** Business loan principal. */
+  debt: number;
+  loanRate: number;
+  /** Book value of premises and equipment. */
+  assets: number;
+  /** Owner's invested capital (cost basis for exit tax). */
+  basis: number;
+  /** Fraction of the equity the owner holds (investors hold the rest). */
+  ownerShare: number;
+  manager: BusinessManager | null;
+  /** Hidden product/market fit multiplier (0.3-1.8). Revealed only through results. */
+  fit: number;
+  /** Brand awareness stock built by marketing (decays yearly). */
+  marketing: number;
+  /** 0 none, 1 basic, 2 comprehensive. */
+  insurance: number;
+  /** 0-100. Lowers incident, fraud and inspection risk. Decays yearly. */
+  compliance: number;
+  payout: BusinessPayout;
+  /** Last year's revenue (incl. royalties). */
+  revenue: number;
+  /** Local competitive pressure 0-100. */
+  competition: number;
+  /** Product diversification level 0-2. */
+  diversified: number;
+  franchises: number;
+  /** Outside funding rounds raised. */
+  rounds: number;
+  /** Consecutive years with the owner absent and nobody in charge. */
+  neglect: number;
+  covenantBreaches: number;
+  /** Cover cash shortfalls from the owner's savings automatically. */
+  rescue: boolean;
+  /** Spending on decisions this year (deductible; reset on Age Up). */
+  ytdSpend: number;
+  lastPivot: number;
+  profitableYears: number;
+  history: BusinessYearRecord[];
 }
 
 export interface InfluencerState {

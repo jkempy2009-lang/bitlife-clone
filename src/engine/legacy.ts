@@ -2,6 +2,7 @@ import type { PlayerState, Relative } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { money } from "@/lib/format";
 import { newAthleteState } from "./athleteState";
+import { inheritBusiness } from "./business";
 import {
   addLog,
   clone,
@@ -93,7 +94,8 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
   const fresh = createNewPlayer({ scenario: "average", startYear: year, country: old.birthCountry }, rng);
   const [firstName, ...rest] = child.name.split(" ");
   const lastName = rest.join(" ") || old.lastName;
-  const inherited = Math.round(Math.max(0, old.bankBalance) * 0.9); // 10% estate tax
+  const bizHeir = inheritBusiness(old, child.age, rng);
+  const inherited = Math.round(Math.max(0, old.bankBalance) * 0.9) + bizHeir.cash; // 10% estate tax
   const heirsLeft = heirs(old).filter((c) => c.id !== child.id);
   const survivingPartner = old.relatives.find((r) => r.relation === "Partner" && r.alive && r.partnerStatus !== "ex");
 
@@ -150,7 +152,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     education: educationForAge(child.age),
     skills: { acting: 0, music: 0, charisma: 0, athletics: rng.int(0, 20) },
     music: { status: "none", signed: false, pendingAlbum: null, albums: [] },
-    business: null,
+    business: bizHeir.business,
     influencer: { active: false, followers: 0, lastPostYear: 0 },
     athlete: newAthleteState(),
     hobbies: {},
@@ -191,6 +193,8 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
   if (old.properties.length || old.vehicles.length) {
     addLog(next, `You also inherited ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}. The estate tax took ${money(Math.round(Math.max(0, old.bankBalance) * 0.1))}.`);
   }
+  if (bizHeir.business) next.flags.push("business_owner");
+  if (bizHeir.note) addLog(next, bizHeir.note);
   if (royalParent) addLog(next, crowned ? `The crown passes to you. Long live the ${next.royalRank}!` : `You remain in the royal line as a ${next.royalRank}.`);
   return next;
 }

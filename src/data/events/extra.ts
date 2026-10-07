@@ -60,19 +60,6 @@ export const EXTRA_EVENTS: LifeEvent[] = [
   // Pro-athlete events (scouting, contracts, doping, endorsements) live in ./sports.ts
 
   // ---------- business & money ----------
-  ev("biz_review", "money", 20, 80, "Bad Review", "A one-star review has gone viral for your business.", [
-    opt("Respond graciously", "You replied politely and offered a free meal. Public opinion flipped.", { karmaDelta: 3, happinessDelta: 2 }),
-    opt("Respond with sarcasm", "Your sarcastic reply was screenshotted 40,000 times.", { fameDelta: 3, happinessDelta: -3, karmaDelta: -2 }),
-    opt("Ignore it", "The review fades into the internet's noise.", {}),
-  ], { requires: { flagsAll: ["business_owner"] }, cooldown: 4 }),
-  ev("biz_inspection", "money", 20, 80, "Health Inspector", "An inspector arrives unannounced.", [
-    risk("Welcome them in", 0.7, ["You passed with flying colours.", { happinessDelta: 4, smartsDelta: 1 }], ["You were fined for several violations.", { bankBalanceDelta: -4000, happinessDelta: -4 }]),
-    risk("Offer a 'gift'", 0.3, ["The inspector pocketed it and left.", { bankBalanceDelta: -500, karmaDelta: -6 }], ["Attempted bribery. The police were called.", { karmaDelta: -8, arrest: { name: "Bribery", description: "An inspector reported your attempted bribe.", years: 2, severity: "serious" } }]),
-  ], { requires: { flagsAll: ["business_owner"] }, cooldown: 6 }),
-  ev("biz_investor", "money", 22, 70, "Angel Investor", "An investor offers $200,000 for a 30% share of your business.", [
-    opt("Take the money", "You took the deal. Cash flooded your accounts.", { bankBalanceDelta: 200000, happinessDelta: 6 }),
-    opt("Bootstrap on your own", "You declined. It's your baby.", { smartsDelta: 1 }),
-  ], { requires: { flagsAll: ["business_owner"] }, cooldown: 8 }),
   ev("windfall_inheritance", "money", 25, 80, "Distant Relative", "A lawyer calls: a great-aunt you barely knew left you something.", [
     opt("Accept the estate", "You inherited $30,000 and a very old cat.", { bankBalanceDelta: 30000, happinessDelta: 6, addPet: "cat" }),
     opt("Donate it all", "You donated the inheritance to charity.", { karmaDelta: 12, happinessDelta: 4 }),

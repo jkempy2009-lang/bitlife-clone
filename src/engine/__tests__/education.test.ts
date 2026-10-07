@@ -1,3 +1,4 @@
+import { upgradeBusiness } from "../business";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { createNewPlayer } from "../state";
@@ -44,7 +45,7 @@ describe("vocational certificates", () => {
     p.smarts = 10;
     expect(enrollCertificate(p, "pilot", rng).player.education.stage).toBe("None");
     p.smarts = 80;
-    p.business = { kind: "foodtruck", name: "T", value: 1, staff: 0, locations: 1, lastProfit: 0, boost: 0, founded: 2020 };
+    p.business = upgradeBusiness({ kind: "foodtruck", name: "T", value: 1, staff: 0, locations: 1, lastProfit: 0, boost: 0, founded: 2020 } as never);
     expect(enrollCertificate(p, "pilot", rng).player.education.stage).toBe("None");
   });
 });

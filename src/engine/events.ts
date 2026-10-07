@@ -50,6 +50,7 @@ export function fillTokens(text: string, p: PlayerState): string {
     .replaceAll("{sibling}", sib ? firstName(sib) : "your sibling")
     .replaceAll("{friend}", fr ? firstName(fr) : "your friend")
     .replaceAll("{child}", ch ? firstName(ch) : "your child")
+    .replaceAll("{biz}", p.business?.name ?? "your business")
     .replaceAll("{name}", p.firstName);
 }
 
@@ -153,7 +154,8 @@ export function stripRoyalty(p: PlayerState) {
   p.specialCareerPath = p.music.signed ? "musician" : p.specialCareers.includes("actor") ? "actor" : "none";
 }
 
-export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng) {
+/** Applies an option's effects. Returns extra text from `bizEffect` (e.g. how much the company gained) if any. */
+export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng): string | undefined {
   changeStat(p, "happiness", e.happinessDelta);
   changeStat(p, "health", e.healthDelta);
   changeStat(p, "smarts", e.smartsDelta);
@@ -225,6 +227,7 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng) {
   if (e.stripRoyalty) stripRoyalty(p);
   if (e.arrest) startTrial(p, e.arrest);
   if (e.die) killPlayer(p, e.die);
+  return e.bizEffect?.(p, rng) || undefined;
 }
 
 function pickBranch(p: PlayerState, option: ChoiceOption, rng: Rng): { fx: ChoiceEffects; success: boolean } {
@@ -248,7 +251,7 @@ export function resolveEvent(p0: PlayerState, event: LifeEvent, optionIndex: num
   const text = fillTokens(fx.logText, p);
   addLog(p, `${event.title}: ${text}`);
   p.seenEvents[event.id] = p.age;
-  applyEffects(p, fx, rng);
+  const extra = applyEffects(p, fx, rng);
   const chips: Chip[] = summarizeDelta(before, p);
   const bad = !success || (fx.happinessDelta ?? 0) < -3 || !!fx.arrest || !!fx.die;
   const upside = chips.some((c) => c.delta > 0);
@@ -258,7 +261,7 @@ export function resolveEvent(p0: PlayerState, event: LifeEvent, optionIndex: num
       {
         kind: "info",
         title: event.title,
-        body: text,
+        body: extra ? `${text} ${extra}` : text,
         tone: bad ? "bad" : upside ? "good" : "neutral",
         chips,
       },

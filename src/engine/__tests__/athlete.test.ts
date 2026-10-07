@@ -1,3 +1,4 @@
+import { upgradeBusiness } from "../business";
 import { describe, expect, it } from "vitest";
 import { makeRng, type Rng } from "@/lib/rng";
 import { createNewPlayer } from "../state";
@@ -556,7 +557,7 @@ describe("exclusivity", () => {
 
   it("a pro contract can't be signed while running a business or signed to a label", () => {
     const { p, rng } = mk(92, "college", {}, 21);
-    p.business = { kind: "restaurant", name: "Chez Test", value: 100_000, staff: 0, locations: 1, lastProfit: 0, boost: 0, founded: 2020 };
+    p.business = upgradeBusiness({ kind: "restaurant", name: "Chez Test", value: 100_000, staff: 0, locations: 1, lastProfit: 0, boost: 0, founded: 2020 } as never);
     p.athlete.offers = [offer({ id: "b", kind: "pro" })];
     expect(acceptOffer(p, "b", rng).player.athlete.stage).toBe("college");
   });

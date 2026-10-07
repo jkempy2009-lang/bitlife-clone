@@ -22,6 +22,7 @@ import { LIFE5_EVENTS } from "./events/life5";
 import { ADULT2_EVENTS } from "./events/adult2";
 import { LATER2_EVENTS } from "./events/later2";
 import { SPORTS_EVENTS } from "./events/sports";
+import { BUSINESS_EVENTS } from "./events/business";
 
 export type EventCategory =
   | "general"
@@ -97,6 +98,8 @@ export interface ChoiceEffects {
   addPet?: "dog" | "cat";
   /** Adds to hobby skill levels. */
   hobbyDelta?: Record<string, number>;
+  /** Arbitrary business-state change (see engine/business.ts `bizEffect`). May return a sentence appended to the result. */
+  bizEffect?: (p: import("@/types/game.types").PlayerState, rng: import("@/lib/rng").Rng) => string | void;
 }
 
 export interface ChoiceOption {
@@ -183,6 +186,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...ADULT2_EVENTS,
   ...LATER2_EVENTS,
   ...SPORTS_EVENTS,
+  ...BUSINESS_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(
