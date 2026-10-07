@@ -49,6 +49,7 @@ export interface Eligibility {
 
 export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
   if (line.pack === "adult" && (!p.matureContent || p.age < 18)) return { ok: false, reason: "Mature content is off" };
+  if (line.pack === "athlete") return { ok: false, reason: "Sports careers run through the Athlete tab" };
   if (isRoyal(p)) return { ok: false, reason: "Royals can't hold ordinary jobs" };
   if (p.isInPrison) return { ok: false, reason: "You're in prison" };
   if (p.isFugitive) return { ok: false, reason: "Fugitives can't get hired" };

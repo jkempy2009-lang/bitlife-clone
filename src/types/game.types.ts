@@ -142,8 +142,116 @@ export interface InfluencerState {
   lastPostYear: number;
 }
 
+// ---- Sports career (engine: src/engine/athlete*.ts, data: src/data/sports.ts) ----
+
+export type AthleteStage = "none" | "youth" | "college" | "semipro" | "pro" | "retired";
+export type InjuryPlan = "rest" | "rehab" | "surgery" | "play";
+
+export interface AthleteInjury {
+  label: string;
+  /** 1 knock, 2 moderate, 3 major, 4 career-threatening. */
+  severity: number;
+  /** Full seasons still to miss. */
+  yearsLeft: number;
+  plan: InjuryPlan;
+  /** Permanent rating loss applied when the injury heals. */
+  ratingLoss: number;
+  /** The player has chosen how to deal with it. */
+  decided: boolean;
+  /** Age when it happened. */
+  age: number;
+}
+
+export interface AthleteOffer {
+  id: string;
+  kind: "scholarship" | "academy" | "semipro" | "pro" | "renew" | "transfer" | "coach" | "pundit";
+  club: string;
+  league: number;
+  salary: number;
+  years: number;
+  bonus: number;
+  note: string;
+  /** Already negotiated once this year. */
+  haggled?: boolean;
+}
+
+export interface SeasonRecord {
+  age: number;
+  year: number;
+  stage: AthleteStage;
+  club: string;
+  league: number;
+  rating: number;
+  /** League finish (1 = champions) or null if you didn't play. */
+  place: number | null;
+  summary: string;
+  titles: number;
+  award: string | null;
+  earnings: number;
+}
+
+export interface AthleteRecord {
+  seasons: number;
+  proSeasons: number;
+  titles: number;
+  awards: number;
+  caps: number;
+  medals: number;
+  bestRating: number;
+  peakSalary: number;
+  /** Lifetime income from sport (salary, bonuses, endorsements). */
+  earnings: number;
+  injuries: number;
+}
+
 export interface AthleteState {
   sport: string | null;
+  stage: AthleteStage;
+  /** Hidden potential 0-100. Scouts only see a noisy read of it. */
+  talent: number;
+  /** Overall ability 0-100. */
+  rating: number;
+  /** This season's form 0-100. */
+  form: number;
+  /** Training consistency 0-100 (rises with steady/grind, collapses when you coast). */
+  consistency: number;
+  /** How visible you are to scouts 0-100. */
+  exposure: number;
+  club: string;
+  /** 0 semi-pro, 1 second tier, 2 top flight, 3 elite. */
+  league: number;
+  track: "college" | "academy" | null;
+  scholarship: boolean;
+  /** Academic warnings while on scholarship. */
+  warnings: number;
+  /** Youth / academy stipend per year. */
+  stipend: number;
+  /** Seasons trained in this sport (drives experience). */
+  years: number;
+  stageYears: number;
+  contractYears: number;
+  /** Contract ran out; terms are being negotiated. Resolved automatically at the next Age Up. */
+  expiring: boolean;
+  freeAgent: boolean;
+  freeAgentYears: number;
+  agent: boolean;
+  /** Consecutive years of coasting. */
+  detrain: number;
+  doping: boolean;
+  dopeTitles: number;
+  banYears: number;
+  injury: AthleteInjury | null;
+  offers: AthleteOffer[];
+  /** Cannot re-enter / sign before this age (after quitting, being cut or banned). */
+  lockedUntil: number;
+  /** Mirror of skills.athletics we last wrote, so outside boosts can be detected. */
+  athMirror: number;
+  retiredAge: number | null;
+  post: "none" | "coach" | "pundit";
+  /** Endorsement income paid in the latest season. */
+  endorsements: number;
+  record: AthleteRecord;
+  history: SeasonRecord[];
 }
 
 export type Climate = "boom" | "normal" | "recession";

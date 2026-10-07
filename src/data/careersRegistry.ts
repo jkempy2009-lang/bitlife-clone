@@ -566,16 +566,42 @@ export const CAREER_LINES: CareerLine[] = [
     ],
   },
   // ---- Special Job Pack: Professional Athlete ----
+  // Contracts are signed through the Athlete tab (engine/athlete.ts); the ladder tiers are league tiers.
   {
-    id: "athlete", name: "Professional Sports", emoji: "🏅", category: "Sports", blurb: "Train hard, sign with a club, chase glory before your body gives out.",
+    id: "athlete", name: "Professional Sports", emoji: "🏅", category: "Sports", blurb: "A career, not a job: years of youth development, selection, contracts and injuries.",
     companies: ["Metro Titans", "Harbor Hawks", "Union FC", "Capital Lions", "Pacific Storm"], minAge: 16,
-    requirements: { minSmarts: 0, minSkills: { athletics: 40 } },
+    requirements: { minSmarts: 0 },
     pack: "athlete",
     ladder: [
-      { title: "Semi-Pro Player", salary: 38_000 },
-      { title: "Pro Player", salary: 420_000 },
-      { title: "Franchise Player", salary: 3_200_000 },
-      { title: "Hall-of-Fame Legend", salary: 14_000_000 },
+      { title: "Semi-Pro Player", salary: 26_000 },
+      { title: "Pro Player", salary: 90_000 },
+      { title: "Top-Flight Pro", salary: 420_000 },
+      { title: "Elite Star", salary: 2_600_000 },
+    ],
+  },
+  // Post-career lines for retired athletes (hidden from the job board, offered from the Athlete tab).
+  {
+    id: "sports_coach", name: "Sports Coaching", emoji: "📋", category: "Sports", blurb: "Coaching positions for former athletes.",
+    companies: ["Metro Youth Academy", "Harbor Sports Institute", "Union Athletic Club", "Capital Training Centre"], minAge: 24,
+    requirements: { minSmarts: 0 },
+    pack: "athlete",
+    ladder: [
+      { title: "Youth Coach", salary: 36_000 },
+      { title: "Assistant Coach", salary: 78_000 },
+      { title: "Head Coach", salary: 240_000 },
+      { title: "Elite Manager", salary: 1_400_000 },
+    ],
+  },
+  {
+    id: "sports_pundit", name: "Sports Media", emoji: "🎙️", category: "Sports", blurb: "Broadcasting jobs for former athletes with a name.",
+    companies: ["Metro Sports Radio", "Harbor Sports Network", "Capital Sports Desk", "Pacific Broadcasting"], minAge: 24,
+    requirements: { minSmarts: 0 },
+    pack: "athlete",
+    ladder: [
+      { title: "Radio Pundit", salary: 32_000 },
+      { title: "TV Analyst", salary: 95_000 },
+      { title: "Lead Broadcaster", salary: 380_000 },
+      { title: "Network Star", salary: 1_800_000 },
     ],
   },
 ];
