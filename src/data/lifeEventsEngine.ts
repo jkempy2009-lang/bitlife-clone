@@ -1,0 +1,142 @@
+/**
+ * Master life-event database. Scenario trees are decoupled data: the engine
+ * (src/engine/events.ts) is the only thing that interprets them.
+ *
+ * Event files live in ./events/*.ts and are merged into `LIFE_EVENTS` below.
+ */
+import type { CrimeCharge, Relation, PartnerStatus, Relative, Skills } from "@/types/game.types";
+import { EARLY_EVENTS } from "./events/early";
+import { TEEN_EVENTS } from "./events/teen";
+import { ADULT_EVENTS } from "./events/adult";
+import { LATER_EVENTS } from "./events/later";
+import { SOCIAL_EVENTS } from "./events/social";
+import { SPECIAL_EVENTS } from "./events/special";
+
+export type EventCategory =
+  | "general"
+  | "school"
+  | "career"
+  | "crime"
+  | "health"
+  | "royalty"
+  | "fame"
+  | "family"
+  | "romance"
+  | "money"
+  | "prison";
+
+export interface NewRelativeSpec {
+  relation: Extract<Relation, "Friend" | "Partner" | "Child" | "Sibling">;
+  /** Age relative to the player (partners/friends). */
+  ageOffset?: [number, number];
+  partnerStatus?: Exclude<PartnerStatus, "ex">;
+  /** Pre-generated person (used for "meet someone" encounters). */
+  prebuilt?: Relative;
+}
+
+export interface ChoiceEffects {
+  bankBalanceDelta?: number;
+  happinessDelta?: number;
+  healthDelta?: number;
+  smartsDelta?: number;
+  looksDelta?: number;
+  karmaDelta?: number;
+  fameDelta?: number;
+  royalRespectDelta?: number;
+  diseaseTrigger?: string;
+  logText: string;
+
+  // ---- extensions beyond the base schema ----
+  performanceDelta?: number;
+  setFlags?: string[];
+  clearFlags?: string[];
+  skillDeltas?: Partial<Skills>;
+  relationshipDelta?: { target: Relation | "All"; delta: number };
+  addRelative?: NewRelativeSpec;
+  endRelationship?: "breakup" | "divorce";
+  /** Upgrades a dating partner to married. */
+  marry?: boolean;
+  /** Event id to force into next year's Age Up. */
+  queueEvent?: string;
+  arrest?: CrimeCharge;
+  loseJob?: boolean;
+  promote?: boolean;
+  /** Percent change to current salary. */
+  salaryPct?: number;
+  /** Instantly kills the player with this cause of death. */
+  die?: string;
+  stripRoyalty?: boolean;
+  bankMultiplier?: number;
+  cureAll?: boolean;
+}
+
+export interface ChoiceOption {
+  text: string;
+  /** Applied on success (or always, if `chance` is absent). */
+  effects: ChoiceEffects;
+  chance?: {
+    p: number;
+    /** Shifts p by (stat-50)/250. */
+    scaleBy?: "smarts" | "looks" | "health" | "happiness";
+    failure: ChoiceEffects;
+  };
+}
+
+export interface EventRequirements {
+  hasPartner?: boolean;
+  married?: boolean;
+  hasChildren?: boolean;
+  hasSibling?: boolean;
+  hasFriend?: boolean;
+  parentAlive?: boolean;
+  hasJob?: boolean;
+  inSchool?: boolean;
+  royal?: boolean;
+  hasVehicle?: boolean;
+  hasProperty?: boolean;
+  careers?: Array<"actor" | "musician">;
+  flagsAll?: string[];
+  flagsNone?: string[];
+  minBank?: number;
+  maxBank?: number;
+  minNetWorth?: number;
+  minStat?: Partial<Record<"happiness" | "health" | "smarts" | "looks" | "karma" | "fame", number>>;
+  maxStat?: Partial<Record<"happiness" | "health" | "smarts" | "looks" | "karma" | "fame", number>>;
+  countries?: string[];
+  /** Events are free-world only unless this is true (see prisonOnly). */
+  custom?: (p: import("@/types/game.types").PlayerState) => boolean;
+}
+
+export interface LifeEvent {
+  id: string;
+  title: string;
+  description: string;
+  minAge: number;
+  maxAge: number;
+  category: EventCategory;
+  options: ChoiceOption[];
+
+  // ---- extensions ----
+  /** Relative selection weight (default 1). */
+  weight?: number;
+  /** Only ever appears once per life. */
+  once?: boolean;
+  /** Minimum years between appearances (default 3). */
+  cooldown?: number;
+  requires?: EventRequirements;
+  /** Only appears while serving a sentence. */
+  prisonOnly?: boolean;
+}
+
+export const LIFE_EVENTS: LifeEvent[] = [
+  ...EARLY_EVENTS,
+  ...TEEN_EVENTS,
+  ...ADULT_EVENTS,
+  ...LATER_EVENTS,
+  ...SOCIAL_EVENTS,
+  ...SPECIAL_EVENTS,
+];
+
+export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(
+  LIFE_EVENTS.map((e) => [e.id, e]),
+);

@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.pop-in { animation: pop-in 0.25s ease-out; }
+
+@keyframes banner-flash {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.4); }
+}
+.banner-flash { animation: banner-flash 1s ease-in-out infinite; }
+
+.scroll-thin::-webkit-scrollbar { width: 6px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }

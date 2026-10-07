@@ -1,0 +1,61 @@
+import type { Disease, Severity } from "@/types/game.types";
+
+export interface DiseaseTemplate {
+  id: string;
+  name: string;
+  severity: Severity;
+  happinessImpact: number;
+  healthImpact: number;
+  minAge: number;
+  /** Baseline yearly chance of contracting (before age/health scaling). */
+  baseChance: number;
+  /** Fatal diseases: [min, max] years left. */
+  fatalYears?: [number, number];
+}
+
+export const DISEASE_CATALOG: DiseaseTemplate[] = [
+  { id: "cold", name: "Common Cold", severity: "mild", happinessImpact: 2, healthImpact: 3, minAge: 0, baseChance: 0.18 },
+  { id: "flu", name: "Influenza", severity: "mild", happinessImpact: 4, healthImpact: 6, minAge: 0, baseChance: 0.1 },
+  { id: "food_poisoning", name: "Food Poisoning", severity: "mild", happinessImpact: 4, healthImpact: 5, minAge: 2, baseChance: 0.05 },
+  { id: "broken_bone", name: "Broken Bone", severity: "mild", happinessImpact: 5, healthImpact: 8, minAge: 3, baseChance: 0.03 },
+  { id: "pneumonia", name: "Pneumonia", severity: "mild", happinessImpact: 5, healthImpact: 10, minAge: 0, baseChance: 0.02 },
+  { id: "asthma", name: "Asthma", severity: "chronic", happinessImpact: 2, healthImpact: 1, minAge: 2, baseChance: 0.008 },
+  { id: "anxiety", name: "Anxiety Disorder", severity: "chronic", happinessImpact: 6, healthImpact: 0, minAge: 12, baseChance: 0.012 },
+  { id: "depression", name: "Depression", severity: "chronic", happinessImpact: 9, healthImpact: 0, minAge: 12, baseChance: 0.012 },
+  { id: "migraines", name: "Chronic Migraines", severity: "chronic", happinessImpact: 4, healthImpact: 1, minAge: 14, baseChance: 0.008 },
+  { id: "diabetes", name: "Type 2 Diabetes", severity: "chronic", happinessImpact: 3, healthImpact: 2, minAge: 30, baseChance: 0.012 },
+  { id: "hypertension", name: "Hypertension", severity: "chronic", happinessImpact: 1, healthImpact: 2, minAge: 35, baseChance: 0.02 },
+  { id: "arthritis", name: "Arthritis", severity: "chronic", happinessImpact: 3, healthImpact: 2, minAge: 45, baseChance: 0.025 },
+  { id: "copd", name: "Lung Disease (COPD)", severity: "chronic", happinessImpact: 3, healthImpact: 3, minAge: 45, baseChance: 0.01 },
+  { id: "heart_disease", name: "Heart Disease", severity: "chronic", happinessImpact: 3, healthImpact: 3, minAge: 45, baseChance: 0.012 },
+  { id: "early_cancer", name: "Early-Stage Cancer", severity: "chronic", happinessImpact: 6, healthImpact: 3, minAge: 25, baseChance: 0 },
+  { id: "cancer", name: "Cancer", severity: "fatal", happinessImpact: 8, healthImpact: 10, minAge: 25, baseChance: 0.0016, fatalYears: [2, 6] },
+  { id: "kidney_failure", name: "Kidney Failure", severity: "fatal", happinessImpact: 5, healthImpact: 8, minAge: 35, baseChance: 0.0015, fatalYears: [2, 5] },
+  { id: "stroke", name: "Stroke Complications", severity: "fatal", happinessImpact: 6, healthImpact: 9, minAge: 55, baseChance: 0.004, fatalYears: [1, 4] },
+  { id: "alzheimers", name: "Alzheimer's Disease", severity: "fatal", happinessImpact: 8, healthImpact: 6, minAge: 65, baseChance: 0.007, fatalYears: [3, 8] },
+];
+
+export const DISEASE_BY_ID: Record<string, DiseaseTemplate> = Object.fromEntries(
+  DISEASE_CATALOG.map((d) => [d.id, d]),
+);
+
+export function instantiateDisease(
+  t: DiseaseTemplate,
+  rollYears: (min: number, max: number) => number,
+): Disease {
+  return {
+    id: t.id,
+    name: t.name,
+    severity: t.severity,
+    happinessImpact: t.happinessImpact,
+    healthImpact: t.healthImpact,
+    ...(t.fatalYears ? { yearsLeft: rollYears(t.fatalYears[0], t.fatalYears[1]) } : {}),
+  };
+}
+
+/** Chance (0-1) that a single doctor visit cures a disease of this severity. */
+export const CURE_CHANCE: Record<Severity, number> = {
+  mild: 0.75,
+  chronic: 0.35,
+  fatal: 0.1,
+};
