@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lifeline — a free text-life simulator
 
-## Getting Started
-
-First, run the development server:
+A mobile-first, BitLife-style life simulator built with **Next.js (App Router) + TypeScript + Tailwind CSS**.
+Every year you age up, make choices, and live a different life: ordinary jobs, crime, royalty, stardom, prison,
+families, dynasties. Lives continue across generations.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
+npm test           # engine tests (Vitest)
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Your game autosaves to `localStorage` (no backend).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Path | Purpose |
+| --- | --- |
+| `src/types/game.types.ts` | `PlayerState`, `Relative`, `Job`, `Property`, `Vehicle`, notices |
+| `src/context/GameStateContext.tsx` | React context: reducer, autosave, UI state |
+| `src/engine/` | **Pure** game logic (no React). `ageUp.ts` is the yearly transaction |
+| `src/data/lifeEventsEngine.ts` | Event schema + master list merged from `src/data/events/*` |
+| `src/data/careersRegistry.ts` | Career ladders, education programs, Special Job Packs |
+| `src/data/assetsCatalog.ts` | Cars, houses, mortgage/loan constants |
+| `src/data/countries.ts`, `diseases.ts`, `crimes.ts` | Tax brackets & names, disease catalog, crime table |
+| `src/components/` | Tabs, `ModalManager`, `TrialView`, `PrisonView`, `TombstoneOverlay`, `StartScreen` |
 
-## Learn More
+### Adding content (data-only)
 
-To learn more about Next.js, take a look at the following resources:
+Events live in `src/data/events/*.ts` and are built with `ev`, `opt`, `risk`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```ts
+ev("lost_dog", "general", 8, 60, "Lost Dog", "A frantic neighbour asks for help.", [
+  opt("Help search", "You found the dog!", { karmaDelta: 5, happinessDelta: 4 }),
+  risk("Charge a finder's fee", 0.4, ["They paid up.", { bankBalanceDelta: 200 }], ["They were furious.", { karmaDelta: -4 }]),
+], { requires: { hasProperty: true }, cooldown: 6 });
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Events support requirements (age, partner, job, flags, wealth, royalty…), weights, cooldowns, `once`,
+chance outcomes, follow-ups (`queueEvent`), arrests, relatives, and more — see `ChoiceEffects`.
 
-## Deploy on Vercel
+### Design notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- All randomness uses a seeded PRNG stored in game state, so engine logic is deterministic and testable.
+- Repeatable actions are limited to once per year (or capped) to prevent grinding.
+- Mortality is a graded age/health curve; relatives die on the same curve.

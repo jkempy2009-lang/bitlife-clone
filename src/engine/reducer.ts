@@ -39,7 +39,7 @@ export function reducer(state: GameState, action: Action): GameState {
       return { ...initialState, screen: "game", player, rngState: rng.state() };
     }
     case "LOAD":
-      return { ...initialState, screen: "game", player: action.player, rngState: action.rngState };
+      return { ...initialState, screen: "game", player: action.player, rngState: action.rngState, tab: action.player.isInPrison ? "prison" : "dashboard" };
     case "QUIT_TO_MENU":
       return { ...initialState };
     case "SET_TAB":
