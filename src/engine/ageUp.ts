@@ -29,7 +29,6 @@ import { processFriendLoans } from "./friends";
 import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
-import { startTrial } from "./crime";
 import { selectEvents } from "./events";
 import { albumRating, convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
 import { checkAchievements } from "./achievements";
@@ -38,6 +37,8 @@ import { processVices } from "./vices";
 import { escortIsIllegal, processAdultWork, processIntimacy } from "./intimacy";
 import { processPolitics } from "./politics";
 import { processMob } from "./underworld";
+import { processSpy } from "./spy";
+import { processJustice } from "./justiceYear";
 import { hobbyIncome, processHobbies } from "./hobbies";
 import { processAthlete, processBusiness, processInfluencer } from "./paths";
 import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
@@ -462,12 +463,13 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   processAdultWork(p, rng, notices);
   processPolitics(p, rng, notices);
   processMob(p, rng, notices);
+  processSpy(p, rng, notices);
   const job = p.currentJob;
   if (!job || p.isInPrison) return;
   p.stats.yearsWorked += job.partTime ? 0.5 : 1;
   p.careerYears[job.lineId] = (p.careerYears[job.lineId] ?? 0) + (job.partTime ? 0.5 : 1);
-  // Elected officials answer to voters, not managers.
-  if (CAREER_BY_ID[job.lineId]?.pack === "politics" || job.lineId === "athlete") return; // athletes are driven by processAthlete
+  // Elected officials, mobsters and agents answer to voters, bosses and handlers, not managers; athletes are driven by processAthlete.
+  if (["politics", "crime", "spy"].includes(CAREER_BY_ID[job.lineId]?.pack ?? "") || job.lineId === "athlete") return;
   job.performance = clamp(job.performance + effortPerformanceDelta(job.partTime ? "steady" : p.effort, rng) + Math.round((p.smarts - 50) / 25));
   if (job.performance < 20 && rng.chance(0.4)) {
     const body = `You were fired from your job as a ${job.title} for poor performance.`;
@@ -538,73 +540,6 @@ function processRoyalty(p: PlayerState, rng: Rng, notices: Notices) {
     const body = `With your parents gone, you are crowned ${p.royalRank}! The nation holds its breath.`;
     addLog(p, body);
     notices.push(info("Long Live the Crown!", body, "jackpot"));
-  }
-}
-
-function processJustice(p: PlayerState, rng: Rng, notices: Notices) {
-  if (p.isInPrison && p.prison) {
-    p.prison.yearsServed += 1;
-    p.stats.yearsInPrison += 1;
-    changeStat(p, "happiness", -3);
-    if (p.prison.deathRow && p.prison.yearsServed >= p.prison.sentenceYears) {
-      killPlayer(p, "execution");
-      addLog(p, "You were executed by the state.");
-      return;
-    }
-    if (p.prison.yearsServed >= p.prison.sentenceYears) {
-      const charge = p.prison.charge;
-      p.isInPrison = false;
-      p.prison = null;
-      p.flags.push("ex_con");
-      changeStat(p, "happiness", 10);
-      const body = `You served your full sentence for ${charge} and were released. Welcome back to freedom.`;
-      addLog(p, body);
-      notices.push(info("Released!", body, "good"));
-    }
-    return;
-  }
-  if (p.flags.includes("under_investigation") && !p.pendingTrial && !p.isInPrison) {
-    const risk = clamp(0.08 + p.stats.kills * 0.04 - (p.smarts - 50) / 400, 0.03, 0.35);
-    const coldKey = p.flags.find((f) => f.startsWith("cold:"));
-    const years = coldKey ? Number(coldKey.slice(5)) : 0;
-    if (rng.chance(risk)) {
-      p.flags = p.flags.filter((f) => f !== "under_investigation" && !f.startsWith("cold:"));
-      p.karma = 0;
-      startTrial(p, { name: "Murder", description: "A detective finally connected the dots. DNA, cameras, and a patient investigator did the rest.", years: 32, severity: "heinous", capital: true });
-      notices.push(info("The Detective Was Patient", "Years later, the police arrived with a warrant. You're being charged with murder.", "bad"));
-    } else if (years + 1 >= 8) {
-      p.flags = p.flags.filter((f) => f !== "under_investigation" && !f.startsWith("cold:"));
-      const body = "The investigation into the death went cold. You're probably safe now.";
-      addLog(p, body);
-      notices.push(info("Cold Case", body, "neutral"));
-    } else {
-      p.flags = p.flags.filter((f) => !f.startsWith("cold:"));
-      p.flags.push(`cold:${years + 1}`);
-      changeStat(p, "happiness", -2);
-    }
-  }
-  if (p.probation) {
-    p.probation.yearsLeft -= 1;
-    if (p.probation.yearsLeft <= 0) {
-      const body = `You completed your probation for ${p.probation.charge}. Your record is clean again.`;
-      p.probation = null;
-      addLog(p, body);
-      notices.push(info("Probation Over", body, "good"));
-    }
-  }
-  if (p.isFugitive) {
-    changeStat(p, "happiness", -2);
-    if (rng.chance(0.15)) {
-      p.isFugitive = false;
-      p.flags = p.flags.filter((f) => f !== "fugitive");
-      p.isInPrison = true;
-      if (p.prison) p.prison.sentenceYears += 2;
-      else p.prison = { charge: "Escape from Custody", sentenceYears: 4, yearsServed: 0 };
-      p.currentJob = null;
-      const body = "The police tracked you down and dragged you back to prison. Two more years were added to your sentence.";
-      addLog(p, body);
-      notices.push(info("Recaptured", body, "bad"));
-    }
   }
 }
 

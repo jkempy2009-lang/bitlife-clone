@@ -22,13 +22,14 @@ import {
 } from "@/engine/activities";
 import { commitCrime } from "@/engine/crime";
 import { DIET_LEVELS, EXERCISE_LEVELS, careSystem, hasInsurance, illnessCosts, medicalPrice, setHabit } from "@/engine/health";
+import { EXPUNGE_COST, RECORD_LABEL, catchChance, expungeBlocker, petitionExpungement, planCost, recordLevel, scrutiny } from "@/engine/justice";
 import { HOBBIES, MAX_HOBBY_SESSIONS, hobbyIncome, practiceHobby } from "@/engine/hobbies";
 import { REHAB_COST, VICE_INFO, hasAnyVice, quitVice, rehab } from "@/engine/vices";
 import type { Vices } from "@/types/game.types";
-import { CRIMES } from "@/data/crimes";
+import { CRIMES, crimeMeta } from "@/data/crimes";
 import { blackjackClear, blackjackDeal, blackjackHit, blackjackStand, handValue, type Card as PlayingCard } from "@/engine/blackjack";
 import { money } from "@/lib/format";
-import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
+import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
 import ViolencePanel from "./ViolencePanel";
 
 type Panel = "medical" | "wellness" | "hobbies" | "casino" | "crime" | "surgery" | "leisure";
@@ -247,10 +248,40 @@ function Leisure() {
 function CrimeRings() {
   const { player: p, act } = useGame();
   const [tab, setTab] = useState<"Theft" | "Fraud" | "Underworld" | "Violence">("Theft");
+  const [plan, setPlan] = useState<0 | 1 | 2>(0);
+  const [crew, setCrew] = useState<0 | 1 | 2>(0);
   const list = CRIMES.filter((c) => c.category === tab);
+  const level = recordLevel(p);
+  const expungeReason = expungeBlocker(p);
+  const heat = p.justice.heat;
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle hint="each repeat this year is riskier">Crime Rings</SectionTitle>
+      <Card>
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm font-semibold">🚔 Police attention</span>
+          <span className="text-xs text-slate-400">{{ unknown: "Unknown to police", noticed: "On their radar", watched: "Under watch", wanted: "Wanted" }[scrutiny(p)]}</span>
+        </div>
+        <div className="mt-1.5"><MiniBar value={heat} color={heat >= 40 ? "bg-rose-500" : "bg-amber-400"} /></div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Pill tone={level === "clean" ? "green" : "red"}>{RECORD_LABEL[level]}</Pill>
+          {p.justice.convictions > 0 && <Pill tone="amber">{p.justice.convictions} conviction{p.justice.convictions === 1 ? "" : "s"}</Pill>}
+          {p.justice.accomplices > 0 && <Pill tone="amber">🗣️ {p.justice.accomplices} could talk</Pill>}
+          {p.justice.proceeds > 0 && <Pill tone="red">💰 {money(p.justice.proceeds)} seizable</Pill>}
+          {p.probation && <Pill tone="blue">{p.probation.parole ? "Parole" : "Probation"}: {p.probation.yearsLeft}y</Pill>}
+          {p.justice.juvenileRecord.length > 0 && <Pill>{p.justice.recordSealed ? "Juvenile record sealed" : p.age < 18 ? "Juvenile record (sealed at 18 if minor)" : "Juvenile record"}</Pill>}
+          {p.justice.expunged && <Pill tone="green">Expunged</Pill>}
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Heat, past convictions, probation and anyone who knows your business raise the odds of being caught; so does a well-policed country. Planning and a crew help, but every accomplice is someone who can talk later.
+        </p>
+        {level !== "clean" && !p.justice.expunged && (
+          <div className="mt-2">
+            <Button variant="secondary" className="w-full" disabled={!!expungeReason} onClick={() => act((pl, rng) => petitionExpungement(pl, rng))}>🧹 Petition to Expunge Record ({money(EXPUNGE_COST)})</Button>
+            {expungeReason && <div className="mt-0.5 text-xs text-rose-300">🔒 {expungeReason}</div>}
+          </div>
+        )}
+      </Card>
       <Segmented
         value={tab}
         onChange={setTab}
@@ -264,26 +295,55 @@ function CrimeRings() {
       {tab === "Violence" ? (
         <ViolencePanel />
       ) : (
-        list.map((c) => {
-          const reason = c.requires?.(p) ?? null;
-          return (
-            <div key={c.id} className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
-              <span className="text-2xl">{c.emoji}</span>
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold">{c.name}</div>
-                <div className="text-xs text-slate-400">{c.blurb}</div>
-                <div className="mt-1 flex gap-1.5">
-                  <Pill tone={c.risk === "Low" ? "green" : c.risk === "Medium" ? "amber" : "red"}>{c.risk} risk</Pill>
-                  <Pill>{c.reward[0] === c.reward[1] ? money(c.reward[0]) : `${money(c.reward[0])}–${money(c.reward[1])}`}</Pill>
+        <>
+          <Card>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="mb-1 text-xs font-medium text-slate-400">Planning (costs money)</div>
+                <div className="flex gap-1">
+                  {(["Wing it", "Scout", "Mastermind"] as const).map((label, n) => (
+                    <button key={label} type="button" onClick={() => setPlan(n as 0 | 1 | 2)} className={`flex-1 rounded-lg px-1 py-1.5 text-xs font-medium ${plan === n ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300"}`}>{label}</button>
+                  ))}
                 </div>
-                {reason && <div className="mt-1 text-xs font-medium text-rose-300">🔒 {reason}</div>}
               </div>
-              <Button variant="danger" className="shrink-0 px-3 py-1.5" disabled={p.age < c.minAge || !!reason} onClick={() => act((pl, rng) => commitCrime(pl, c.id, rng))}>
-                {p.age < c.minAge ? `${c.minAge}+` : "Do it"}
-              </Button>
+              <div>
+                <div className="mb-1 text-xs font-medium text-slate-400">Crew (team crimes)</div>
+                <div className="flex gap-1">
+                  {(["Solo", "+1", "+2"] as const).map((label, n) => (
+                    <button key={label} type="button" onClick={() => setCrew(n as 0 | 1 | 2)} className={`flex-1 rounded-lg px-1 py-1.5 text-xs font-medium ${crew === n ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300"}`}>{label}</button>
+                  ))}
+                </div>
+              </div>
             </div>
-          );
-        })
+          </Card>
+          {list.map((c) => {
+            const reason = c.requires?.(p) ?? null;
+            const meta = crimeMeta(c.id);
+            const cost = planCost(plan, c.id);
+            const oddsCrew = meta.team ? crew : 0;
+            const awayFree = 1 - catchChance(p, c.id, { plan, crew: oddsCrew });
+            const blocked = p.age < c.minAge ? `${c.minAge}+` : reason ?? (cost > p.bankBalance ? `Prep costs ${money(cost)}` : null);
+            return (
+              <div key={c.id} className="flex items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3">
+                <span className="text-2xl">{c.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">{c.name}</div>
+                  <div className="text-xs text-slate-400">{c.blurb}</div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <Pill tone={awayFree >= 0.65 ? "green" : awayFree >= 0.4 ? "amber" : "red"}>{Math.round(awayFree * 100)}% get away</Pill>
+                    <Pill>{c.reward[0] === c.reward[1] ? money(c.reward[0]) : `${money(c.reward[0])}–${money(c.reward[1])}`}</Pill>
+                    {meta.team && <Pill tone="blue">team job</Pill>}
+                    {cost > 0 && <Pill>prep {money(cost)}</Pill>}
+                  </div>
+                  {reason && <div className="mt-1 text-xs font-medium text-rose-300">🔒 {reason}</div>}
+                </div>
+                <Button variant="danger" className="shrink-0 px-3 py-1.5" disabled={!!blocked} onClick={() => act((pl, rng) => commitCrime(pl, c.id, rng, { plan, crew: oddsCrew }))}>
+                  {p.age < c.minAge ? `${c.minAge}+` : "Do it"}
+                </Button>
+              </div>
+            );
+          })}
+        </>
       )}
     </div>
   );

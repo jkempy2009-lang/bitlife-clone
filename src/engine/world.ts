@@ -6,6 +6,7 @@ import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { COUNTRY_BY_NAME, getCountry } from "@/data/countries";
 import { addLog, changeStat, clone, isRoyal } from "./state";
+import { relocationBlocker } from "./justice";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -234,6 +235,8 @@ export function relocate(p0: PlayerState, country: string, rng: Rng): ActionResu
   if (p.age < 18) return { player: p0, notices: [info("Too Young", "You can't move out on your own yet.", "bad")] };
   if (p.isInPrison || p.pendingTrial) return { player: p0, notices: [info("Not Possible", "You can't relocate right now.", "bad")] };
   if (isRoyal(p)) return { player: p0, notices: [info("Duty Calls", "Royals can't simply emigrate. The crown needs you.", "bad")] };
+  const restricted = relocationBlocker(p, dest.name);
+  if (restricted) return { player: p0, notices: [info("Can't Move", restricted, "bad")] };
   const abroad = dest.name !== p.residence.country;
   const cost = abroad ? RELOCATE_ABROAD : RELOCATE_DOMESTIC;
   if (p.bankBalance < cost) return { player: p0, notices: [info("Insufficient Funds", `Moving costs ${money(cost)}.`, "bad")] };

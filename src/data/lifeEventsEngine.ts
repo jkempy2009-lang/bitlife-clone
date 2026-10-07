@@ -23,6 +23,8 @@ import { ADULT2_EVENTS } from "./events/adult2";
 import { LATER2_EVENTS } from "./events/later2";
 import { SPORTS_EVENTS } from "./events/sports";
 import { BUSINESS_EVENTS } from "./events/business";
+import { JUSTICE_EVENTS } from "./events/justice";
+import { POLITICS_EVENTS } from "./events/politics";
 
 export type EventCategory =
   | "general"
@@ -100,6 +102,8 @@ export interface ChoiceEffects {
   hobbyDelta?: Record<string, number>;
   /** Arbitrary business-state change (see engine/business.ts `bizEffect`). May return a sentence appended to the result. */
   bizEffect?: (p: import("@/types/game.types").PlayerState, rng: import("@/lib/rng").Rng) => string | void;
+  /** Arbitrary state change (justice, politics, mob and spy events use this). Runs on a clone, after the other effects. */
+  apply?: (p: import("@/types/game.types").PlayerState, rng: import("@/lib/rng").Rng) => void;
 }
 
 export interface ChoiceOption {
@@ -187,6 +191,8 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...LATER2_EVENTS,
   ...SPORTS_EVENTS,
   ...BUSINESS_EVENTS,
+  ...JUSTICE_EVENTS,
+  ...POLITICS_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

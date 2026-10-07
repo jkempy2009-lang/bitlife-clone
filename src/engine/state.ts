@@ -11,6 +11,7 @@ import { COUNTRIES, MONARCHIES, getCountry } from "@/data/countries";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { occupationFor } from "@/data/occupations";
 import { newAthleteState } from "./athleteState";
+import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
 
 export const MAX_AGE = 120;
 
@@ -316,6 +317,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     athlete: newAthleteState(),
     hobbies: {},
     politics: { popularity: 30, yearsInOffice: 0, party: null },
+    statecraft: freshStatecraft(),
     economy: { climate: rng.pick(["normal", "normal", "boom", "recession"] as const), yearsLeft: rng.int(1, 4) },
     residence: { country: country.name, city: "", rentTier: 1 },
     investments: {},
@@ -333,6 +335,9 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     prison: null,
     pendingTrial: null,
     criminalRecord: [],
+    justice: freshJustice(),
+    mob: freshMob(),
+    spy: freshSpy(),
     achievements: [],
     goalsDone: [],
     challenge: opts.challenge ? { id: opts.challenge, status: "active" } : null,
