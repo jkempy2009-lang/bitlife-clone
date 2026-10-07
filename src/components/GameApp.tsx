@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { BarChart3, Briefcase, Building2, Lock, Settings, Sparkles, Users } from "lucide-react";
 import { GameStateProvider, useGame } from "@/context/GameStateContext";
 import type { TabId } from "@/types/game.types";
-import { money } from "@/lib/format";
+import { avatarFor, money } from "@/lib/format";
 import StartScreen from "./StartScreen";
 import DashboardTab from "./DashboardTab";
 import RelationshipsTab from "./RelationshipsTab";
@@ -111,9 +111,12 @@ function Shell() {
     <div className="mx-auto flex h-dvh max-w-md flex-col bg-slate-900 text-slate-100 shadow-2xl sm:border-x sm:border-slate-800">
       {/* Slim top bar */}
       <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900/95 px-4 py-2.5 backdrop-blur">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold">{p.firstName} {p.lastName}</div>
-          <div className="text-xs text-slate-400">Age {p.age} · {p.year}</div>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="text-2xl leading-none" aria-hidden="true">{avatarFor(p)}</span>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold">{p.firstName} {p.lastName}</div>
+            <div className="text-xs text-slate-400">Age {p.age} · {p.year}</div>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">

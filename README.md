@@ -15,7 +15,7 @@ Your game autosaves to `localStorage` (no backend). Use the gear icon to export/
 
 ## What you can do
 
-- **Grow up:** 360+ data-driven life events from infancy to 100+, school, romance, family, crime, health, fame.
+- **Grow up:** 380+ data-driven life events from infancy to 100+, school, romance, family, crime, health, fame.
 - **Study:** high school, university (7 majors), medical school, law school, graduate school; student debt.
 - **Work:** 45+ careers with ladders, plus special packs: movie star, rock star, pro athlete, influencer,
   entrepreneur (6 businesses), politician (elections), secret agent, astronaut, crime family, model, royalty.
@@ -31,7 +31,10 @@ Your game autosaves to `localStorage` (no backend). Use the gear icon to export/
 - **Darker paths:** murder (five methods, cover-ups, detectives, cold cases, death row where it exists),
   assault, blackmail, arson, kidnapping, fraud, smuggling, tax evasion.
 - **Legacy:** tombstone, epitaph, life chart, continue as your child (estate tax), plus a Hall of Lives and 50+
-  achievements that persist across characters.
+  achievements that persist across characters. Copy your life story as plain text from the tombstone.
+- **Quality of life:** a "past year" strip on the dashboard, milestone notices at key ages, contextual tips,
+  **Skip** (fast-forward up to 10 years until something happens), text-size and reduce-motion settings,
+  a rolling one-year backup save with crash recovery, and offline play (service worker, production build).
 
 ## Architecture
 
