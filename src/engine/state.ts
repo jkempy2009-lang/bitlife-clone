@@ -159,6 +159,12 @@ export interface NewLifeOptions {
   startYear: number;
   /** Optional scenario challenge id (see data/challenges.ts). */
   challenge?: string;
+  /** Hand-picked starting traits from character design (0-100). */
+  stats?: { happiness: number; health: number; smarts: number; looks: number };
+  /** Hidden gifts picked in character design (0-100); anything omitted is randomised. */
+  talents?: Partial<import("@/types/game.types").Talents>;
+  /** Free-edit design (no point budget): fine to play, but challenge wins don't count. */
+  freeStats?: boolean;
 }
 
 const TRAITS: Record<string, { open: number; jealous: number }> = {
@@ -212,6 +218,19 @@ export function makeRelativeBase(
     rel.occupation = age >= 67 ? `Retired ${occupationFor(incomeTier, rng).toLowerCase()}` : occupationFor(incomeTier, rng);
   }
   return rel;
+}
+
+export const TALENT_KEYS = ["athletic", "musical", "acting", "charisma", "business", "discipline"] as const;
+
+/** Random natural gifts, with anything the player chose taking precedence. */
+export function rollTalents(rng: Rng, chosen?: Partial<import("@/types/game.types").Talents>): import("@/types/game.types").Talents {
+  const roll = () => clamp(Math.round((rng.int(5, 95) + rng.int(5, 95) + rng.int(5, 95)) / 3));
+  const t = {} as import("@/types/game.types").Talents;
+  for (const k of TALENT_KEYS) {
+    const r = roll();
+    t[k] = chosen?.[k] !== undefined ? clamp(Math.round(chosen[k] as number)) : r;
+  }
+  return t;
 }
 
 export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
@@ -289,6 +308,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
   if (scenario === "wealthy") flags.push("trust_fund");
   if (celebrity) flags.push("famous_family");
   if (royal) flags.push("royal_born");
+  if (opts.freeStats) flags.push("sandbox_stats");
 
   const player: PlayerState = {
     id: rng.id(),
@@ -303,10 +323,12 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     sexuality,
     karma: 50,
     fame: royal ? 20 : celebrity ? 25 : 0,
-    happiness: clamp(rng.int(72, 96) + (scenario === "struggling" ? -6 : 0)),
-    health: rng.int(75, 100),
-    smarts: clamp(Math.round((rng.int(10, 95) + rng.int(10, 95)) / 2)),
-    looks: clamp(Math.round((rng.int(10, 95) + rng.int(10, 95)) / 2) + (royal || celebrity ? 8 : 0)),
+    talents: rollTalents(rng, opts.talents),
+    outlook: opts.stats ? clamp(opts.stats.happiness) : 84,
+    happiness: opts.stats ? clamp(opts.stats.happiness) : clamp(rng.int(72, 96) + (scenario === "struggling" ? -6 : 0)),
+    health: opts.stats ? clamp(opts.stats.health) : rng.int(75, 100),
+    smarts: opts.stats ? clamp(opts.stats.smarts) : clamp(Math.round((rng.int(10, 95) + rng.int(10, 95)) / 2)),
+    looks: opts.stats ? clamp(opts.stats.looks) : clamp(Math.round((rng.int(10, 95) + rng.int(10, 95)) / 2) + (royal || celebrity ? 8 : 0)),
     diseases: [],
     bankBalance: 0,
     outstandingLoans: 0,
@@ -390,6 +412,9 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
   };
 
   player.residence.city = player.birthCity;
+  // Natural gifts nudge where you start.
+  player.skills.charisma = clamp(player.skills.charisma + Math.round(player.talents.charisma * 0.3));
+  player.skills.athletics = clamp(player.skills.athletics + Math.max(0, Math.round((player.talents.athletic - 50) * 0.25)));
   const birthLine = royal
     ? `You were born ${royalRankFor(gender, false) === "Prince" ? "a Prince" : "a Princess"} in ${player.birthCity}, ${country.name}. The whole nation celebrates. Your parents are ${relatives[0].name} and ${relatives[1].name}.`
     : `You were born in ${player.birthCity}, ${country.name}. Your parents are ${relatives[0].name} and ${relatives[1].name}.`;

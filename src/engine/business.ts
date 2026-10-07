@@ -176,6 +176,8 @@ export function startBusiness(p0: PlayerState, kindId: string, name: string, rng
   p.bankBalance -= kind.cost;
   const label = name.trim() || `${p.lastName} ${kind.name}`;
   p.business = newBusiness(kind, label, p.year, r);
+  // Natural business sense improves (or hurts) how well the idea suits its market.
+  p.business.fit = Math.max(0.2, Math.min(2.4, p.business.fit * (1 + (p.talents.business - 50) / 220)));
   p.business.value = stakeValue(p.business);
   setFlag(p, "business_owner");
   changeStat(p, "happiness", 8);

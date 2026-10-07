@@ -26,7 +26,7 @@ type Notices = NonNullable<ActionResult["notices"]>;
 
 function mk(seed: number, stage: PlayerState["athlete"]["stage"], over: Partial<PlayerState["athlete"]> = {}, age = 20, sport = "Soccer") {
   const rng = makeRng(seed);
-  const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: { athletic: 50, musical: 50, acting: 50, charisma: 50, business: 50, discipline: 50 } }, rng);
   p.age = age;
   p.education = { ...p.education, stage: "None", degrees: ["highschool"], grades: 70 };
   p.smarts = 60;
@@ -185,7 +185,7 @@ describe("stage gates", () => {
   it("a committed grinder can reach the pros; a coaster never does", () => {
     const play = (effort: PlayerState["effort"], seed: number) => {
       const rng = makeRng(seed);
-      let p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+      let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: { athletic: 50, musical: 50, acting: 50, charisma: 50, business: 50, discipline: 50 } }, rng);
       let maxLeague = -1;
       for (let guard = 0; guard < 40 && p.alive; guard++) {
         p = ageUp(p, rng).player;
@@ -222,9 +222,13 @@ describe("commitment and neglect", () => {
 
   it("coasting makes the rating slide; grinding grows it faster than steady", () => {
     const run = (effort: "coast" | "steady" | "grind") => {
-      const { p, rng } = mk(20, "youth", { rating: 30, talent: 70, years: 4, consistency: 50 }, 14);
-      for (let i = 0; i < 4; i++) year(p, rng, effort);
-      return p.athlete.rating;
+      let total = 0;
+      for (let seed = 20; seed < 32; seed++) {
+        const { p, rng } = mk(seed, "youth", { rating: 30, talent: 70, years: 4, consistency: 50 }, 14);
+        for (let i = 0; i < 4; i++) year(p, rng, effort);
+        total += p.athlete.rating;
+      }
+      return total / 12;
     };
     const c = run("coast");
     const s = run("steady");
@@ -697,7 +701,7 @@ describe("achievements, saves and heirs", () => {
   it("full years never throw for an athlete bot across many seasons", () => {
     for (let s = 0; s < 12; s++) {
       const rng = makeRng(2000 + s);
-      let p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+      let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: { athletic: 50, musical: 50, acting: 50, charisma: 50, business: 50, discipline: 50 } }, rng);
       for (let g = 0; g < 70 && p.alive; g++) {
         const res = ageUp(p, rng);
         p = res.player;

@@ -121,7 +121,7 @@ export function applyEffortCosts(p: PlayerState, rng: Rng, notices: NonNullable<
     changeStat(p, "health", p.age > 45 ? -3 : -2);
     changeStat(p, "happiness", -2);
     for (const r of family) r.relationshipBar = Math.max(0, r.relationshipBar - 3);
-    if (rng.chance(p.age > 45 ? 0.14 : 0.09)) {
+    if (rng.chance((p.age > 45 ? 0.14 : 0.09) * (1.4 - p.talents.discipline / 125))) {
       p.effort = "steady";
       changeStat(p, "happiness", -10);
       changeStat(p, "health", -6);

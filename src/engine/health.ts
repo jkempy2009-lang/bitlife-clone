@@ -125,6 +125,7 @@ export function riskMultiplier(p: PlayerState, diseaseId: string): number {
   if (diseaseId === "copd" || diseaseId === "cancer" || diseaseId === "early_cancer") m *= 1 + p.vices.smoking / 60;
   if (diseaseId === "liver_disease") m *= 1 + p.vices.alcohol / 40;
   if (diseaseId === "anxiety" || diseaseId === "depression") {
+    m *= 1 + Math.max(0, 40 - p.happiness) / 50;
     m *= p.effort === "grind" ? 1.35 : p.effort === "coast" ? 0.85 : 1;
     m *= p.habits.exercise === 2 ? 0.8 : p.habits.exercise === 0 ? 1.2 : 1;
     m *= 1 + p.vices.drugs / 80;
@@ -137,4 +138,17 @@ export const vicesLabel = (v: Vices) => Object.entries(v).filter(([, n]) => n > 
 
 export function describeCost(p: PlayerState, base: number): string {
   return money(medicalPrice(p, base));
+}
+
+/** Mood isn't just a number: misery wears the body and work down, contentment protects them. */
+export function applyMoodEffects(p: PlayerState) {
+  if (p.age < 8) return;
+  if (p.happiness < 25) {
+    changeStat(p, "health", p.happiness < 10 ? -3 : -2);
+    if (p.currentJob) p.currentJob.performance = Math.max(0, p.currentJob.performance - 3);
+    for (const r of p.relatives) if (r.alive && (r.relation === "Partner" || r.relation === "Friend")) r.relationshipBar = Math.max(0, r.relationshipBar - 1);
+  } else if (p.happiness >= 80) {
+    if (p.age < 65) changeStat(p, "health", 1);
+    if (p.currentJob) p.currentJob.performance = Math.min(100, p.currentJob.performance + 1);
+  }
 }

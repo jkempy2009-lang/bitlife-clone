@@ -56,7 +56,7 @@ export function signWithClub(p0: PlayerState, sport: string, rng: Rng): ActionRe
   const sinfo = sportInfo(sport);
   const same = a.sport === sport && a.rating > 0;
   const ath = p.skills.athletics;
-  const rolled = clamp(Math.round(gauss(rng, 38, 19) + (ath - 10) * 0.35 + (p.health - 70) * 0.08), 3, 100);
+  const rolled = clamp(Math.round(gauss(rng, 38, 19) + (ath - 10) * 0.35 + (p.health - 70) * 0.08 + (p.talents.athletic - 50) * 0.5), 3, 100);
   a.sport = sport;
   a.talent = same ? Math.max(a.talent, Math.round(rolled * 0.4 + a.talent * 0.6)) : rolled;
   a.rating = same ? a.rating : clamp(Math.round(ath * 0.7 + rng.int(0, 6)), 3, 60);

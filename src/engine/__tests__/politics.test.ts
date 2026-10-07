@@ -31,7 +31,7 @@ import type { PlayerState } from "@/types/game.types";
 
 const pol = (seed = 1, tier = -1) => {
   const rng = makeRng(seed);
-  const p = createNewPlayer({ scenario: "average", startYear: 2026 }, rng);
+  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: { athletic: 50, musical: 50, acting: 50, charisma: 50, business: 50, discipline: 50 } }, rng);
   p.age = 45;
   p.smarts = 80;
   p.education.degrees = ["highschool"];
@@ -67,6 +67,8 @@ describe("campaign finance", () => {
   });
   it("donors abandon you if you cross their position", () => {
     const { p } = pol(2, 1);
+    p.skills.charisma = 0;
+    p.economy.climate = "recession";
     p.statecraft.funds = 50_000;
     p.statecraft.donors = [{ id: "d", name: "Big Business", kind: "business", given: 40_000, issue: "economy", stance: 1, year: p.year }];
     p.statecraft.stances.economy = -1;

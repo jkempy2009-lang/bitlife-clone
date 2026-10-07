@@ -84,7 +84,8 @@ export const fmtCount = (n: number): string => {
  */
 export function talentCeiling(p: PlayerState, craft: "music" | "song" | "acting"): number {
   const u = (hashString(`${p.id}:${craft}`) % 10_000) / 10_000;
-  return clamp(Math.round(32 + 0.2 * p.smarts + 50 * Math.pow(u, 0.8)), 30, 100);
+  const gift = craft === "acting" ? p.talents.acting : p.talents.musical;
+  return clamp(Math.round(32 + 0.2 * p.smarts + 50 * Math.pow(u, 0.8) + (gift - 50) * 0.35), 30, 100);
 }
 
 /** Scale a raw training gain by how close the skill already is to the person's ceiling. */

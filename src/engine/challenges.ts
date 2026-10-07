@@ -8,6 +8,7 @@ export function checkChallenge(p: PlayerState, notices: NonNullable<ActionResult
   if (!state || state.status !== "active") return;
   const def = CHALLENGE_BY_ID[state.id];
   if (!def) return;
+  if (p.flags.includes("sandbox_stats")) return; // hand-edited traits: not a fair run
   if (def.achieved(p)) {
     state.status = "won";
     if (!p.flags.includes("challenge_won")) p.flags.push("challenge_won");

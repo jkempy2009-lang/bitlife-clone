@@ -62,6 +62,17 @@ function readSlot(key: string): SaveData | null {
   }
 }
 
+/** Stable pseudo-random gifts for saves made before talents existed. */
+function legacyTalents(id: string) {
+  let h = 2166136261;
+  const next = () => {
+    for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619) + 0x9e3779b9;
+    h ^= h >>> 15;
+    return 15 + (Math.abs(h) % 70);
+  };
+  return { athletic: next(), musical: next(), acting: next(), charisma: next(), business: next(), discipline: next() };
+}
+
 /** Fill in fields added after a save was written so older saves keep working. */
 export function hydrate(p: PlayerState): PlayerState {
   return {
@@ -84,6 +95,8 @@ export function hydrate(p: PlayerState): PlayerState {
     retirementSavings: p.retirementSavings ?? 0,
     savingsLevel: p.savingsLevel ?? 1,
     royal: p.royal ?? (p.royalRank === "none" ? null : { crown: p.royalRank === "King" || p.royalRank === "Queen" ? "self" : "parent", hrh: true, peerage: null, line: p.royalRank === "King" || p.royalRank === "Queen" ? 0 : 1 }),
+    outlook: p.outlook ?? 84,
+    talents: p.talents ?? legacyTalents(p.id),
     matureContent: p.matureContent ?? true,
     effort: p.effort ?? "steady",
     habits: p.habits ?? { exercise: 1, diet: 1 },

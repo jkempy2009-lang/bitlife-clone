@@ -31,7 +31,7 @@ export function processVices(p: PlayerState, rng: Rng, notices: Notices) {
   const v = p.vices;
   if (Object.values(v).some((x) => x >= 40) && !p.flags.includes("was_addict")) p.flags.push("was_addict");
   // Habits are sticky once established.
-  for (const k of Object.keys(v) as (keyof Vices)[]) if (v[k] >= 15) v[k] = clamp(v[k] + rng.int(0, 2));
+  for (const k of Object.keys(v) as (keyof Vices)[]) if (v[k] >= 15 && !(p.talents.discipline >= 65 && rng.chance((p.talents.discipline - 50) / 100))) v[k] = clamp(v[k] + rng.int(0, 2));
 
   // Habits cost money, and the heavy ones cost you at work.
   if (p.age >= 16) {
@@ -88,7 +88,7 @@ export function quitVice(p0: PlayerState, key: keyof Vices, rng: Rng): ActionRes
   if (level <= 0) return { player: p0 };
   if ((p.annual[`quit:${key}`] ?? 0) >= 1) return { player: p0, notices: [info("Not Yet", "You've already tried this year. Willpower needs time to recharge.")] };
   p.annual[`quit:${key}`] = 1;
-  if (rng.chance(clamp(0.65 - level / 140, 0.1, 0.85))) {
+  if (rng.chance(clamp(0.65 - level / 140 + (p.talents.discipline - 50) / 200, 0.1, 0.92))) {
     p.vices[key] = Math.round(level * 0.2);
     changeStat(p, "happiness", 4);
     const body = `You white-knuckled your way through it. Your ${label} habit is mostly behind you.`;

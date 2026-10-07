@@ -88,6 +88,11 @@ export function epitaph(p: PlayerState): string {
 export const heirs = (p: PlayerState): Relative[] =>
   p.relatives.filter((r) => r.relation === "Child" && r.alive);
 
+function blendTalents(a: PlayerState["talents"], b: PlayerState["talents"]): PlayerState["talents"] {
+  const mix = (x: number, y: number) => Math.round((x + y) / 2);
+  return { athletic: mix(a.athletic, b.athletic), musical: mix(a.musical, b.musical), acting: mix(a.acting, b.acting), charisma: mix(a.charisma, b.charisma), business: mix(a.business, b.business), discipline: mix(a.discipline, b.discipline) };
+}
+
 export function continueAsChild(old: PlayerState, childId: string, rng: Rng): PlayerState | null {
   const child = heirs(old).find((c) => c.id === childId);
   if (!child) return null;
@@ -151,6 +156,8 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     royalRank: royalHeir ? royalHeir.rank : "none",
     royal: royalHeir ? royalHeir.royal : null,
     royalRespect: royalParent ? 60 : 50,
+    // Gifts run in families: half from the parent, half luck.
+    talents: blendTalents(old.talents, fresh.talents),
     nation: royalParent ? { ...old.nation } : { economy: 50, freedom: 50, military: 50 },
     education: educationForAge(child.age),
     skills: { acting: 0, music: 0, charisma: 0, athletics: rng.int(0, 20) },

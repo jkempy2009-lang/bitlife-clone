@@ -455,6 +455,16 @@ export interface RoyalLife {
   line: number;
 }
 
+/** Hidden gifts (0-100). Never shown in play; they quietly shape what you're good at. */
+export interface Talents {
+  athletic: number;
+  musical: number;
+  acting: number;
+  charisma: number;
+  business: number;
+  discipline: number;
+}
+
 export interface IntimacyPrefs {
   /** Use an age window around your own age instead of fixed limits. */
   ageAuto: boolean;
@@ -913,6 +923,10 @@ export interface PlayerState {
   fame: number;
 
   // Core stats (0-100)
+  /** Hidden natural gifts that shape careers and willpower. */
+  talents: Talents;
+  /** Your temperament: the level happiness settles around. Set at birth (or in character design). */
+  outlook: number;
   happiness: number;
   health: number;
   smarts: number;

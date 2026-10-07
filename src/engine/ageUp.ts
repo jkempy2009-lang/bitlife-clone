@@ -44,7 +44,7 @@ import { processAthlete, processBusiness } from "./paths";
 import { processCreative } from "./creative";
 import { creativeFameFloor, processCelebrity } from "./celebrity";
 import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
-import { applyHabitEffects, habitCost, illnessCosts, riskMultiplier } from "./health";
+import { applyHabitEffects, applyMoodEffects, habitCost, illnessCosts, riskMultiplier } from "./health";
 import { SHARED_LIVING_FACTOR, SPOUSE_TAX, childSupportDue, marriedPartner, spouseIncome } from "./household";
 import { LIFESTYLES, RENT_TIERS, livesWithParents, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
 
@@ -300,6 +300,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
 
 function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
   applyHabitEffects(p);
+  applyMoodEffects(p);
   // Natural ageing
   const lingering = p.diseases.some((d) => d.severity !== "mild");
   if (p.age < 55 && !lingering) p.health += rng.int(1, 4);
@@ -556,7 +557,8 @@ function driftStats(p: PlayerState, rng: Rng) {
   const atHome = livesWithParents(p);
   const rentBonus = p.properties.length === 0 && p.age >= 18 ? (atHome ? (p.age >= 25 ? -3 : 0) : RENT_TIERS[p.residence.rentTier].happiness * 2) : 0;
   const moodBonus = p.age >= 18 && !p.isInPrison ? (LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1]).mood : 0;
-  const target = 62 + moodBonus + rentBonus + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
+  const temperament = Math.round(((p.outlook ?? 84) - 84) * 0.3);
+  const target = 62 + temperament + moodBonus + rentBonus + (partner && partner.relationshipBar > 60 ? 4 : 0) + (p.bankBalance > 50_000 ? 3 : 0) - p.diseases.length * 2 - (p.isInPrison ? 25 : 0);
   p.happiness += Math.round((target - p.happiness) * 0.1) + rng.int(-2, 2);
   if (p.age >= 40) p.looks -= rng.int(0, p.age >= 60 ? 3 : 2);
   if (p.age >= 70) p.smarts -= rng.int(0, 1);
