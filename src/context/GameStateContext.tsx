@@ -35,6 +35,8 @@ interface GameContextValue {
   newGame: (opts: Omit<NewLifeOptions, "startYear">) => void;
   continueSave: () => void;
   continueAsChild: (childId: string) => void;
+  /** Step aside while alive and play as one of your children. */
+  handOverTo: (childId: string) => void;
   quitToMenu: () => void;
   deleteSave: () => void;
   exportCurrent: () => string;
@@ -92,6 +94,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       },
       continueAsChild: (childId) => {
         dispatch({ type: "CONTINUE_AS_CHILD", childId });
+      },
+      handOverTo: (childId) => {
+        const pl = state.player;
+        if (pl?.alive) recordLife({ ...pl, alive: false, deathYear: pl.year, causeOfDeath: "handed the family over to their child" });
+        dispatch({ type: "CONTINUE_AS_CHILD", childId, living: true });
       },
       quitToMenu: () => {
         dispatch({ type: "QUIT_TO_MENU" });

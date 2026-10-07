@@ -18,7 +18,7 @@ export type Action =
   | { type: "DISMISS_NOTICE"; id: string }
   | { type: "SET_TAB"; tab: TabId }
   | { type: "CLEAR_BANNER" }
-  | { type: "CONTINUE_AS_CHILD"; childId: string }
+  | { type: "CONTINUE_AS_CHILD"; childId: string; living?: boolean }
   | { type: "QUIT_TO_MENU" };
 
 export const initialState: GameState = {
@@ -126,7 +126,7 @@ export function reducer(state: GameState, action: Action): GameState {
     case "CONTINUE_AS_CHILD": {
       if (!state.player) return state;
       const rng = makeRng(state.rngState);
-      const next = continueAsChild(state.player, action.childId, rng);
+      const next = continueAsChild(state.player, action.childId, rng, !!action.living);
       if (!next) return state;
       return { ...initialState, screen: "game", player: next, rngState: rng.state() };
     }

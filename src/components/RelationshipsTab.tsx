@@ -41,6 +41,7 @@ import { closeRelationship, type Intent } from "@/engine/intimacy";
 import { supportAction } from "@/engine/friends";
 import { ACTIVITY_COST, INTERESTS as KID_INTERESTS, PRIVATE_SCHOOL_COST, TUTOR_COST, childAction } from "@/engine/parenting";
 import { money } from "@/lib/format";
+import { HANDOVER_CASH_SHARE, HANDOVER_MIN_AGE, handoverBlocker } from "@/engine/legacy";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
 
@@ -417,6 +418,31 @@ function ExperienceMenu({ rel, safe }: { rel: Relative; safe: boolean }) {
   );
 }
 
+function HandOver({ rel }: { rel: Relative }) {
+  const { player: p, handOverTo } = useGame();
+  const [sure, setSure] = useState(false);
+  const blocker = handoverBlocker(p, rel);
+  const first = rel.name.split(" ")[0];
+  return (
+    <>
+      <SectionTitle hint="play as them instead">Pass the Torch</SectionTitle>
+      <p className="text-xs text-slate-400">
+        Step aside and live on as {first}. You'll stay in the family as their living parent. About {Math.round(HANDOVER_CASH_SHARE * 100)}% of your cash, plus your property, vehicles, investments and any business, goes with them. Your debts stay with you. This ends your own story.
+      </p>
+      {blocker ? (
+        <p className="text-xs text-amber-300">{blocker}</p>
+      ) : sure ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="gold" onClick={() => handOverTo(rel.id)}>Yes, become {first}</Button>
+          <Button variant="secondary" onClick={() => setSure(false)}>Not yet</Button>
+        </div>
+      ) : (
+        <Button variant="secondary" onClick={() => setSure(true)}>👑 Hand my life to {first}</Button>
+      )}
+    </>
+  );
+}
+
 function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe: boolean; setSafe: (b: boolean) => void; onBack: () => void }) {
   const { player: p, act } = useGame();
   const used = p.annual[`rel:${rel.id}`] ?? 0;
@@ -511,6 +537,8 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
           <p className="text-xs text-slate-500">Activities cost ${ACTIVITY_COST} a year. {rel.interest && rel.interest !== "none" ? `${rel.name.split(" ")[0]} loves ${rel.interest}.` : ""} Neglected teenagers get into trouble.</p>
         </>
       )}
+
+      {rel.relation === "Child" && rel.alive && rel.age >= HANDOVER_MIN_AGE && <HandOver rel={rel} />}
 
       {rel.relation === "Partner" && (
         <>

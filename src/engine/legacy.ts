@@ -94,25 +94,45 @@ function blendTalents(a: PlayerState["talents"], b: PlayerState["talents"]): Pla
   return out;
 }
 
-export function continueAsChild(old: PlayerState, childId: string, rng: Rng): PlayerState | null {
+/** Youngest child you can hand your life to while you're still alive. */
+export const HANDOVER_MIN_AGE = 16;
+/** Share of your cash that goes with you when you step aside (no estate tax, but you keep some to live on). */
+export const HANDOVER_CASH_SHARE = 0.75;
+
+/** Why you can't hand your life over to this child right now (null = you can). */
+export function handoverBlocker(p: PlayerState, child: Relative): string | null {
+  if (!p.alive) return "Your story has already ended.";
+  if (child.relation !== "Child" || !child.alive) return "That child can't take over.";
+  if (child.age < HANDOVER_MIN_AGE) return `${child.name.split(" ")[0]} is too young. They need to be at least ${HANDOVER_MIN_AGE}.`;
+  if (p.isInPrison) return "You can't hand your life over from prison.";
+  if (p.pendingTrial) return "Not while you're facing trial.";
+  if (p.isFugitive) return "Not while you're on the run.";
+  if (p.royalRank === "King" || p.royalRank === "Queen" || p.royal?.crown === "self") return "A sovereign can't simply step aside. The crown passes on death (or by abdication).";
+  return null;
+}
+
+/**
+ * Take over as one of your children. After death (default) the old character is gone and the estate passes on with
+ * 10% tax. With `living`, the old character steps aside but stays in the family as a living parent.
+ */
+export function continueAsChild(old: PlayerState, childId: string, rng: Rng, living = false): PlayerState | null {
   const child = heirs(old).find((c) => c.id === childId);
   if (!child) return null;
+  if (living && handoverBlocker(old, child)) return null;
 
-  const year = old.deathYear ?? old.year;
+  const year = living ? old.year : (old.deathYear ?? old.year);
   const fresh = createNewPlayer({ scenario: "average", startYear: year, country: old.birthCountry }, rng);
   const [firstName, ...rest] = child.name.split(" ");
   const lastName = rest.join(" ") || old.lastName;
   const bizHeir = inheritBusiness(old, child.age, rng);
-  const inherited = Math.round(Math.max(0, old.bankBalance) * 0.9) + bizHeir.cash; // 10% estate tax
+  const inherited = Math.round(Math.max(0, old.bankBalance) * (living ? HANDOVER_CASH_SHARE : 0.9)) + bizHeir.cash; // 10% estate tax after death
   const heirsLeft = heirs(old).filter((c) => c.id !== child.id);
   const survivingPartner = old.relatives.find((r) => r.relation === "Partner" && r.alive && r.partnerStatus !== "ex");
 
   const relatives: Relative[] = [];
   relatives.push({
     ...makeRelativeBase(rng, "Parent", `${old.firstName} ${old.lastName}`, old.age, old.gender, Math.min(5, Math.max(1, Math.round(1 + netWorth(old) / 400_000))), 80),
-    alive: false,
-    deathAge: old.age,
-    deathYear: year,
+    ...(living ? { alive: true, relationshipBar: Math.max(70, child.relationshipBar) } : { alive: false, deathAge: old.age, deathYear: year }),
   });
   if (survivingPartner) {
     relatives.push({ ...survivingPartner, id: rng.id(), relation: "Parent", partnerStatus: undefined, relationshipBar: Math.max(60, survivingPartner.relationshipBar) });
@@ -143,7 +163,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     looks: child.looks,
     diseases: [],
     bankBalance: inherited,
-    outstandingLoans: old.outstandingLoans,
+    outstandingLoans: living ? 0 : old.outstandingLoans,
     creditScore: 600,
     annualSalary: 0,
     taxesPaidThisYear: 0,
@@ -202,13 +222,29 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     deathYear: null,
   };
   addLog(next, logHeader(next));
-  addLog(next, `You have taken control of your life at age ${child.age}, inheriting $${inherited.toLocaleString("en-US")} from your late parent.`);
+  addLog(next, living
+    ? `${old.firstName} ${old.lastName} stepped aside. You took control of your life at age ${child.age}, with $${inherited.toLocaleString("en-US")} from your parent.`
+    : `You have taken control of your life at age ${child.age}, inheriting $${inherited.toLocaleString("en-US")} from your late parent.`);
   if (old.properties.length || old.vehicles.length) {
-    addLog(next, `You also inherited ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}. The estate tax took ${money(Math.round(Math.max(0, old.bankBalance) * 0.1))}.`);
+    addLog(next, living
+      ? `Your parent also signed over ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}.`
+      : `You also inherited ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}. The estate tax took ${money(Math.round(Math.max(0, old.bankBalance) * 0.1))}.`);
   }
   if (bizHeir.business) next.flags.push("business_owner");
   if (bizHeir.note) addLog(next, bizHeir.note);
   if (royalHeir) addLog(next, royalHeir.log);
   applyFamilyLegacy(next, old, child, rng); // family continuity: upbringing, reputation, traits, flags, opening events
+  if (living) {
+    // Nobody died: no grief, no memorial, no reading of the will. Your old self carries on as a living parent.
+    for (const r of next.relatives) if (r.relation === "Parent" && r.traits?.includes("Grieving")) r.traits = r.traits.filter((t) => t !== "Grieving");
+    const me = next.relatives.find((r) => r.relation === "Parent" && r.name === `${old.firstName} ${old.lastName}`);
+    if (me) {
+      me.smarts = old.smarts;
+      me.looks = old.looks;
+    }
+    next.queuedEvents = next.queuedEvents.filter((e) => e !== "legacy_memorial");
+    next.scheduled = next.scheduled.filter((s) => s.id !== "estate_heir_will" && s.id !== "legacy_letter_note");
+    next.flags.push("parent_stepped_aside");
+  }
   return next;
 }

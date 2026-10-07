@@ -1,7 +1,8 @@
 import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
-import { createNewPlayer, getPartner } from "../state";
+import { createNewPlayer, getPartner, makeRelativeBase } from "../state";
+import { HANDOVER_CASH_SHARE, continueAsChild, handoverBlocker } from "../legacy";
 import { ageUp } from "../ageUp";
 import { endRelationship } from "../social";
 import { divorceSettlement, minorChildren, spouseIncome } from "../household";
@@ -186,5 +187,51 @@ describe("parenting", () => {
     processChildren(q, makeRng(5), []);
     expect(k.occupation).toBeTruthy();
     expect(k.incomeTier).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("handing your life to a child while alive", () => {
+  const setup = (seed = 3) => {
+    const rng = makeRng(seed);
+    const p = createNewPlayer({ scenario: "wealthy", startYear: 2026, talents: NEUTRAL }, rng);
+    p.age = 55;
+    p.birthYear = p.year - 55;
+    p.bankBalance = 400_000;
+    p.outstandingLoans = 20_000;
+    p.relatives = p.relatives.filter((r) => r.relation !== "Child");
+    const kid = makeRelativeBase(rng, "Child", `Sam ${p.lastName}`, 24, "Male", 3, 70);
+    p.relatives.push(kid);
+    return { rng, p, kid };
+  };
+
+  it("keeps you alive as a parent, moves the money and leaves debts behind", () => {
+    const { rng, p, kid } = setup();
+    const next = continueAsChild(p, kid.id, rng, true)!;
+    expect(next).not.toBeNull();
+    expect(next.firstName).toBe("Sam");
+    expect(next.bankBalance).toBe(Math.round(400_000 * HANDOVER_CASH_SHARE));
+    expect(next.outstandingLoans).toBe(0);
+    const parent = next.relatives.find((r) => r.relation === "Parent" && r.name.startsWith(p.firstName));
+    expect(parent?.alive).toBe(true);
+    expect(parent?.age).toBe(55);
+    expect(next.queuedEvents).not.toContain("legacy_memorial");
+    expect(parent?.traits ?? []).not.toContain("Grieving");
+  });
+
+  it("the heir plays on and the old parent still ages in the family", () => {
+    const { rng, p, kid } = setup(5);
+    let next = continueAsChild(p, kid.id, rng, true)!;
+    for (let i = 0; i < 10 && next.alive; i++) next = ageUp(next, rng).player;
+    expect(next.age).toBeGreaterThan(24);
+    expect(next.relatives.some((r) => r.relation === "Parent" && r.name.startsWith(p.firstName))).toBe(true);
+  });
+
+  it("refuses young children, prison and sovereigns", () => {
+    const { rng, p, kid } = setup();
+    expect(handoverBlocker(p, kid)).toBeNull();
+    expect(handoverBlocker(p, { ...kid, age: 15 })).toMatch(/too young/);
+    expect(handoverBlocker({ ...p, isInPrison: true }, kid)).toMatch(/prison/);
+    expect(handoverBlocker({ ...p, royalRank: "King" }, kid)).toMatch(/sovereign/i);
+    expect(continueAsChild({ ...p, isInPrison: true }, kid.id, rng, true)).toBeNull();
   });
 });
