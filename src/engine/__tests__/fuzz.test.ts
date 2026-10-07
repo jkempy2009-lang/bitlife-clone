@@ -13,6 +13,7 @@ import { buyCar, buyHouse, carInventory, houseInventory, renovate, sellCar, take
 import { doLeisure, doWellness, plasticSurgery, visitDoctor, visitWitchDoctor, buyLotteryTicket } from "../activities";
 import { dateNight, interact, meetSomeone, propose, tryForBaby } from "../social";
 import { BUSINESS_TYPES, brandCollab, postContent, signWithClub, startBusiness, startChannel, trainAthletics, workOnBusiness, investInBusiness } from "../paths";
+import { SPORTS, acceptOffer, attendShowcase, chooseTreatment, comeback, declineOffer, fireAgent, hireAgent, negotiateOffer, quitSport, retireFromSport, setEffort, stopDoping } from "../athlete";
 import { DECREES } from "@/data/careersRegistry";
 import { continueAsChild, heirs } from "../legacy";
 import { divest, invest, relocate, setRentTier, INVESTMENTS } from "../world";
@@ -52,6 +53,17 @@ function checkInvariants(p: PlayerState) {
   expect(p.creditScore).toBeLessThanOrEqual(850);
   for (const r of p.relatives) expect(r.relationshipBar).toBeGreaterThanOrEqual(0);
   if (p.isInPrison) expect(p.currentJob).toBeNull();
+  const a = p.athlete;
+  for (const k of ["rating", "form", "consistency", "exposure", "talent"] as const) {
+    expect(Number.isFinite(a[k]), `athlete.${k} finite`).toBe(true);
+    expect(a[k]).toBeGreaterThanOrEqual(0);
+    expect(a[k]).toBeLessThanOrEqual(100);
+  }
+  // A sports contract only exists inside a contracted stage, and nobody holds a second job beside it.
+  if (p.currentJob?.lineId === "athlete") expect(["semipro", "pro"]).toContain(a.stage);
+  if (a.stage === "semipro" || a.stage === "pro") expect(p.business).toBeNull();
+  if (a.stage === "retired") expect(p.currentJob?.lineId).not.toBe("athlete");
+  expect(a.history.length).toBeLessThanOrEqual(40);
 }
 
 function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): PlayerState {
@@ -114,7 +126,18 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl, r) => postContent(pl, r),
       (pl) => brandCollab(pl),
       (pl, r) => trainAthletics(pl, r),
-      (pl, r) => signWithClub(pl, "Soccer", r),
+      (pl, r) => signWithClub(pl, r.pick(SPORTS), r),
+      (pl, r) => (pl.athlete.offers[0] ? acceptOffer(pl, r.pick(pl.athlete.offers).id, r) : { player: pl }),
+      (pl, r) => (pl.athlete.offers[0] ? negotiateOffer(pl, r.pick(pl.athlete.offers).id, r) : { player: pl }),
+      (pl) => (pl.athlete.offers[0] && rng.chance(0.3) ? declineOffer(pl, pl.athlete.offers[0].id) : { player: pl }),
+      (pl, r) => chooseTreatment(pl, r.pick(["rest", "rehab", "surgery", "play"] as const), r),
+      (pl, r) => attendShowcase(pl, r),
+      (pl) => (rng.chance(0.15) ? quitSport(pl) : { player: pl }),
+      (pl) => (rng.chance(0.2) ? retireFromSport(pl) : { player: pl }),
+      (pl) => comeback(pl),
+      (pl) => (rng.chance(0.5) ? hireAgent(pl) : fireAgent(pl)),
+      (pl) => stopDoping(pl),
+      (pl, r) => setEffort(pl, r.pick(["coast", "steady", "grind"] as const)),
       (pl, r) => invest(pl, r.pick(INVESTMENTS).id, 5_000),
       (pl) => divest(pl, rng.pick(Object.keys(pl.investments).concat("index"))),
       (pl) => setRentTier(pl, rng.int(0, 3)),
@@ -174,6 +197,44 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
   return p;
 }
 
+/** A sports-obsessed life: commits young, then makes random career decisions every year. */
+function playAthleteBot(seed: number): PlayerState {
+  const rng = makeRng(seed);
+  let p = createNewPlayer({ scenario: "random", startYear: 2026 }, rng);
+  for (let guard = 0; guard < 90 && p.alive; guard++) {
+    const res = ageUp(p, rng);
+    p = res.player;
+    checkInvariants(p);
+    for (const n of (res.notices ?? []) as Notice[]) {
+      if (n.kind === "event" && p.alive) p = run(p, rng, (pl, r) => resolveEvent(pl, n.event, r.int(0, n.event.options.length - 1), r)).p;
+    }
+    if (!p.alive) break;
+    if (p.pendingTrial) p = run(p, rng, (pl, r) => resolveTrial(pl, "public", r)).p;
+    if (p.age >= 9 && p.athlete.stage === "none" && rng.chance(0.5)) p = run(p, rng, (pl, r) => signWithClub(pl, r.pick(SPORTS), r)).p;
+    if (p.athlete.stage !== "none" && rng.chance(0.4)) p = run(p, rng, (pl, r) => setEffort(pl, r.pick(["steady", "grind", "grind", "coast"] as const))).p;
+    for (let i = 0; i < 3 && p.alive; i++) {
+      const o = p.athlete.offers;
+      const pick = o.length ? rng.pick(o).id : "none";
+      const acts: Array<(pl: PlayerState, r: Rng) => ActionResult> = [
+        (pl, r) => acceptOffer(pl, pick, r),
+        (pl, r) => negotiateOffer(pl, pick, r),
+        (pl) => declineOffer(pl, pick),
+        (pl, r) => chooseTreatment(pl, r.pick(["rest", "rehab", "surgery", "play"] as const), r),
+        (pl, r) => attendShowcase(pl, r),
+        (pl, r) => trainAthletics(pl, r),
+        (pl) => (rng.chance(0.1) ? quitSport(pl) : { player: pl }),
+        (pl) => (rng.chance(0.15) ? retireFromSport(pl) : { player: pl }),
+        (pl) => comeback(pl),
+        (pl) => hireAgent(pl),
+      ];
+      p = run(p, rng, rng.pick(acts)).p;
+      if (p.pendingTrial) p = run(p, rng, (pl, r) => resolveTrial(pl, "public", r)).p;
+    }
+    checkInvariants(p);
+  }
+  return p;
+}
+
 describe("fuzz: bot that pokes every system", () => {
   it("never produces invalid state across many lives", () => {
     for (let s = 1; s <= 120; s++) {
@@ -181,6 +242,16 @@ describe("fuzz: bot that pokes every system", () => {
       const p = playBot(s, scenario);
       expect(p.age).toBeLessThanOrEqual(120);
     }
+  }, 180_000);
+
+  it("sports-career bot never breaks the athlete state machine", () => {
+    let careers = 0;
+    for (let s = 1; s <= 80; s++) {
+      const p = playAthleteBot(7000 + s);
+      if (p.athlete.record.seasons > 0) careers++;
+      expect(p.age).toBeLessThanOrEqual(120);
+    }
+    expect(careers).toBeGreaterThan(30);
   }, 180_000);
 
   it("generations chain: continue as child repeatedly", () => {
