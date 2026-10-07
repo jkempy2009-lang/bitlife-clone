@@ -21,6 +21,7 @@ import { HOBBIES, practiceHobby } from "../hobbies";
 import { charityDrive, giveSpeech, runForOffice } from "../politics";
 import { joinMob, leaveMob } from "../underworld";
 import { adoptChild } from "../social";
+import { runMission } from "../spy";
 import { COUNTRIES } from "@/data/countries";
 import type { ActionResult, Notice, PlayerState } from "@/types/game.types";
 
@@ -120,6 +121,9 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl, r) => joinMob(pl, r),
       (pl, r) => leaveMob(pl, r),
       (pl, r) => adoptChild(pl, r),
+      (pl, r) => runMission(pl, r.pick(["stealth", "social", "force"]), r),
+      (pl, r) => applyForJob(pl, "spy", r),
+      (pl, r) => enrollProgram(pl, "Masters", null, r),
       (pl, r) => doLeisure(pl, r.pick(["bar", "experiment"] as const), r),
       (pl, r) => attemptEscape(pl, "tunnel", r),
       (pl, r) => startRiot(pl, r),

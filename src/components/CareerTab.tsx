@@ -34,9 +34,9 @@ import {
 import { isRoyal } from "@/engine/state";
 import { money } from "@/lib/format";
 import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
-import { AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, UnderworldSection } from "./CareerPaths";
+import { AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, SpySection, UnderworldSection } from "./CareerPaths";
 
-type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "stardom" | "music";
+type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "spy" | "stardom" | "music";
 
 export default function CareerTab() {
   const { player: p } = useGame();
@@ -49,7 +49,7 @@ export default function CareerTab() {
     { id: "school", label: "🎓 Academics" },
     ...(royal ? [] : [{ id: "business" as const, label: "🏢 Business" }, { id: "sports" as const, label: "🏅 Athlete" }]),
     { id: "online", label: "📱 Influencer" },
-    ...(royal ? [] : [{ id: "politics" as const, label: "🏛️ Politics" }, { id: "underworld" as const, label: "🕴️ Underworld" }]),
+    ...(royal ? [] : [{ id: "politics" as const, label: "🏛️ Politics" }, { id: "underworld" as const, label: "🕴️ Underworld" }, { id: "spy" as const, label: "🕵️ Agent" }]),
     ...(royal ? [] : [{ id: "stardom" as const, label: "🎬 Movie Star" }]),
     { id: "music", label: "🎸 Rock Star" },
   ];
@@ -63,6 +63,7 @@ export default function CareerTab() {
       {section === "online" && <InfluencerSection />}
       {section === "politics" && <PoliticsSection />}
       {section === "underworld" && <UnderworldSection />}
+      {section === "spy" && <SpySection />}
       {section === "stardom" && <MovieStar />}
       {section === "music" && <RockStar />}
     </div>
@@ -75,6 +76,7 @@ export default function CareerTab() {
 
 const STAGE_LABEL: Record<string, string> = {
   None: "Not enrolled",
+  Masters: "Graduate School",
   Primary: "Primary School",
   HighSchool: "High School",
   University: "University",
@@ -123,7 +125,7 @@ function Academics() {
           <div className="mt-3 flex flex-wrap gap-1.5">
             {e.degrees.map((d) => (
               <Pill key={d} tone="green">
-                {d === "highschool" ? "High School Diploma" : d === "md" ? "Medical Degree" : d === "jd" ? "Law Degree" : `BA/BS ${UNIVERSITY_MAJORS.find((m) => m.id === d.slice(9))?.name ?? ""}`}
+                {d === "highschool" ? "High School Diploma" : d === "md" ? "Medical Degree" : d === "jd" ? "Law Degree" : d === "masters" ? "Master\'s Degree" : `BA/BS ${UNIVERSITY_MAJORS.find((m) => m.id === d.slice(9))?.name ?? ""}`}
               </Pill>
             ))}
           </div>
@@ -149,6 +151,11 @@ function Academics() {
             <Button variant="primary" className="w-full" onClick={() => act((pl, rng) => enrollProgram(pl, "University", major, rng))}>
               Apply
             </Button>
+          </Card>
+          <Card>
+            <div className="mb-1 font-semibold">🎓 Graduate School</div>
+            <p className="mb-2 text-xs text-slate-400">2 years · {money(PROGRAMS.Masters.tuition)}/yr · needs a Bachelor's & {PROGRAMS.Masters.minSmarts}+ Smarts. Opens academia, psychology and consulting.</p>
+            <Button variant="primary" className="w-full" onClick={() => act((pl, rng) => enrollProgram(pl, "Masters", null, rng))}>Apply</Button>
           </Card>
           <Card>
             <div className="mb-1 font-semibold">⚕️ Medical School</div>

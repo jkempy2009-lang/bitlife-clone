@@ -16,7 +16,7 @@ import type { Rng } from "@/lib/rng";
 import { freshSeed } from "@/lib/rng";
 import { initialState, reducer } from "@/engine/reducer";
 import { recordAchievements, recordLife } from "@/engine/hall";
-import { clearSave, hasSaveSnapshot, loadGame, saveGame, subscribeSave } from "@/engine/save";
+import { clearSave, exportSave, hasSaveSnapshot, loadGame, parseSave, saveGame, subscribeSave } from "@/engine/save";
 import type { NewLifeOptions } from "@/engine/state";
 
 export interface BlackjackHand {
@@ -47,6 +47,8 @@ interface GameContextValue {
   continueAsChild: (childId: string) => void;
   quitToMenu: () => void;
   deleteSave: () => void;
+  exportCurrent: () => string;
+  importFromText: (text: string) => boolean;
 }
 
 const Ctx = createContext<GameContextValue | null>(null);
@@ -109,6 +111,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       },
       deleteSave: () => {
         clearSave();
+      },
+      exportCurrent: () => exportSave(state.player as PlayerState, state.rngState),
+      importFromText: (text) => {
+        const data = parseSave(text);
+        if (!data) return false;
+        setBlackjack(null);
+        dispatch({ type: "LOAD", player: data.player, rngState: data.rngState });
+        return true;
       },
     }),
     [state, ready, hasSave, blackjack, act],

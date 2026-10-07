@@ -256,3 +256,37 @@ describe("achievements", () => {
     expect(Number.isFinite(netWorth(cur))).toBe(true);
   });
 });
+
+describe("agency, masters and history", () => {
+  it("spy missions require the job and are limited to once per year", async () => {
+    const { runMission, missionChance } = await import("../spy");
+    const { p } = base(30);
+    expect(runMission(p, "stealth", makeRng(1)).player).toBe(p);
+    p.currentJob = { id: "j", title: "Trainee Operative", company: "Bureau", salary: 45_000, performance: 50, tier: 0, lineId: "spy" };
+    p.smarts = 90;
+    expect(missionChance(p, "stealth")).toBeGreaterThan(missionChance({ ...p, smarts: 10 }, "stealth"));
+    const once = runMission(p, "stealth", makeRng(2)).player;
+    const twice = runMission(once, "stealth", makeRng(3));
+    expect(twice.player).toBe(once);
+  });
+  it("graduate school needs a bachelor's and yields a master's degree", async () => {
+    const { enrollProgram } = await import("../career");
+    const { p, rng } = base(31);
+    p.smarts = 90;
+    expect(enrollProgram(p, "Masters", null, rng).player.education.stage).toBe("None");
+    p.education.degrees.push("bachelor:science");
+    let enrolled = p;
+    for (let s = 0; s < 20 && enrolled.education.stage === "None"; s++) enrolled = enrollProgram({ ...p, annual: {} }, "Masters", null, makeRng(s)).player;
+    expect(enrolled.education.stage).toBe("Masters");
+    let cur = enrolled;
+    for (let i = 0; i < 6 && !cur.education.degrees.includes("masters"); i++) cur = ageUp(cur, rng).player;
+    expect(cur.education.degrees).toContain("masters");
+  });
+  it("records a history snapshot every year", () => {
+    const { rng, p } = base(32);
+    let cur = p;
+    for (let i = 0; i < 5; i++) cur = ageUp(cur, rng).player;
+    expect(cur.history).toHaveLength(5);
+    expect(cur.history[4].age).toBe(p.age + 5);
+  });
+});

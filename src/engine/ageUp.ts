@@ -359,6 +359,9 @@ function processEducation(p: PlayerState, rng: Rng, notices: Notices) {
   } else if (e.stage === "LawSchool") {
     degree = "jd";
     label = "law school";
+  } else if (e.stage === "Masters") {
+    degree = "masters";
+    label = "graduate school";
   }
   if (!e.degrees.includes(degree)) e.degrees.push(degree);
   e.stage = "None";
@@ -428,9 +431,10 @@ function processEntertainment(p: PlayerState) {
   const actorActive = job?.lineId === "actor";
   if (actorActive && job.tier >= 2) changeStat(p, "fame", job.tier - 1);
   if (job?.lineId === "model" && job.tier >= 1) changeStat(p, "fame", job.tier);
+  if (job?.lineId === "astronaut" && job.tier >= 1) changeStat(p, "fame", 1);
   const athleteActive = job?.lineId === "athlete" && job.tier >= 1;
   if (athleteActive) changeStat(p, "fame", job!.tier);
-  const active = actorActive || athleteActive || job?.lineId === "model" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
+  const active = actorActive || athleteActive || job?.lineId === "model" || job?.lineId === "astronaut" || p.music.signed || isRoyal(p) || p.influencer.active || job?.lineId === "athlete";
   if (!active) changeStat(p, "fame", p.fame > 0 ? -2 : 0);
 }
 
@@ -547,6 +551,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   }
 
   finalize(p, notices);
+  p.history.push({ age: p.age, netWorth: netWorth(p), happiness: Math.round(p.happiness), health: Math.round(p.health) });
 
   // 6. Event selection matrix (skipped when dead)
   if (p.alive) {

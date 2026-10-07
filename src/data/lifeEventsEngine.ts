@@ -12,6 +12,10 @@ import { LATER_EVENTS } from "./events/later";
 import { SOCIAL_EVENTS } from "./events/social";
 import { SPECIAL_EVENTS } from "./events/special";
 import { EXTRA_EVENTS } from "./events/extra";
+import { LIFE2_EVENTS } from "./events/life2";
+import { PATHS2_EVENTS } from "./events/paths2";
+import { EARLY2_EVENTS } from "./events/early2";
+import { LIFE3_EVENTS } from "./events/life3";
 
 export type EventCategory =
   | "general"
@@ -31,6 +35,8 @@ export interface NewRelativeSpec {
   /** Age relative to the player (partners/friends). */
   ageOffset?: [number, number];
   partnerStatus?: Exclude<PartnerStatus, "ex">;
+  /** Absolute age (e.g. 0 for a newborn sibling). */
+  age?: number;
   /** Pre-generated person (used for "meet someone" encounters). */
   prebuilt?: Relative;
 }
@@ -147,6 +153,10 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...SOCIAL_EVENTS,
   ...SPECIAL_EVENTS,
   ...EXTRA_EVENTS,
+  ...LIFE2_EVENTS,
+  ...PATHS2_EVENTS,
+  ...EARLY2_EVENTS,
+  ...LIFE3_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

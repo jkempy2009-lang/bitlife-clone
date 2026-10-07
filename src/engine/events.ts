@@ -180,7 +180,10 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng) {
   }
   if (e.marry) {
     const partner = getPartner(p);
-    if (partner) partner.partnerStatus = "married";
+    if (partner && partner.partnerStatus !== "married") {
+      partner.partnerStatus = "married";
+      p.queuedEvents.push("wedding_day");
+    }
   }
   if (e.endRelationship) endRelationship(p, e.endRelationship);
   if (e.addRelative) {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { BarChart3, Briefcase, Building2, Lock, Sparkles, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BarChart3, Briefcase, Building2, Lock, Settings, Sparkles, Users } from "lucide-react";
 import { GameStateProvider, useGame } from "@/context/GameStateContext";
 import type { TabId } from "@/types/game.types";
 import { money } from "@/lib/format";
@@ -15,6 +15,31 @@ import PrisonView from "./PrisonView";
 import ModalManager from "./ModalManager";
 import TrialView from "./TrialView";
 import TombstoneOverlay from "./TombstoneOverlay";
+import { Button } from "./ui";
+
+function SettingsModal({ onClose }: { onClose: () => void }) {
+  const { exportCurrent, importFromText, quitToMenu } = useGame();
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/85 p-3 sm:items-center">
+      <div className="pop-in w-full max-w-md rounded-3xl border border-slate-600 bg-slate-800 p-5">
+        <h2 className="text-xl font-bold">Settings</h2>
+        <p className="mt-1 text-xs text-slate-400">Your game autosaves in this browser. Export a backup to move it between devices.</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button variant="secondary" onClick={async () => { try { await navigator.clipboard.writeText(exportCurrent()); setMsg("Save copied to clipboard."); } catch { setText(exportCurrent()); setMsg("Clipboard unavailable. Copy the text below."); } }}>📋 Export save</Button>
+          <Button variant="secondary" onClick={() => { if (importFromText(text)) onClose(); else setMsg("That doesn't look like a valid save."); }} disabled={!text.trim()}>📥 Import save</Button>
+        </div>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a save here to import it…" className="mt-2 h-24 w-full rounded-xl border border-slate-600 bg-slate-900 p-2 text-xs outline-none focus:border-emerald-500" aria-label="Save data" />
+        {msg && <p className="mt-1 text-xs text-amber-300">{msg}</p>}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button variant="ghost" onClick={() => { quitToMenu(); onClose(); }}>🏠 Main menu</Button>
+          <Button variant="primary" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: "dashboard", label: "Life", icon: BarChart3 },
@@ -46,6 +71,7 @@ function Banner() {
 
 function Shell() {
   const { state, player: p, setTab, ageUp } = useGame();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const trial = !!p.pendingTrial;
   const locked = trial || !p.alive;
   const noticesPending = state.notices.length > 0;
@@ -66,9 +92,14 @@ function Shell() {
           <div className="truncate text-sm font-bold">{p.firstName} {p.lastName}</div>
           <div className="text-xs text-slate-400">Age {p.age} · {p.year}</div>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-slate-400">Cash</div>
-          <div className="text-sm font-bold tabular-nums text-emerald-300">{money(p.bankBalance)}</div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xs text-slate-400">Cash</div>
+            <div className="text-sm font-bold tabular-nums text-emerald-300">{money(p.bankBalance)}</div>
+          </div>
+          <button type="button" aria-label="Settings" onClick={() => setSettingsOpen(true)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+            <Settings size={18} />
+          </button>
         </div>
       </header>
 
@@ -117,6 +148,7 @@ function Shell() {
       </footer>
 
       <ModalManager />
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {trial && !noticesPending && <TrialView />}
       {!p.alive && !noticesPending && <TombstoneOverlay />}
     </div>

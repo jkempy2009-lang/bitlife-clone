@@ -57,8 +57,24 @@ function hydrate(p: PlayerState): PlayerState {
     vices: p.vices ?? { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
     probation: p.probation ?? null,
     achievements: p.achievements ?? [],
+    history: p.history ?? [],
     stats: { ...p.stats, highestSalary: p.stats.highestSalary ?? 0 },
   };
+}
+
+/** Parse a pasted/exported save. Returns null if it doesn't look like a valid save. */
+export function parseSave(json: string): SaveData | null {
+  try {
+    const data = JSON.parse(json) as SaveData;
+    if (data.v !== 1 || typeof data.player?.age !== "number" || !Array.isArray(data.player.relatives)) return null;
+    return { ...data, rngState: typeof data.rngState === "number" ? data.rngState : 1, player: hydrate(data.player) };
+  } catch {
+    return null;
+  }
+}
+
+export function exportSave(player: PlayerState, rngState: number): string {
+  return JSON.stringify({ v: 1, player, rngState } satisfies SaveData);
 }
 
 export function clearSave() {

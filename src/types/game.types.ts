@@ -86,7 +86,8 @@ export type EducationStage =
   | "HighSchool"
   | "University"
   | "MedicalSchool"
-  | "LawSchool";
+  | "LawSchool"
+  | "Masters";
 
 export interface EducationState {
   stage: EducationStage;
@@ -206,6 +207,13 @@ export interface LifetimeStats {
   yearsInPrison: number;
 }
 
+export interface HistoryPoint {
+  age: number;
+  netWorth: number;
+  happiness: number;
+  health: number;
+}
+
 export interface PlayerState {
   // Personal profile
   id: string;
@@ -277,6 +285,7 @@ export interface PlayerState {
 
   // Engine bookkeeping
   achievements: string[];
+  history: HistoryPoint[];
   flags: string[];
   /** Per-year action counters (reset on Age Up). */
   annual: Record<string, number>;

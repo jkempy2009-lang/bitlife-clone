@@ -67,6 +67,7 @@ export function degreeName(id: string): string {
   if (id === "highschool") return "a High School Diploma";
   if (id === "bachelor") return "a Bachelor's Degree";
   if (id === "md") return "a Medical Degree";
+  if (id === "masters") return "a Master's Degree";
   if (id === "jd") return "a Law Degree";
   if (id.startsWith("bachelor:")) {
     const major = UNIVERSITY_MAJORS.find((m) => m.id === id.slice(9));
@@ -231,7 +232,7 @@ export function dropOut(p0: PlayerState): ActionResult {
 
 export function enrollProgram(
   p0: PlayerState,
-  stage: Extract<EducationStage, "University" | "MedicalSchool" | "LawSchool">,
+  stage: Extract<EducationStage, "University" | "MedicalSchool" | "LawSchool" | "Masters">,
   major: string | null,
   rng: Rng,
 ): ActionResult {

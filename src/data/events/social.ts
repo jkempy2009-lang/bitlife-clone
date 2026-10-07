@@ -14,7 +14,7 @@ export const SOCIAL_EVENTS: LifeEvent[] = [
     opt("Trust them", "You trusted them. It was a surprise party plan.", { relationshipDelta: { target: "Partner", delta: 8 }, karmaDelta: 2 }),
   ], { requires: { hasPartner: true }, cooldown: 6 }),
   ev("partner_proposes", "romance", 20, 55, "Down on One Knee", "{partner} is on one knee. Everyone in the restaurant is staring.", [
-    opt("Say yes!", "You said yes! The restaurant erupted in applause. You're engaged and eventually wed.", { happinessDelta: 14, relationshipDelta: { target: "Partner", delta: 15 }, bankBalanceDelta: -4000, marry: true }),
+    opt("Say yes!", "You said yes! The restaurant erupted in applause. You're engaged and eventually wed.", { happinessDelta: 14, relationshipDelta: { target: "Partner", delta: 15 }, marry: true }),
     opt("Say not yet", "You asked for more time. {partner} took it gracefully.", { relationshipDelta: { target: "Partner", delta: -8 }, happinessDelta: -3 }),
     opt("Say no and leave", "You said no and walked out. It was a painful scene.", { endRelationship: "breakup", happinessDelta: -8, karmaDelta: -2 }),
   ], { requires: { hasPartner: true, custom: (p) => p.relatives.some((r) => r.relation === "Partner" && r.partnerStatus === "dating" && r.relationshipBar >= 55) }, cooldown: 4, weight: 2 }),

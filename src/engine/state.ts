@@ -289,6 +289,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     pendingTrial: null,
     criminalRecord: [],
     achievements: [],
+    history: [],
     flags,
     annual: {},
     queuedEvents: [],

@@ -46,7 +46,8 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
   const [lo, hi] = spec.ageOffset ?? [-2, 3];
   const first = randomName(p.birthCountry, gender, rng).first;
   const last = spec.relation === "Sibling" ? p.lastName : rng.pick(country.lastNames);
-  return makeRelativeBase(rng, spec.relation, `${first} ${last}`, Math.max(3, p.age + rng.int(lo, hi)), gender, rng.int(1, 4), rng.int(45, 80));
+  const age = spec.age ?? Math.max(3, p.age + rng.int(lo, hi));
+  return makeRelativeBase(rng, spec.relation, `${first} ${last}`, age, gender, rng.int(1, 4), rng.int(45, 80));
 }
 
 export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Relative {
@@ -246,9 +247,9 @@ export function propose(p0: PlayerState, rng: Rng): ActionResult {
   if (rng.chance(clamp(partner.relationshipBar / 110, 0.05, 0.95))) {
     partner.partnerStatus = "married";
     partner.relationshipBar = clamp(partner.relationshipBar + 15);
-    p.bankBalance -= 3000;
-    changeStat(p, "happiness", 15);
-    const body = `${partner.name} said yes! You married in a ceremony that cost ${money(3000)}.`;
+    changeStat(p, "happiness", 12);
+    p.queuedEvents.push("wedding_day");
+    const body = `${partner.name} said yes! Wedding planning begins.`;
     addLog(p, body);
     return { player: p, notices: [{ kind: "info", title: "Just Married!", body, tone: "good" }] };
   }

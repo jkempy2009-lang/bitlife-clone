@@ -5,6 +5,7 @@ import { useGame } from "@/context/GameStateContext";
 import { epitaph, heirs, summarize } from "@/engine/legacy";
 import { money } from "@/lib/format";
 import { Button } from "./ui";
+import LifeChart from "./LifeChart";
 
 /** Endgame overlay: pauses all engine operations until the player chooses what to do next. */
 export default function TombstoneOverlay() {
@@ -54,6 +55,8 @@ export default function TombstoneOverlay() {
               <dd className="text-right font-semibold">{summary.children}</dd>
             </dl>
           </div>
+
+          <LifeChart history={p.history} />
 
           {/* Generational continuity */}
           {!choosing ? (

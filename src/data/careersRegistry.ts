@@ -24,7 +24,7 @@ export interface CareerLine {
   };
   ladder: JobTier[];
   /** Special packs are hidden from the general corporate board. */
-  pack?: "actor" | "athlete" | "politics" | "crime";
+  pack?: "actor" | "athlete" | "politics" | "crime" | "spy";
 }
 
 export const CAREER_LINES: CareerLine[] = [
@@ -326,7 +326,7 @@ export const CAREER_LINES: CareerLine[] = [
   {
     id: "psychology", name: "Psychology", emoji: "🧠", category: "Healthcare", blurb: "How does that make you feel?",
     companies: ["Mindful Practice", "Riverside Counselling", "Univ. Health Services"], minAge: 24,
-    requirements: { degrees: ["bachelor:science", "bachelor:arts", "bachelor:education"], minSmarts: 60 },
+    requirements: { degrees: ["masters", "bachelor:science", "bachelor:arts", "bachelor:education"], minSmarts: 60 },
     ladder: [
       { title: "Counsellor", salary: 52_000 },
       { title: "Clinical Psychologist", salary: 98_000 },
@@ -336,7 +336,7 @@ export const CAREER_LINES: CareerLine[] = [
   {
     id: "professor", name: "Academia", emoji: "🎓", category: "Education", blurb: "Publish, teach, argue about footnotes.",
     companies: ["Westbridge University", "Northgate College", "Institute of Technology"], minAge: 26,
-    requirements: { degrees: ["md", "jd", "bachelor:science", "bachelor:arts"], minSmarts: 75 },
+    requirements: { degrees: ["masters", "md", "jd"], minSmarts: 72 },
     ladder: [
       { title: "Lecturer", salary: 58_000 },
       { title: "Associate Professor", salary: 92_000 },
@@ -459,12 +459,47 @@ export const CAREER_LINES: CareerLine[] = [
   {
     id: "consulting", name: "Management Consulting", emoji: "📋", category: "Business", blurb: "Slide decks as a service.",
     companies: ["Calloway & Pine", "Strategos Group", "Meridian Advisors"], minAge: 23,
-    requirements: { degrees: ["bachelor:business", "bachelor:engineering", "jd"], minSmarts: 70 },
+    requirements: { degrees: ["masters", "jd"], minSmarts: 68 },
     ladder: [
       { title: "Analyst", salary: 92_000 },
       { title: "Consultant", salary: 150_000 },
       { title: "Principal", salary: 280_000 },
       { title: "Senior Partner", salary: 650_000 },
+    ],
+  },
+  {
+    id: "astronaut", name: "Space Programme", emoji: "🚀", category: "Science", blurb: "Elite. Needs genius-level Smarts, strong Athletics, and a science or engineering degree.",
+    companies: ["National Space Agency", "Orbital Dynamics", "Horizon Aerospace"], minAge: 26,
+    requirements: { degrees: ["bachelor:science", "bachelor:engineering", "masters"], minSmarts: 85, minSkills: { athletics: 45 } },
+    ladder: [
+      { title: "Astronaut Candidate", salary: 78_000 },
+      { title: "Astronaut", salary: 125_000 },
+      { title: "Mission Commander", salary: 190_000 },
+      { title: "Chief Astronaut", salary: 260_000 },
+    ],
+  },
+  {
+    id: "clergy", name: "Clergy", emoji: "⛪", category: "Public Service", blurb: "Guide the faithful.",
+    companies: ["St. Andrew's Church", "Riverside Congregation", "Grace Fellowship", "The Interfaith Centre"], minAge: 22,
+    requirements: { degrees: ["bachelor"], minSmarts: 35 },
+    ladder: [
+      { title: "Deacon", salary: 30_000 },
+      { title: "Pastor", salary: 48_000 },
+      { title: "Bishop", salary: 85_000 },
+      { title: "Archbishop", salary: 140_000 },
+    ],
+  },
+  // ---- Special Job Pack: Secret Agent ----
+  {
+    id: "spy", name: "The Agency", emoji: "🕵️", category: "Intelligence", blurb: "Classified. Apply if you have a degree and 70+ Smarts, then take missions.",
+    companies: ["Intelligence Service", "Overseas Directorate", "The Bureau"], minAge: 21,
+    requirements: { degrees: ["bachelor", "masters"], minSmarts: 70 },
+    pack: "spy",
+    ladder: [
+      { title: "Trainee Operative", salary: 45_000 },
+      { title: "Field Agent", salary: 95_000 },
+      { title: "Senior Agent", salary: 160_000 },
+      { title: "Station Chief", salary: 250_000 },
     ],
   },
   // ---- Special Job Pack: The Underworld ----
@@ -529,6 +564,7 @@ export const PROGRAMS = {
   University: { years: 4, tuition: 18_000, minSmarts: 35, label: "University" },
   MedicalSchool: { years: 4, tuition: 42_000, minSmarts: 70, label: "Medical School" },
   LawSchool: { years: 3, tuition: 34_000, minSmarts: 60, label: "Law School" },
+  Masters: { years: 2, tuition: 28_000, minSmarts: 55, label: "Graduate School" },
 } as const;
 
 // ---------------------------------------------------------------------------

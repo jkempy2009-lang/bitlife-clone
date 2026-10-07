@@ -262,8 +262,8 @@ export const EXTRA_EVENTS: LifeEvent[] = [
 
   // ---------- relationships ----------
   ev("proposal_planning", "romance", 20, 60, "Planning the Perfect Proposal", "You've been thinking about asking {partner} to marry you.", [
-    opt("Rent a rooftop and propose", "You proposed on a rooftop at sunset. It was perfect.", { relationshipDelta: { target: "Partner", delta: 15 }, marry: true, happinessDelta: 12, bankBalanceDelta: -3500 }),
-    opt("Propose casually at home", "You proposed on the couch. Simple and sincere.", { relationshipDelta: { target: "Partner", delta: 8 }, marry: true, happinessDelta: 8, bankBalanceDelta: -500 }),
+    opt("Rent a rooftop and propose", "You proposed on a rooftop at sunset. It was perfect.", { relationshipDelta: { target: "Partner", delta: 15 }, marry: true, happinessDelta: 12 }),
+    opt("Propose casually at home", "You proposed on the couch. Simple and sincere.", { relationshipDelta: { target: "Partner", delta: 8 }, marry: true, happinessDelta: 8 }),
     opt("Wait a little longer", "You decided to wait.", {}),
   ], { requires: { hasPartner: true, custom: (p) => p.relatives.some((r) => r.relation === "Partner" && r.partnerStatus === "dating" && r.relationshipBar >= 70 && r.age >= 18) && p.age >= 21 }, cooldown: 4, weight: 1.5 }),
   ev("in_laws", "romance", 22, 80, "Meet the In-Laws", "{partner}'s parents are visiting for two weeks.", [

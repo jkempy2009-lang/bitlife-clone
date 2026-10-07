@@ -145,6 +145,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     pendingTrial: null,
     criminalRecord: [],
     achievements: [],
+    history: [],
     flags: royalParent ? ["royal_born"] : [],
     annual: {},
     queuedEvents: [],

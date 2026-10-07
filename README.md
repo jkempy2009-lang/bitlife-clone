@@ -11,7 +11,21 @@ npm test           # engine tests (Vitest)
 npm run build
 ```
 
-Your game autosaves to `localStorage` (no backend).
+Your game autosaves to `localStorage` (no backend). Use the gear icon to export/import a save.
+
+## What you can do
+
+- **Grow up:** 360+ data-driven life events from infancy to 100+, school, romance, family, crime, health, fame.
+- **Study:** high school, university (7 majors), medical school, law school, graduate school; student debt.
+- **Work:** 45+ careers with ladders, plus special packs: movie star, rock star, pro athlete, influencer,
+  entrepreneur (6 businesses), politician (elections), secret agent, astronaut, crime family, model, royalty.
+- **Money:** taxes by country, loans, mortgages, rent tiers, investments (bonds, index, tech, crypto) and a
+  boom/recession economy that moves layoffs, hiring, housing and markets.
+- **Live:** hobbies with milestones, addictions and rehab, relocate abroad, adopt, grandchildren, pets, faith.
+- **Break the law:** shoplifting to bank robbery, trial with lawyers or a plea bargain, probation and fines,
+  prison (riot, escape, parole), life on the run.
+- **Legacy:** tombstone, epitaph, life chart, continue as your child (estate tax), plus a Hall of Lives and 50+
+  achievements that persist across characters.
 
 ## Architecture
 
@@ -19,7 +33,7 @@ Your game autosaves to `localStorage` (no backend).
 | --- | --- |
 | `src/types/game.types.ts` | `PlayerState`, `Relative`, `Job`, `Property`, `Vehicle`, notices |
 | `src/context/GameStateContext.tsx` | React context: reducer, autosave, UI state |
-| `src/engine/` | **Pure** game logic (no React). `ageUp.ts` is the yearly transaction |
+| `src/engine/` | **Pure** game logic (no React). `ageUp.ts` is the yearly transaction; `world.ts`, `vices.ts`, `hobbies.ts`, `politics.ts`, `underworld.ts`, `spy.ts`, `paths.ts` are the feature modules |
 | `src/data/lifeEventsEngine.ts` | Event schema + master list merged from `src/data/events/*` |
 | `src/data/careersRegistry.ts` | Career ladders, education programs, Special Job Packs |
 | `src/data/assetsCatalog.ts` | Cars, houses, mortgage/loan constants |
