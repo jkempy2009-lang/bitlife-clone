@@ -33,6 +33,20 @@ export function processVices(p: PlayerState, rng: Rng, notices: Notices) {
   // Habits are sticky once established.
   for (const k of Object.keys(v) as (keyof Vices)[]) if (v[k] >= 15) v[k] = clamp(v[k] + rng.int(0, 2));
 
+  // Habits cost money, and the heavy ones cost you at work.
+  if (p.age >= 16) {
+    const habitBill = Math.round(v.smoking * 40 + v.alcohol * 30 + v.drugs * 120);
+    if (habitBill > 0) p.bankBalance -= Math.min(Math.max(0, p.bankBalance), habitBill);
+    if (p.currentJob && (v.alcohol >= 40 || v.drugs >= 30)) {
+      p.currentJob.performance = clamp(p.currentJob.performance - rng.int(2, 6));
+      if (rng.chance(0.2)) {
+        const body = "Your boss pulled you aside about your attendance and your focus. Your habits are showing at work.";
+        addLog(p, body);
+        notices.push(info("Warning at Work", body, "bad"));
+      }
+    }
+    if (v.drugs >= 40) for (const r of p.relatives) if (r.alive && (r.relation === "Parent" || r.relation === "Child")) r.relationshipBar = clamp(r.relationshipBar - 2);
+  }
   if (v.smoking >= 10) {
     changeStat(p, "health", -Math.floor(v.smoking / 25));
     if (v.smoking >= 40) changeStat(p, "looks", -1);
