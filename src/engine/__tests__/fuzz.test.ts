@@ -38,6 +38,19 @@ import {
   raiseFunding, renovateBusiness, repayBusinessLoan, sellBusiness, sellFranchise, setInsurance, setPayout, setPrice, setRescue, takeBusinessLoan,
   trainStaff, upgradeProduct,
 } from "../paths";
+import {
+  acceptDeal, appealBan, buyFollowers, declineDeal, goFullTimeCreator, launchMerch, negotiateDeal, stepBackCreator, switchFocus, takeBreak,
+  toggleMemberships, NICHES, PLATFORMS,
+} from "../influencer";
+import {
+  dismissMember, goOnTour, leaveLabel, recordDemo, recruitMember, renegotiateContract, startSolo, takeMusicBreak, teamNight, toggleManager,
+  writeSongs, PRODUCERS, TOUR_SCALES,
+} from "../music";
+import {
+  acceptOffer as acceptFilm, bookCampaign, buyOutStudioDeal, declineOffer as declineFilm, fireAgent as fireTalentAgent, hireAgent as hireTalentAgent,
+  produceFilm, signStudioDeal, FILM_GENRES, PRODUCE_TIERS,
+} from "../acting";
+import { layLow, resolveScandal, toggleBusinessManager, toggleSecurity } from "../celebrity";
 import { COUNTRIES } from "@/data/countries";
 import type { ActionResult, Notice, PlayerState } from "@/types/game.types";
 
@@ -144,7 +157,8 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl, r) => startBusiness(pl, r.pick(BUSINESS_TYPES).id, "", r),
       (pl) => workOnBusiness(pl),
       (pl) => investInBusiness(pl, 10_000),
-      (pl, r) => startChannel(pl, r),
+      (pl, r) => startChannel(pl, r, { platform: r.pick(PLATFORMS).id, niche: r.pick(NICHES).id }),
+      ...creativeActions(rng),
       (pl, r) => postContent(pl, r),
       (pl) => brandCollab(pl),
       (pl, r) => trainAthletics(pl, r),
@@ -247,6 +261,96 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
   return p;
 }
 
+/** Every action of the fame careers (creator, musician, actor / model, celebrity), picking real ids where needed. */
+function creativeActions(rng: Rng): Array<(pl: PlayerState, r: Rng) => ActionResult> {
+  return [
+    (pl, r) => switchFocus(pl, r, { platform: r.pick(PLATFORMS).id, niche: r.pick(NICHES).id }),
+    (pl) => goFullTimeCreator(pl, rng.chance(0.5)),
+    (pl) => (rng.chance(0.3) ? stepBackCreator(pl) : { player: pl }),
+    (pl) => takeBreak(pl),
+    (pl) => (pl.influencer.offers[0] ? acceptDeal(pl, rng.pick(pl.influencer.offers).id) : { player: pl }),
+    (pl, r) => (pl.influencer.offers[0] ? negotiateDeal(pl, r, rng.pick(pl.influencer.offers).id) : { player: pl }),
+    (pl) => (pl.influencer.offers[0] ? declineDeal(pl, rng.pick(pl.influencer.offers).id) : { player: pl }),
+    (pl) => launchMerch(pl),
+    (pl) => toggleMemberships(pl),
+    (pl, r) => buyFollowers(pl, r),
+    (pl, r) => appealBan(pl, r),
+    (pl) => startSolo(pl),
+    (pl, r) => writeSongs(pl, r),
+    (pl, r) => recordDemo(pl, r),
+    (pl, r) => recruitMember(pl, r),
+    (pl) => (pl.music.members[0] && rng.chance(0.3) ? dismissMember(pl, rng.pick(pl.music.members).id) : { player: pl }),
+    (pl) => teamNight(pl),
+    (pl) => toggleManager(pl),
+    (pl) => takeMusicBreak(pl),
+    (pl, r) => renegotiateContract(pl, r),
+    (pl) => (rng.chance(0.2) ? leaveLabel(pl) : { player: pl }),
+    (pl) => recordAlbum(pl, "Pop", "", { producer: rng.pick(PRODUCERS).id, direction: rng.pick(["commercial", "balanced", "artistic"] as const) }),
+    (pl, r) => goOnTour(pl, r, r.pick(TOUR_SCALES).id),
+    (pl, r) => hireTalentAgent(pl, r),
+    (pl) => (rng.chance(0.2) ? fireTalentAgent(pl) : { player: pl }),
+    (pl, r) => auditionForLead(pl, r, r.pick(FILM_GENRES)),
+    (pl, r) => (pl.acting.offers[0] ? acceptFilm(pl, r, rng.pick(pl.acting.offers).id, rng.chance(0.4)) : { player: pl }),
+    (pl) => (pl.acting.offers[0] ? declineFilm(pl, rng.pick(pl.acting.offers).id) : { player: pl }),
+    (pl, r) => signStudioDeal(pl, r),
+    (pl) => buyOutStudioDeal(pl),
+    (pl, r) => produceFilm(pl, r, r.pick(PRODUCE_TIERS).id, r.chance(0.5)),
+    (pl, r) => bookCampaign(pl, r),
+    (pl, r) => applyForJob(pl, r.pick(["actor", "model"]), r),
+    (pl, r) => resolveScandal(pl, r, r.pick(["apologise", "ignore", "doubleDown", "prFirm"] as const)),
+    (pl) => toggleSecurity(pl),
+    (pl) => toggleBusinessManager(pl),
+    (pl) => layLow(pl),
+  ];
+}
+
+function checkCreative(p: PlayerState) {
+  const inf = p.influencer, m = p.music, a = p.acting, c = p.celeb;
+  for (const [k, v] of Object.entries({ followers: inf.followers, engagement: inf.engagement, authenticity: inf.authenticity, craft: inf.craft, cadence: inf.cadence, burnout: inf.burnout, subs: inf.subscribers, fans: m.fans, local: m.localFame, relevance: m.relevance, mburn: m.burnout, rep: a.reputation, critics: a.critics, pull: a.pull, privacy: c.privacy, stalker: c.stalker })) {
+    expect(Number.isFinite(v), `${k} finite`).toBe(true);
+    expect(v, `${k} >= 0`).toBeGreaterThanOrEqual(0);
+  }
+  for (const k of ["engagement", "authenticity", "craft", "cadence", "burnout"] as const) expect(inf[k]).toBeLessThanOrEqual(100);
+  expect(m.members.length).toBeLessThanOrEqual(4);
+  if (m.signed) expect(m.contract).not.toBeNull();
+  if (!m.signed) expect(m.contract).toBeNull();
+  expect(inf.deals.length).toBeLessThanOrEqual(3);
+  expect(Number.isFinite(inf.lifetimeEarnings)).toBe(true);
+  expect(Number.isFinite(m.earnings)).toBe(true);
+  expect(Number.isFinite(a.earnings)).toBe(true);
+  // A signed artist and a full-time creator cannot coexist with a job or a business.
+  if (m.signed) expect(p.currentJob).toBeNull();
+  if (inf.fullTime) expect(p.currentJob).toBeNull();
+}
+
+/** A life devoted to fame: commits to a creative path young, then makes random decisions every year. */
+function playCreativeBot(seed: number): PlayerState {
+  const rng = makeRng(seed);
+  let p = createNewPlayer({ scenario: "random", startYear: 2026 }, rng);
+  for (let guard = 0; guard < 80 && p.alive; guard++) {
+    const res = ageUp(p, rng);
+    p = res.player;
+    checkInvariants(p);
+    checkCreative(p);
+    for (const n of (res.notices ?? []) as Notice[]) {
+      if (n.kind === "event" && p.alive) p = run(p, rng, (pl, r) => resolveEvent(pl, n.event, r.int(0, n.event.options.length - 1), r)).p;
+    }
+    if (!p.alive) break;
+    if (p.pendingTrial) p = run(p, rng, (pl, r) => resolveTrial(pl, "public", r)).p;
+    if (p.age >= 12 && !p.influencer.active && rng.chance(0.3)) p = run(p, rng, (pl, r) => startChannel(pl, r, { platform: r.pick(PLATFORMS).id, niche: r.pick(NICHES).id })).p;
+    if (p.age >= 14 && p.music.status === "none" && rng.chance(0.3)) p = run(p, rng, (pl) => startSolo(pl)).p;
+    if (p.age >= 16 && !p.currentJob && rng.chance(0.2)) p = run(p, rng, (pl, r) => applyForJob(pl, r.pick(["actor", "model"]), r)).p;
+    const acts = [...creativeActions(rng), (pl: PlayerState, r: Rng) => postContent(pl, r), (pl: PlayerState) => brandCollab(pl), (pl: PlayerState, r: Rng) => formBand(pl, r.int(0, 100), r), (pl: PlayerState, r: Rng) => auditionContract(pl, r.pick(["solo", "band"] as const), r.int(0, 100), r), (pl: PlayerState, r: Rng) => practiceMusic(pl, r), (pl: PlayerState) => shootCommercial(pl), (pl: PlayerState, r: Rng) => writeMemoir(pl, r)];
+    for (let i = 0; i < 4 && p.alive; i++) {
+      p = run(p, rng, rng.pick(acts)).p;
+      if (p.pendingTrial) p = run(p, rng, (pl, r) => resolveTrial(pl, "public", r)).p;
+    }
+    checkInvariants(p);
+    checkCreative(p);
+  }
+  return p;
+}
+
 /** A sports-obsessed life: commits young, then makes random career decisions every year. */
 function playAthleteBot(seed: number): PlayerState {
   const rng = makeRng(seed);
@@ -302,6 +406,16 @@ describe("fuzz: bot that pokes every system", () => {
       expect(p.age).toBeLessThanOrEqual(120);
     }
     expect(careers).toBeGreaterThan(30);
+  }, 180_000);
+
+  it("fame-career bot keeps creator, music, acting and celebrity state valid", () => {
+    let famous = 0;
+    for (let s = 1; s <= 40; s++) {
+      const p = playCreativeBot(9000 + s);
+      if (p.influencer.peakFollowers > 1000 || p.music.albums.length > 0 || p.acting.credits.length > 0) famous++;
+      expect(p.age).toBeLessThanOrEqual(120);
+    }
+    expect(famous).toBeGreaterThan(10);
   }, 180_000);
 
   it("generations chain: continue as child repeatedly", () => {
