@@ -13,6 +13,7 @@ import { occupationFor } from "@/data/occupations";
 import { newRoyalLife, royalStyleText } from "./royalty";
 import { newAthleteState } from "./athleteState";
 import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
+import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 
 export const MAX_AGE = 120;
 
@@ -328,9 +329,11 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     nation: { economy: 50, freedom: 50, military: 50 },
     education: educationForAge(0),
     skills: { acting: 0, music: 0, charisma: rng.int(0, 10), athletics: rng.int(0, 20) },
-    music: { status: "none", signed: false, pendingAlbum: null, albums: [] },
+    music: newMusic(),
     business: null,
-    influencer: { active: false, followers: 0, lastPostYear: 0 },
+    influencer: newInfluencer(),
+    acting: newActing(),
+    celeb: newCeleb(),
     athlete: newAthleteState(),
     hobbies: {},
     politics: { popularity: 30, yearsInOffice: 0, party: null },

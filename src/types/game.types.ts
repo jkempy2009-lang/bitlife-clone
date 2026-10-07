@@ -233,10 +233,70 @@ export interface Business {
   history: BusinessYearRecord[];
 }
 
+// ---------------------------------------------------------------------------
+// Fame careers: online creator, musician, actor / model, and the cost of being known
+// ---------------------------------------------------------------------------
+
+export type Platform = "video" | "shorts" | "stream" | "photo" | "podcast";
+
+/** A brand contract: paid yearly, but it obliges you to keep producing and it costs authenticity. */
+export interface SponsorDeal {
+  id: string;
+  brand: string;
+  pay: number;
+  yearsLeft: number;
+  /** Minimum creative output (0-1.6) needed to honour the contract. */
+  minOutput: number;
+  /** Authenticity lost per year for pushing this product. */
+  authCost: number;
+  shady: boolean;
+}
+
+export interface IncomeBreakdown {
+  ads: number;
+  deals: number;
+  subs: number;
+  merch: number;
+  costs: number;
+}
+
 export interface InfluencerState {
   active: boolean;
   followers: number;
   lastPostYear: number;
+  platform: Platform;
+  niche: string;
+  /** Audience quality, 0-100. Drives ad and sponsor rates. */
+  engagement: number;
+  /** Trust you've built, 0-100. Spent by sponsored content and scandals. */
+  authenticity: number;
+  /** Learned skill at making content, 0-100. */
+  craft: number;
+  /** Rolling posting consistency, 0-100. */
+  cadence: number;
+  burnout: number;
+  yearsActive: number;
+  /** Creating is your day job. Needs no other full-time commitment. */
+  fullTime: boolean;
+  /** Resting this year: output drops to a trickle, burnout heals. */
+  onBreak: boolean;
+  algorithm: "boost" | "neutral" | "suppress";
+  algoYears: number;
+  /** The niche the platform is currently pushing. */
+  trend: string;
+  bannedYears: number;
+  deals: SponsorDeal[];
+  /** Brand offers waiting for an answer (they expire at Age Up). */
+  offers: SponsorDeal[];
+  merch: boolean;
+  premium: boolean;
+  subscribers: number;
+  boughtFollowers: boolean;
+  income: IncomeBreakdown;
+  lifetimeEarnings: number;
+  peakFollowers: number;
+  viralHits: number;
+  followerHistory: number[];
 }
 
 // ---- Sports career (engine: src/engine/athlete*.ts, data: src/data/sports.ts) ----
@@ -437,15 +497,180 @@ export interface Album {
   genre: string;
   rating: string;
   sales: number;
+  /** Artist royalty earned for the coming year (decays as the record ages). */
   royalty: number;
   year: number;
+  /** 0-100 craft behind the record. */
+  quality?: number;
+  /** Spawned a chart single. */
+  hit?: boolean;
+  /** Self-released rather than through a label. */
+  indie?: boolean;
+  /** The label owns it and keeps the royalties. */
+  labelOwned?: boolean;
+  award?: string;
+}
+
+export interface BandMember {
+  id: string;
+  name: string;
+  role: string;
+  skill: number;
+  /** Chemistry with you, 0-100. Low loyalty means they walk. */
+  loyalty: number;
+  ego: number;
+  partier: boolean;
+}
+
+export interface RecordContract {
+  label: string;
+  totalYears: number;
+  yearsLeft: number;
+  /** Lump sum paid at signing (recoupable). */
+  advance: number;
+  /** Yearly living stipend (recoupable). */
+  stipend: number;
+  /** Your share of album revenue, 0.08-0.30. */
+  royaltyRate: number;
+  albumsOwed: number;
+  albumsDelivered: number;
+  /** Advances, stipends and studio bills the label has fronted and not yet earned back. */
+  unrecouped: number;
+  /** 0-100: how much say you have over the sound. */
+  creativeControl: number;
+  tourCut: number;
+  renegotiatedYear: number;
+}
+
+export interface PendingAlbum {
+  title: string;
+  genre: string;
+  quality?: number;
+  producer?: string;
+  direction?: "commercial" | "balanced" | "artistic";
+  indie?: boolean;
 }
 
 export interface MusicState {
   status: "none" | "band" | "solo";
   signed: boolean;
-  pendingAlbum: { title: string; genre: string } | null;
+  pendingAlbum: PendingAlbum | null;
   albums: Album[];
+  bandName: string;
+  members: BandMember[];
+  genre: string;
+  songwriting: number;
+  /** 0-100 quality of your latest demo tape. */
+  demo: number;
+  /** Fame in your own scene, 0-100. */
+  localFame: number;
+  fans: number;
+  /** 0-100: how current you sound. Decays with time, age and flops. */
+  relevance: number;
+  contract: RecordContract | null;
+  /** The label's opinion of you, 0-100. */
+  labelStanding: number;
+  manager: boolean;
+  burnout: number;
+  /** Years of writer's block remaining. */
+  blockYears: number;
+  /** Resting this year: no gigs, burnout heals. */
+  onBreak: boolean;
+  hits: number;
+  yearsSinceHit: number;
+  awards: string[];
+  gigs: number;
+  tours: number;
+  yearsActive: number;
+  earnings: number;
+  droppedCount: number;
+  lastIncome: { gigs: number; royalties: number; stipend: number; costs: number };
+}
+
+export interface FilmCredit {
+  id: string;
+  title: string;
+  year: number;
+  genre: string;
+  role: "extra" | "cameo" | "supporting" | "lead" | "producer" | "director";
+  budget: number;
+  boxOffice: number;
+  /** Critics' score, 0-100. */
+  critics: number;
+  outcome: "flop" | "modest" | "hit" | "blockbuster";
+  award?: string;
+}
+
+export interface FilmOffer {
+  id: string;
+  title: string;
+  genre: string;
+  role: "cameo" | "supporting" | "lead";
+  fee: number;
+  budget: number;
+  /** Script quality, 0-100. */
+  script: number;
+  prestige: number;
+}
+
+export interface PendingFilm extends Omit<FilmOffer, "role"> {
+  role: FilmCredit["role"];
+  /** Your own money riding on it (producer / director). */
+  invested?: number;
+}
+
+export interface Agent {
+  name: string;
+  cut: number;
+  /** 0-100: how hard they work for you. */
+  skill: number;
+  yearsWith: number;
+}
+
+export interface StudioDeal {
+  studio: string;
+  yearsLeft: number;
+  fee: number;
+  genre: string;
+}
+
+export interface ActingState {
+  agent: Agent | null;
+  /** Standing with the industry, 0-100. */
+  reputation: number;
+  /** Critical acclaim, 0-100. */
+  critics: number;
+  /** Box-office draw, 0-100. */
+  pull: number;
+  typecast: string | null;
+  credits: FilmCredit[];
+  offers: FilmOffer[];
+  pendingFilm: PendingFilm | null;
+  studioDeal: StudioDeal | null;
+  awards: string[];
+  nominations: number;
+  earnings: number;
+  yearsSinceWork: number;
+  modelBookings: number;
+  lastIncome: { fees: number; bonuses: number; agent: number };
+}
+
+export interface ScandalState {
+  source: "influencer" | "music" | "acting" | "general";
+  cause: string;
+  /** 1 (embarrassing) to 3 (career-threatening). */
+  severity: 1 | 2 | 3;
+}
+
+/** The cost of being known, shared by every fame career. */
+export interface CelebState {
+  /** 0-100, higher is more private. */
+  privacy: number;
+  stalker: number;
+  security: boolean;
+  businessManager: boolean;
+  scandal: ScandalState | null;
+  scandals: number;
 }
 
 export interface NationState {
@@ -725,6 +950,8 @@ export interface PlayerState {
   music: MusicState;
   business: Business | null;
   influencer: InfluencerState;
+  acting: ActingState;
+  celeb: CelebState;
   athlete: AthleteState;
   hobbies: Record<string, number>;
   politics: PoliticsState;

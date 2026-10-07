@@ -65,6 +65,10 @@ describe("rock star", () => {
     p.skills.music = 90;
     const band = formBand(p, 100).player;
     expect(band.music.status).toBe("band");
+    // A record deal needs a scene behind you, not just skill: local buzz, a demo and songs.
+    Object.assign(band.music, { localFame: 60, demo: 70, songwriting: 60 });
+    for (const m of band.music.members) m.skill = 70;
+    expect(band.music.status).toBe("band");
     band.annual = {};
     let signed = band;
     for (let s = 0; s < 20 && !signed.music.signed; s++) {
