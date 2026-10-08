@@ -302,7 +302,7 @@ export interface InfluencerState {
 // ---- Sports career (engine: src/engine/athlete*.ts, data: src/data/sports.ts) ----
 
 export type AthleteStage = "none" | "youth" | "college" | "semipro" | "pro" | "retired";
-export type InjuryPlan = "rest" | "rehab" | "surgery" | "play";
+export type InjuryPlan = "rest" | "rehab" | "surgery" | "play" | "rush";
 
 export interface AthleteInjury {
   label: string;
@@ -317,6 +317,47 @@ export interface AthleteInjury {
   decided: boolean;
   /** Age when it happened. */
   age: number;
+  /** Came back a season early (plan "rush"): the injury may flare up again on return. */
+  rushed?: boolean;
+}
+
+export type DealCategory = "apparel" | "drink" | "watch" | "betting" | "fintech" | "charity";
+
+/** A multi-year sponsorship. Pays every season; carries an image risk. */
+export interface EndorsementDeal {
+  id: string;
+  brand: string;
+  category: DealCategory;
+  /** Gross pay per season. */
+  pay: number;
+  /** Seasons left on the deal (offers: seasons it would run). */
+  years: number;
+}
+
+/** The squad invitation for the next four-yearly major. */
+export interface NationalCall {
+  /** Year the tournament is played. */
+  year: number;
+  major: string;
+  /** False when the selectors left you out. */
+  selected: boolean;
+}
+
+export type NationalPlan = "balanced" | "allin" | "withdraw";
+
+/** A positive test the player may still contest this season. */
+export interface DopingAppeal {
+  ban: number;
+  stripped: number;
+  cost: number;
+}
+
+export interface AthleteRival {
+  name: string;
+  /** 0-100: how personal it has become. */
+  heat: number;
+  wins: number;
+  losses: number;
 }
 
 export interface AthleteOffer {
@@ -404,9 +445,32 @@ export interface AthleteState {
   /** Mirror of skills.athletics we last wrote, so outside boosts can be detected. */
   athMirror: number;
   retiredAge: number | null;
-  post: "none" | "coach" | "pundit";
+  post: "none" | "coach" | "pundit" | "academy";
   /** Endorsement income paid in the latest season. */
   endorsements: number;
+  /** Morale and mental health 0-100. Low values wreck form and end in burnout. */
+  mental: number;
+  /** Team chemistry (or, in individual sports, how well your support team works together) 0-100. */
+  chemistry: number;
+  /** Relationship with the head coach 0-100. */
+  coachRel: number;
+  captain: boolean;
+  /** Share of the minutes you get 0-100 (always full in individual sports). */
+  playing: number;
+  /** You asked to leave; the club will shop you around at the end of the season. */
+  transferReq: boolean;
+  /** Public image 0-100. Sponsors pay for it and flee from damage to it. */
+  image: number;
+  deals: EndorsementDeal[];
+  dealOffers: EndorsementDeal[];
+  natCall: NationalCall | null;
+  natPlan: NationalPlan;
+  appeal: DopingAppeal | null;
+  rival: AthleteRival | null;
+  /** The story the media tells about you this season. */
+  narrative: string;
+  /** Year of Hall of Fame induction, if any. */
+  hofYear: number | null;
   record: AthleteRecord;
   history: SeasonRecord[];
 }

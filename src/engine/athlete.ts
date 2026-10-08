@@ -290,6 +290,8 @@ export function treatmentBlocker(p: PlayerState, plan: InjuryPlan): string | nul
   if (inj.decided && inj.plan !== "play") return "You've already committed to a treatment plan.";
   if (plan === "surgery" && inj.severity < 2) return "A minor knock doesn't need surgery.";
   if (plan === "play" && inj.yearsLeft <= 0) return "It will heal on its own by the next season; no need to risk it.";
+  if (plan === "rush" && inj.severity < 2) return "A minor knock needs no rushing.";
+  if (plan === "rush" && inj.yearsLeft <= 0) return "You're already due back next season.";
   const cost = injuryCost(a, plan, inj.severity);
   if (cost > p.bankBalance) return `Costs ${money(cost)}.`;
   return null;
@@ -323,11 +325,17 @@ export function chooseTreatment(p0: PlayerState, plan: InjuryPlan, rng: Rng): Ac
       changeStat(p, "health", -6);
       body = `Complications set you back. Surgery on your ${inj.label.toLowerCase()} went badly and recovery will take longer.`;
     }
+  } else if (plan === "rush") {
+    inj.yearsLeft = Math.max(0, inj.yearsLeft - 1);
+    inj.ratingLoss = Math.round(inj.ratingLoss * 1.4 * 10) / 10;
+    inj.rushed = true;
+    changeStat(p, "health", -2);
+    body = `You pushed the doctors to clear you a season early. You're back sooner, but the damage will be heavier and there's a real chance it flares up again.`;
   } else {
     body = `You'll play through the pain. You keep your place and your salary, but you're well below your best and every game risks making it worse.`;
   }
   addLog(p, body);
-  return { player: p, notices: [info(plan === "play" ? "Playing Through It" : "Treatment", body, plan === "surgery" && !body.startsWith("Complications") ? "good" : plan === "play" ? "bad" : "neutral")] };
+  return { player: p, notices: [info(plan === "play" ? "Playing Through It" : plan === "rush" ? "Rushing Back" : "Treatment", body, plan === "surgery" && !body.startsWith("Complications") ? "good" : plan === "play" || plan === "rush" ? "bad" : "neutral")] };
 }
 
 // ---------------------------------------------------------------------------
@@ -499,7 +507,7 @@ export function stageLabel(p: PlayerState): string {
       if (a.freeAgent) return "Free Agent";
       return p.age > s.peak[1] + 2 ? "Veteran Pro" : "Pro";
     }
-    case "retired": return a.post === "coach" ? "Retired · Coach" : a.post === "pundit" ? "Retired · Pundit" : "Retired";
+    case "retired": return a.post === "coach" ? "Retired · Coach" : a.post === "pundit" ? "Retired · Pundit" : a.post === "academy" ? "Retired · Academy owner" : "Retired";
   }
 }
 

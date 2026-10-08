@@ -18,6 +18,8 @@ import {
 import { athleteJob, dropContract, exitAmateur, info, netExtra, retireAthlete, signContract, type Notices } from "./athleteCareer";
 import { isContractedAthlete } from "./athleteState";
 import { startTrial } from "./crime";
+import { afterSeasonDepth, appealCost, dealIncome, lateDepth, resolveTransferRequest, rollPlaying, seasonModifiers } from "./athleteDepth";
+import { hallBallot } from "./athleteLegacy";
 
 function takeFlag(p: PlayerState, f: string): boolean {
   if (!hasFlag(p, f)) return false;
@@ -206,6 +208,13 @@ function caughtDoping(p: PlayerState, rng: Rng, notices: Notices) {
     a.freeAgentYears = 0;
   } else if (a.stage === "youth" || a.stage === "college") exitAmateur(p, ban >= 99 ? 99 : ban);
   a.endorsements = 0;
+  a.deals = [];
+  a.dealOffers = [];
+  a.captain = false;
+  a.image = clamp(a.image - 25);
+  a.mental = clamp(a.mental - 15);
+  // A first positive can be contested for the rest of this year.
+  a.appeal = ban >= 99 ? null : { ban, stripped, cost: appealCost(a) };
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +226,8 @@ export function processAthlete(p: PlayerState, rng: Rng, notices: Notices) {
   if (!a) return;
   const prevOffers = a.offers;
   a.offers = [];
+  a.appeal = null;
+  a.dealOffers = [];
 
   // ---- 0. event-driven influences, delivered as flags by the events in data/events/sports.ts ----
   const active0 = a.stage !== "none" && a.stage !== "retired";
@@ -355,6 +366,7 @@ export function processAthlete(p: PlayerState, rng: Rng, notices: Notices) {
   }
 
   // ---- 5. injuries ----
+  const bannedStart = a.banYears > 0;
   let missed = a.banYears > 0;
   let hurtSev = 0;
   let hurtLabel = "";
@@ -394,6 +406,12 @@ export function processAthlete(p: PlayerState, rng: Rng, notices: Notices) {
       return;
     }
   }
+  // A rushed comeback that flared up costs the season.
+  if (a.injury && !missed && a.injury.yearsLeft > 0 && a.injury.plan !== "play") {
+    missed = true;
+    hurtLabel = a.injury.label;
+    a.injury.yearsLeft -= 1;
+  }
   if (!a.injury && !missed && (injFlag !== undefined || rng.chance(injuryChance(p, a, load)))) {
     const inj = rollInjury(p, a, load, rng, injFlag);
     a.injury = inj;
@@ -422,17 +440,23 @@ export function processAthlete(p: PlayerState, rng: Rng, notices: Notices) {
     changeStat(p, "health", -2);
     changeStat(p, "karma", -1);
   }
-  a.form = clamp(Math.round(42 + a.consistency * 0.25 + (p.health - 60) * 0.3 + (rng.next() + rng.next() + rng.next() - 1.5) * 14 - (a.injury?.plan === "play" ? 15 : 0)));
+  a.form = clamp(Math.round(42 + a.consistency * 0.25 + (p.health - 60) * 0.3 + (rng.next() + rng.next() + rng.next() - 1.5) * 14 - (a.injury?.plan === "play" ? 15 : 0) - Math.max(0, 40 - a.mental) * 0.4));
 
   // ---- 7. the season ----
   const unattached = a.freeAgent && isContractedAthlete(p);
+  rollPlaying(p, a, rng);
+  const mods = seasonModifiers(a);
   const out = playSeason(p, a, rng, {
     missed: !healthy || a.banYears > 0 || unattached,
     reason: a.banYears > 0 ? "ban" : !healthy ? "injury" : unattached ? "unattached" : undefined,
     hurtSeverity: hurtSev,
     label: hurtLabel,
+    bonus: mods.bonus,
+    fameScale: mods.fameScale,
   });
   if (a.banYears > 0) out.summary = `Serving a ban (${a.banYears} year${a.banYears === 1 ? "" : "s"} left).`;
+  if (bannedStart && a.banYears > 0 && a.banYears < 99) a.banYears -= 1;
+  afterSeasonDepth(p, a, rng, notices, out, hurtSev);
   const senior = a.stage !== "youth";
   if (out.played) {
     a.record.seasons += 1;
@@ -468,13 +492,18 @@ export function processAthlete(p: PlayerState, rng: Rng, notices: Notices) {
     income += bonus;
   }
   const endorse = endorsementIncome(p, a, trophies);
-  a.endorsements = endorse;
   let endorseNet = 0;
   if (endorse > 0) {
     endorseNet = netExtra(p, salary + bonus, endorse);
     p.bankBalance += endorseNet;
     income += endorseNet;
   }
+  const dealNet = dealIncome(p, a, rng, notices, salary + bonus + endorse);
+  if (dealNet > 0) {
+    p.bankBalance += dealNet;
+    income += dealNet;
+  }
+  a.endorsements = endorse + (dealNet > 0 ? dealNet : 0);
   if (a.agent && income > 0) p.bankBalance -= Math.round(0.08 * income);
   a.record.earnings += Math.round(income);
   p.stats.highestSalary = Math.max(p.stats.highestSalary, salary);
@@ -577,7 +606,7 @@ export function processAthlete(p: PlayerState, rng: Rng, notices: Notices) {
       }
     }
     if (a.freeAgent) {
-      if (wasFA) a.freeAgentYears += 1;
+      if (wasFA && !bannedStart) a.freeAgentYears += 1;
       a.offers = freeAgentOffers(p, rng);
       if (a.offers.length > 0) notices.push(info("Clubs Are Interested", `${a.offers.length} club${a.offers.length > 1 ? "s have" : " has"} made an offer. Open the Athlete tab.`, "good"));
     }
@@ -592,6 +621,13 @@ export function processAthlete(p: PlayerState, rng: Rng, notices: Notices) {
       notices.push(info("Scouts Are Calling", `You have ${a.offers.length} offer${a.offers.length > 1 ? "s" : ""} to consider (${kinds}). Decide in the Athlete tab; they expire at the next Age Up.`, "good"));
     }
   }
+
+  // ---- 12b. the human side: transfer requests, national team, sponsors ----
+  resolveTransferRequest(p, a, rng, notices, () => {
+    const lg = clamp(leagueFor(a.rating + (a.doping ? 4 : 0) + rng.int(-2, 3)), Math.max(0, a.league - 1), 3);
+    return isContractedAthlete(p) ? makeOffer("transfer", a.sport, lg, effRating(a), p.age, a.agent, rng, "") : null;
+  });
+  lateDepth(p, a, rng, notices);
 
   // ---- 13. age takes its toll ----
   const sinfo = sportInfo(a.sport);
@@ -620,6 +656,16 @@ function healInjury(p: PlayerState, rng: Rng, notices: Notices): boolean {
   const inj = a.injury!;
   a.rating = clamp(a.rating - inj.ratingLoss);
   a.injury = null;
+  if (inj.rushed && rng.chance(0.3 + 0.1 * (inj.severity - 2))) {
+    // Came back too soon: it flares up and the whole comeback is lost.
+    a.injury = { ...inj, label: `Recurring ${inj.label.toLowerCase()}`, yearsLeft: 1, plan: "rest", ratingLoss: Math.round((inj.ratingLoss * 0.6 + 1) * 10) / 10, decided: false, rushed: false };
+    changeStat(p, "health", -6);
+    a.mental = clamp(a.mental - 8);
+    const body = `You rushed back and your ${inj.label.toLowerCase()} flared up again. That is another season gone and more lasting damage.`;
+    addLog(p, body);
+    notices.push(info("Setback", body, "bad"));
+    return false;
+  }
   if (inj.severity >= 3) setFlag(p, "comeback_pending");
   if (inj.severity >= 3 && p.age >= 33 && rng.chance(0.25)) {
     retireAthlete(p, notices, "injury");
@@ -638,8 +684,11 @@ function passiveYear(p: PlayerState, rng: Rng, notices: Notices, hadOffers: numb
   const a = p.athlete;
   if (a.banYears > 0 && a.banYears < 99) a.banYears -= 1;
   a.offers = [];
+  a.dealOffers = [];
   a.injury = null;
   a.endorsements = 0;
+  a.mental = clamp(Math.round(a.mental + (70 - a.mental) * 0.3));
+  a.narrative = "";
   if (a.sport && a.rating > 0) a.rating = clamp(a.rating - (a.stage === "retired" ? 3 : 2.5));
   if (a.stage !== "retired") return;
   // Legacy income fades with time.
@@ -654,10 +703,12 @@ function passiveYear(p: PlayerState, rng: Rng, notices: Notices, hadOffers: numb
       a.record.earnings += legacy;
     }
   }
+  if (a.stage === "retired") hallBallot(p, a, rng, notices, yrs);
   if (hasFlag(p, "hall_of_fame") && yrs <= 8) addFame(p, rng, 0.5);
   else if (p.fame > 20 && yrs <= 6 && a.record.titles > 0) addFame(p, rng, 0.8); // part-offsets the generic fame decay
+  if (a.post === "academy" && !p.business) a.post = "none";
   if (a.post === "none" || !p.currentJob) {
-    if (!p.currentJob) a.post = "none";
+    if (!p.currentJob && a.post !== "academy") a.post = "none";
     a.offers = postOffers(p, rng);
     if (a.offers.length > 0 && hadOffers === 0) notices.push(info("Post-Career Offers", "Someone wants to hire you in a coaching or media role. See the Athlete tab.", "good"));
   }

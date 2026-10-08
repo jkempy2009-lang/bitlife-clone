@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import {
   SPORTS, acceptOffer, advanceRequirements, agentBlocker, athleteView, attendShowcase, chooseTreatment, comeback, comebackBlocker, commitBlocker,
@@ -13,6 +13,9 @@ import { SPORT_INFO, LEAGUE_MIN, type Sport } from "@/data/sports";
 import { money } from "@/lib/format";
 import type { AthleteOffer, Effort, InjuryPlan, PlayerState } from "@/types/game.types";
 import { Button, Card, Pill, SectionTitle, StatBar } from "../ui";
+import { Block } from "./AthleteBlock";
+import { CareerSummaryCard, PostCareer } from "./AthleteLegacy";
+import { AppealCard, BrandDeals, NationalTeamCard, RivalryCard, TeamAndMind } from "./AthleteDepth";
 
 // ---------------------------------------------------------------------------
 // Small pieces
@@ -76,16 +79,6 @@ function PeakBar({ sport, age }: { sport: Sport; age: number }) {
         <div className="absolute inset-y-[-2px] w-1 rounded bg-white shadow" style={{ left: `calc(${pos(age)} - 2px)` }} />
       </div>
       <div className="mt-1 flex justify-between text-[10px] text-slate-500"><span>{lo}</span><span>retire ~{info.maxAge}</span></div>
-    </div>
-  );
-}
-
-function Block({ title, children, tone = "slate" }: { title: string; children: ReactNode; tone?: "slate" | "red" | "amber" }) {
-  const border = tone === "red" ? "border-rose-700/60" : tone === "amber" ? "border-amber-700/60" : "border-slate-700/60";
-  return (
-    <div className={`rounded-2xl border ${border} bg-slate-800/70 p-4`}>
-      <div className="mb-2 text-sm font-semibold">{title}</div>
-      {children}
     </div>
   );
 }
@@ -314,6 +307,7 @@ function Offers() {
 const PLANS: { id: InjuryPlan; label: string; blurb: string }[] = [
   { id: "rest", label: "Rest", blurb: "Free. Normal recovery, full lasting damage." },
   { id: "rehab", label: "Rehab", blurb: "Physio costs money. 30% less lasting damage." },
+  { id: "rush", label: "Rush back", blurb: "Return a season early, but 40% more lasting damage and roughly a one in three chance it flares up and costs you the year anyway." },
   { id: "surgery", label: "Surgery", blurb: "Shorter recovery (88% success). Half the lasting damage, but a failure sets you back." },
   { id: "play", label: "Play through it", blurb: "Keep your place and salary at reduced level. High risk of making it worse, maybe ending your career." },
 ];
@@ -337,7 +331,7 @@ function InjuryCard() {
             const why = treatmentBlocker(p, pl.id);
             return (
               <div key={pl.id} className="flex flex-col">
-                <Button variant={pl.id === "play" ? "danger" : "secondary"} disabled={!!why} onClick={() => act((st, rng) => chooseTreatment(st, pl.id, rng))}>{pl.label}</Button>
+                <Button variant={pl.id === "play" || pl.id === "rush" ? "danger" : "secondary"} disabled={!!why} onClick={() => act((st, rng) => chooseTreatment(st, pl.id, rng))}>{pl.label}</Button>
                 <span className={`mt-0.5 text-[11px] ${why ? "text-rose-300" : "text-slate-500"}`}>{why ?? pl.blurb}</span>
               </div>
             );
@@ -469,7 +463,7 @@ function Record() {
         {(r.titles > 0 || r.medals > 0 || r.awards > 0) && (
           <div className="mt-2 text-lg leading-snug" aria-label="Trophy cabinet">{trophies}{"🥇".repeat(Math.min(6, r.medals))}{"⭐".repeat(Math.min(8, r.awards))}</div>
         )}
-        {p.flags.includes("hall_of_fame") && <div className="mt-1"><Pill tone="amber">🏛️ Hall of Fame</Pill></div>}
+        {(p.flags.includes("hall_of_fame") || a.hofYear !== null) && <div className="mt-1"><Pill tone="amber">🏛️ Hall of Fame</Pill></div>}
         {p.flags.includes("doping_caught") && <div className="mt-1"><Pill tone="red">Doping ban on record</Pill></div>}
       </Block>
       <Block title="🗓️ Season history">
@@ -526,6 +520,8 @@ function RetiredPanel() {
   return (
     <>
       <Offers />
+      <CareerSummaryCard />
+      <PostCareer />
       <Block title="🏖️ After the game">
         <p className="text-xs text-slate-400">
           Retired at {a.retiredAge ?? p.age}. {a.post === "none" ? "No salary now. Your savings, any endorsements that outlast your name and whatever job you find pay the bills." : `You're working as a ${a.post === "coach" ? "coach" : "pundit"}.`}
@@ -603,13 +599,19 @@ function Dashboard() {
         <RetiredPanel />
       ) : (
         <>
+          <AppealCard />
+          <NationalTeamCard />
           <Offers />
           <InjuryCard />
           {!(hasCommitment(p) && p.age >= 14) && <TrainingLoad />}
           <Finances />
+          <TeamAndMind />
+          <BrandDeals />
+          <RivalryCard />
           <Requirements />
         </>
       )}
+      {!retired && <CareerSummaryCard />}
       <Record />
       {!retired && <ExitCard />}
     </div>
