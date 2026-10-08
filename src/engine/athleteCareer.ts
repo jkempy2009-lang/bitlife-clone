@@ -5,7 +5,7 @@ import { money } from "@/lib/format";
 import { incomeTaxFor } from "@/data/countries";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { sportInfo } from "@/data/sports";
-import { addLog, changeStat, clearFlag, setFlag } from "./state";
+import { addLog, changeStat, clearFlag, hasFlag, setFlag } from "./state";
 import { makeJob } from "./career";
 
 export type Notices = NonNullable<ActionResult["notices"]>;
@@ -39,6 +39,13 @@ export function signContract(p: PlayerState, rng: Rng, o: AthleteOffer): string 
   const a = p.athlete;
   const sinfo = sportInfo(a.sport);
   const renew = o.kind === "renew" && athleteJob(p) !== null;
+  if (!renew && o.club !== a.club) {
+    // A new dressing room: chemistry, the coach and the armband all start over.
+    a.chemistry = 40;
+    a.coachRel = 45;
+    a.captain = false;
+    a.transferReq = false;
+  }
   const job = renew ? p.currentJob! : makeJob(CAREER_BY_ID.athlete, o.league, rng);
   job.title = sinfo.titles[o.league];
   job.company = o.club;
@@ -115,6 +122,13 @@ export function retireAthlete(p: PlayerState, notices: Notices, reason: "chosen"
   a.freeAgent = false;
   a.expiring = false;
   a.doping = false;
+  a.deals = [];
+  a.dealOffers = [];
+  a.natCall = null;
+  a.natPlan = "balanced";
+  a.captain = false;
+  a.transferReq = false;
+  a.playing = 100;
   setFlag(p, "ex_athlete");
   const mood = { chosen: -2, age: -4, injury: -12, cut: -10, ban: -10 }[reason];
   changeStat(p, "happiness", mood);
@@ -136,8 +150,14 @@ export function retireAthlete(p: PlayerState, notices: Notices, reason: "chosen"
   }
   if (r.bestRating >= 88 && r.titles >= 3 && r.proSeasons >= 8 && reason !== "ban") {
     setFlag(p, "hall_of_fame");
+    a.hofYear = p.year;
     changeStat(p, "fame", 8);
     lines.push("You were inducted into the Hall of Fame.");
+  }
+  if (hasFlag(p, "ath:planned") && wasPro && r.earnings > 0) {
+    const nest = Math.round((r.earnings * 0.05) / 500) * 500;
+    p.bankBalance += nest;
+    lines.push(`The savings plan you started years ago matured: ${money(nest)} waiting for you.`);
   }
   if (wasPro && r.proSeasons > 0) lines.push(`Career: ${r.proSeasons} pro season${r.proSeasons === 1 ? "" : "s"}, ${r.titles} title${r.titles === 1 ? "" : "s"}, ${money(r.earnings)} earned.`);
   const body = lines.join(" ");

@@ -144,12 +144,15 @@ export function contractYears(league: number, age: number, rng: Rng): number {
   return y;
 }
 
+/** Sponsors pay more for a clean, likeable image and less for a tarnished one (1 at the default of 60). */
+export const imageFactor = (a: Pick<AthleteState, "image">) => clamp(0.7 + (a.image ?? 60) / 200, 0.7, 1.2);
+
 export function endorsementIncome(p: PlayerState, a: AthleteState, titlesThisSeason: number): number {
   if (a.banYears > 0 || p.fame < 30) return 0;
   const info = sportInfo(a.sport);
   if (a.stage === "youth") return 0;
   const stageMult = a.stage === "college" ? 0.15 : a.stage === "retired" ? 0.3 : [0.2, 0.5, 1, 3][a.league];
-  let v = Math.pow(p.fame - 25, 2) * 120 * stageMult * info.endorse * (a.agent ? 1.25 : 1) * (1 + 0.25 * Math.min(2, titlesThisSeason));
+  let v = Math.pow(p.fame - 25, 2) * 120 * stageMult * info.endorse * (a.agent ? 1.25 : 1) * imageFactor(a) * (1 + 0.25 * Math.min(2, titlesThisSeason));
   if (p.fame >= 90 && a.record.bestRating >= 92) v *= 2;
   return Math.round(v / 100) * 100;
 }
@@ -181,7 +184,8 @@ export function injuryChance(p: PlayerState, a: AthleteState, effort: Effort): n
   const info = sportInfo(a.sport);
   const ageMult = p.age < 14 ? 0.5 : p.age <= 29 ? 1 : p.age <= 33 ? 1.25 : 1.5;
   const healthMult = p.health < 55 ? 1.4 : p.health > 85 ? 0.9 : 1;
-  return clamp(info.injury * INJURY_LOAD[effort] * ageMult * healthMult * (a.doping ? 1.2 : 1) * (1 + ((p.talents?.injuryProne ?? 50) - 50) / 90), 0, 0.6);
+  const allIn = a.natCall?.selected && a.natCall.year === p.year && a.natPlan === "allin" ? 1.35 : 1;
+  return clamp(info.injury * INJURY_LOAD[effort] * ageMult * healthMult * (a.doping ? 1.2 : 1) * allIn * (1 + ((p.talents?.injuryProne ?? 50) - 50) / 90), 0, 0.6);
 }
 
 export function rollInjury(p: PlayerState, a: AthleteState, effort: Effort, rng: Rng, forceSeverity?: number): AthleteInjury {
@@ -256,7 +260,19 @@ const FAME_BASE: Record<string, number[]> = {
 };
 const FAME_TITLE = [1.5, 3, 5, 8];
 
-export function playSeason(p: PlayerState, a: AthleteState, rng: Rng, opts: { missed: boolean; reason?: "injury" | "ban" | "unattached"; hurtSeverity: number; label?: string }): SeasonOutcome {
+/** Good enough to be considered for the national team / the four-yearly major. */
+export function majorQualifier(a: AthleteState, eff: number): boolean {
+  const info = sportInfo(a.sport);
+  const senior = a.stage !== "youth";
+  return senior && ((a.stage === "pro" && a.league >= 1 && eff >= (info.team ? 70 : 64)) || (a.stage === "college" && eff >= 70));
+}
+
+export function playSeason(
+  p: PlayerState,
+  a: AthleteState,
+  rng: Rng,
+  opts: { missed: boolean; reason?: "injury" | "ban" | "unattached"; hurtSeverity: number; label?: string; /** Team politics: chemistry, coach and minutes. */ bonus?: number; fameScale?: number },
+): SeasonOutcome {
   const info = sportInfo(a.sport);
   const stage = a.stage === "youth" || a.stage === "college" || a.stage === "semipro" || a.stage === "pro" ? a.stage : "pro";
   const teams = TEAMS[stage];
@@ -270,7 +286,7 @@ export function playSeason(p: PlayerState, a: AthleteState, rng: Rng, opts: { mi
   }
   const eff = effRating(a);
   const delta = eff - referenceRating(a, p.age);
-  const score = delta + gauss(rng, 0, 7) + (a.form - 50) * 0.12 - opts.hurtSeverity * 8;
+  const score = delta + gauss(rng, 0, 7) + (a.form - 50) * 0.12 - opts.hurtSeverity * 8 + (opts.bonus ?? 0);
   out.score = score;
   out.place = clamp(Math.round(1 + (teams - 1) * clamp(0.5 - score / 45, 0, 1)), 1, teams);
   const pTitle = sigmoid((score - 18) / 5.5);
@@ -290,10 +306,12 @@ export function playSeason(p: PlayerState, a: AthleteState, rng: Rng, opts: { mi
 
   // International caps and the four-yearly major
   const isMajorYear = p.year % 4 === info.major.offset;
-  const qualifies = senior && ((a.stage === "pro" && a.league >= 1 && eff >= (info.team ? 70 : 64)) || (a.stage === "college" && eff >= 70));
-  if (qualifies && info.team && a.league >= 2) out.caps = rng.int(2, 9);
-  if (qualifies && isMajorYear) {
-    const s2 = score + gauss(rng, 0, 8) - (info.team ? 4 : 0);
+  const call = a.natCall && a.natCall.year === p.year ? a.natCall : null;
+  const qualifies = majorQualifier(a, eff);
+  const inSquad = qualifies && (!call || (call.selected && a.natPlan !== "withdraw"));
+  if (inSquad && info.team && a.league >= 2) out.caps = rng.int(2, 9);
+  if (inSquad && isMajorYear) {
+    const s2 = score + gauss(rng, 0, 8) - (info.team ? 4 : 0) + (call && a.natPlan === "allin" ? 5 : 0);
     out.major = info.major.name;
     if (s2 >= 26) out.medal = "gold";
     else if (s2 >= 20) out.medal = "silver";
@@ -310,7 +328,7 @@ export function playSeason(p: PlayerState, a: AthleteState, rng: Rng, opts: { mi
   else if (out.major) fame += 2;
   if (out.caps) fame += 1;
   if (stage === "youth" && a.stage === "youth" && out.titles > 0) fame += 0.5;
-  fame *= clamp(1.2 - p.fame / 100, 0.35, 1);
+  fame *= clamp(1.2 - p.fame / 100, 0.35, 1) * (opts.fameScale ?? 1);
   out.fame = Math.round(fame * 10) / 10;
   out.happiness = (out.titles > 0 || out.medal ? 6 : 0) + (out.award ? 3 : 0) - (out.place !== null && out.place >= teams - 2 ? 3 : 0) + (a.form < 30 ? -2 : 0);
 

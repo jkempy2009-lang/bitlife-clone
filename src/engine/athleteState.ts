@@ -49,6 +49,21 @@ export const newAthleteState = (): AthleteState => ({
   retiredAge: null,
   post: "none",
   endorsements: 0,
+  mental: 70,
+  chemistry: 50,
+  coachRel: 50,
+  captain: false,
+  playing: 100,
+  transferReq: false,
+  image: 60,
+  deals: [],
+  dealOffers: [],
+  natCall: null,
+  natPlan: "balanced",
+  appeal: null,
+  rival: null,
+  narrative: "",
+  hofYear: null,
   record: newAthleteRecord(),
   history: [],
 });
@@ -56,7 +71,7 @@ export const newAthleteState = (): AthleteState => ({
 /** Fill in any missing fields; migrates the old `{ sport }` + athlete job format. */
 export function hydrateAthlete(raw: Partial<AthleteState> | undefined, p: Pick<PlayerState, "currentJob" | "skills" | "age">): AthleteState {
   const base = newAthleteState();
-  const a: AthleteState = { ...base, ...(raw ?? {}), record: { ...base.record, ...(raw?.record ?? {}) }, history: raw?.history ?? [], offers: raw?.offers ?? [] };
+  const a: AthleteState = { ...base, ...(raw ?? {}), record: { ...base.record, ...(raw?.record ?? {}) }, history: raw?.history ?? [], offers: raw?.offers ?? [], deals: raw?.deals ?? [], dealOffers: raw?.dealOffers ?? [] };
   const legacy = raw !== undefined && raw.stage === undefined;
   if (legacy && a.sport && p.currentJob?.lineId === "athlete") {
     // Old save: a signed athlete. Give them a plausible profile rather than wiping the career.
