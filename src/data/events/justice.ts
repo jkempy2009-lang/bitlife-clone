@@ -10,8 +10,8 @@ import { inAgency } from "@/engine/spy";
 import { clamp } from "@/lib/format";
 
 const hire = (p: PlayerState, rng: { id(): string; pick<T>(a: readonly T[]): T }) => {
-  if (!p.currentJob) p.currentJob = makeJob(CAREER_BY_ID.fast_food, 0, rng as never);
-  p.annualSalary = p.currentJob.salary;
+  if (!p.currentJob && !p.business) p.currentJob = makeJob(CAREER_BY_ID.fast_food, 0, rng as never);
+  if (p.currentJob) p.annualSalary = p.currentJob.salary;
 };
 const strike = (p: PlayerState, years = 1) => {
   if (p.probation) {
@@ -28,7 +28,7 @@ export const JUSTICE_EVENTS: LifeEvent[] = [
     risk("Answer honestly and explain", 0.5, ["The manager read your explanation, nodded slowly and gave you a start date. 'Everybody deserves one.'", { happinessDelta: 4, karmaDelta: 2, apply: (p, rng) => hire(p, rng) }], ["Honesty did not pay this time. The recruiter was polite, and never called back.", { happinessDelta: -4 }]),
     risk("Tick 'no' and hope", 0.5, ["The check was lazy and nobody looked. You started on Monday, with a secret.", { karmaDelta: -3, apply: (p, rng) => hire(p, rng) }], ["The background check found everything. They fired you before your first shift and told the whole chain.", { karmaDelta: -4, happinessDelta: -6 }]),
     opt("Apply only to second-chance employers", "A workshop that hires ex-offenders took you on. Smaller pay, no questions, real work.", { happinessDelta: 3, apply: (p, rng) => hire(p, rng) }),
-  ], { cooldown: 5, requires: { hasJob: false, custom: (p) => hasRecord(p) && p.age >= 18 && !p.isInPrison && !p.influencer.fullTime && !p.music.signed } }),
+  ], { cooldown: 5, requires: { hasJob: false, custom: (p) => hasRecord(p) && p.age >= 18 && !p.isInPrison && !p.influencer.fullTime && !p.music.signed && !p.business } }),
 
   ev("jx_old_crew_calls", "crime", 18, 60, "The Old Crew Calls", "You're barely out and already broke. An old friend rings: 'One job, easy money. We need you.'", [
     risk("Do the one job", 0.5, ["The job went perfectly. You pocketed $15,000, and the old feeling came right back.", { bankBalanceDelta: 15000, karmaDelta: -8, apply: (p) => { addHeat(p, 15); p.justice.accomplices = Math.min(6, p.justice.accomplices + 1); } }], ["The police were waiting. As a recent ex-con, you won't get a second chance.", { karmaDelta: -8, arrest: { name: "Burglary", description: "You were caught on a job within months of release. The prosecutor called you 'incorrigible'.", years: 5, severity: "serious", evidence: 80 } }]),

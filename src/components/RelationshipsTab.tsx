@@ -42,7 +42,7 @@ import { closeRelationship, type Intent } from "@/engine/intimacy";
 import { supportAction } from "@/engine/friends";
 import { ACTIVITY_COST, INTERESTS as KID_INTERESTS, PRIVATE_SCHOOL_COST, TUTOR_COST, childAction } from "@/engine/parenting";
 import { money } from "@/lib/format";
-import { HANDOVER_CASH_SHARE, HANDOVER_MIN_AGE, handoverBlocker } from "@/engine/legacy";
+import { HANDOVER_CASH_SHARE, handoverBlocker } from "@/engine/legacy";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
 
@@ -430,7 +430,7 @@ function HandOver({ rel }: { rel: Relative }) {
     <>
       <SectionTitle hint="play as them instead">Pass the Torch</SectionTitle>
       <p className="text-xs text-slate-400">
-        Step aside and live on as {first}. You'll stay in the family as their living parent. About {Math.round(HANDOVER_CASH_SHARE * 100)}% of your cash, plus your property, vehicles, investments and any business, goes with them. Your debts stay with you. This ends your own story.
+        Step aside and live on as {first}. You'll stay in the family as their living parent. About {Math.round(HANDOVER_CASH_SHARE * 100)}% of your cash, plus your property, vehicles, investments and any business, goes with them. Your debts stay with you. If you wear a crown, you abdicate it to them. This ends your own story.
       </p>
       {blocker ? (
         <p className="text-xs text-amber-300">{blocker}</p>
@@ -541,7 +541,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
         </>
       )}
 
-      {rel.relation === "Child" && rel.alive && rel.age >= HANDOVER_MIN_AGE && <HandOver rel={rel} />}
+      {rel.relation === "Child" && rel.alive && <HandOver rel={rel} />}
 
       {rel.relation === "Partner" && (
         <>

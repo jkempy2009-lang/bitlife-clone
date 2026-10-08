@@ -11,6 +11,7 @@ import {
   createNewPlayer,
   educationForAge,
   isRoyal,
+  royalRankFor,
   logHeader,
   makeRelativeBase,
   netWorth,
@@ -94,20 +95,13 @@ function blendTalents(a: PlayerState["talents"], b: PlayerState["talents"]): Pla
   return out;
 }
 
-/** Youngest child you can hand your life to while you're still alive. */
-export const HANDOVER_MIN_AGE = 16;
 /** Share of your cash that goes with you when you step aside (no estate tax, but you keep some to live on). */
 export const HANDOVER_CASH_SHARE = 0.75;
 
-/** Why you can't hand your life over to this child right now (null = you can). */
+/** Why you can't hand your life over to this child (null = you can). Only the basics: you can do it any time. */
 export function handoverBlocker(p: PlayerState, child: Relative): string | null {
   if (!p.alive) return "Your story has already ended.";
   if (child.relation !== "Child" || !child.alive) return "That child can't take over.";
-  if (child.age < HANDOVER_MIN_AGE) return `${child.name.split(" ")[0]} is too young. They need to be at least ${HANDOVER_MIN_AGE}.`;
-  if (p.isInPrison) return "You can't hand your life over from prison.";
-  if (p.pendingTrial) return "Not while you're facing trial.";
-  if (p.isFugitive) return "Not while you're on the run.";
-  if (p.royalRank === "King" || p.royalRank === "Queen" || p.royal?.crown === "self") return "A sovereign can't simply step aside. The crown passes on death (or by abdication).";
   return null;
 }
 
@@ -133,6 +127,8 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
   relatives.push({
     ...makeRelativeBase(rng, "Parent", `${old.firstName} ${old.lastName}`, old.age, old.gender, Math.min(5, Math.max(1, Math.round(1 + netWorth(old) / 400_000))), 80),
     ...(living ? { alive: true, relationshipBar: Math.max(70, child.relationshipBar) } : { alive: false, deathAge: old.age, deathYear: year }),
+    ...(living && isRoyal(old) ? { royalTitle: old.gender === "Female" ? "Princess" : "Prince" } : {}),
+    ...(living && (old.isInPrison || old.pendingTrial || old.isFugitive) ? { traits: [old.isInPrison ? "In prison" : old.isFugitive ? "On the run" : "Awaiting trial"] } : {}),
   });
   if (survivingPartner) {
     relatives.push({ ...survivingPartner, id: rng.id(), relation: "Parent", partnerStatus: undefined, relationshipBar: Math.max(60, survivingPartner.relationshipBar) });
@@ -143,7 +139,15 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
     relatives.push({ ...gp, id: rng.id(), relation: "Grandparent" });
   }
 
-  const royalHeir = inheritRoyalty(old, child, heirsLeft, rng);
+  let royalHeir = inheritRoyalty(old, child, heirsLeft, rng);
+  if (living && old.royal?.crown === "self") {
+    // Abdication: the sovereign chooses who wears the crown, not birth order.
+    royalHeir = {
+      royal: { crown: "self", hrh: true, peerage: null, line: 0 },
+      rank: royalRankFor(child.gender, true),
+      log: `${old.firstName} abdicated in your favour. The crown is yours: long live the ${royalRankFor(child.gender, true)}!`,
+    };
+  }
   const royalParent = !!royalHeir || isRoyal(old);
   const next: PlayerState = {
     ...fresh,
@@ -245,6 +249,9 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
     next.queuedEvents = next.queuedEvents.filter((e) => e !== "legacy_memorial");
     next.scheduled = next.scheduled.filter((s) => s.id !== "estate_heir_will" && s.id !== "legacy_letter_note");
     next.flags.push("parent_stepped_aside");
+    if (old.isInPrison) addLog(next, `${old.firstName} is serving a sentence. You write to them when you can.`);
+    else if (old.isFugitive) addLog(next, `${old.firstName} is on the run. You haven't heard from them in a while.`);
+    else if (old.pendingTrial) addLog(next, `${old.firstName} faces trial and left you to run the family.`);
   }
   return next;
 }

@@ -226,12 +226,18 @@ describe("handing your life to a child while alive", () => {
     expect(next.relatives.some((r) => r.relation === "Parent" && r.name.startsWith(p.firstName))).toBe(true);
   });
 
-  it("refuses young children, prison and sovereigns", () => {
+  it("works any time: from prison, on trial, or as a sovereign (abdication to the chosen child)", () => {
     const { rng, p, kid } = setup();
     expect(handoverBlocker(p, kid)).toBeNull();
-    expect(handoverBlocker(p, { ...kid, age: 15 })).toMatch(/too young/);
-    expect(handoverBlocker({ ...p, isInPrison: true }, kid)).toMatch(/prison/);
-    expect(handoverBlocker({ ...p, royalRank: "King" }, kid)).toMatch(/sovereign/i);
-    expect(continueAsChild({ ...p, isInPrison: true }, kid.id, rng, true)).toBeNull();
+    expect(handoverBlocker(p, { ...kid, alive: false })).not.toBeNull();
+    const jailed = continueAsChild({ ...p, isInPrison: true }, kid.id, rng, true)!;
+    expect(jailed.isInPrison).toBe(false);
+    expect(jailed.relatives.find((r) => r.relation === "Parent" && r.traits?.includes("In prison"))?.alive).toBe(true);
+    const king = { ...p, royalRank: "King" as const, royal: { crown: "self" as const, hrh: true, peerage: null, line: 0 } };
+    const elder = makeRelativeBase(rng, "Child", "Eldest Royal", 30, "Female", 3, 70);
+    king.relatives = [...p.relatives, elder];
+    const crowned = continueAsChild(king, kid.id, rng, true)!;
+    expect(crowned.royalRank).toBe("King");
+    expect(crowned.royal?.crown).toBe("self");
   });
 });

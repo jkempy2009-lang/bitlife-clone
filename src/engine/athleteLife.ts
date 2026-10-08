@@ -3,6 +3,7 @@
  * locker-room politics, mental health, contesting a doping ban, rivalries, and life after the game.
  * Each action is `(p, rng?) => ActionResult` on a clone, with a matching `*Blocker` for the UI.
  */
+import { blockerFor } from "./occupation";
 import type { ActionResult, NationalPlan, PlayerState } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
@@ -354,6 +355,8 @@ export function academyBlocker(p: PlayerState): string | null {
   const a = p.athlete;
   if (a.stage !== "retired") return "You can only found an academy once you've retired.";
   if (a.post === "academy" || p.business) return p.business ? `You already run ${p.business.name}.` : "You already run an academy.";
+  const clash = blockerFor(p, "business");
+  if (clash) return clash;
   if (p.fame < 15 && a.record.proSeasons < 3) return "Parents want a name they recognise: build a bigger career first.";
   const cost = academyCost() - academyDiscount(p);
   if (p.bankBalance < cost) return `Opening an academy costs ${money(cost)} (${money(academyDiscount(p))} off for your name).`;
