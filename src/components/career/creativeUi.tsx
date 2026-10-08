@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useGame } from "@/context/GameStateContext";
-import { layLow, managerCost, prFirmCost, resolveScandal, securityCost, toggleBusinessManager, toggleSecurity, type PrResponse } from "@/engine/celebrity";
+import { lawyerCost, layLow, managerCost, prFirmCost, resolveScandal, securityCost, toggleBusinessManager, toggleSecurity, type PrResponse } from "@/engine/celebrity";
 import { money } from "@/lib/format";
 import { Card, SectionTitle } from "../ui";
 import { ActionButton, Banner, Meter } from "./shared";
@@ -53,6 +53,7 @@ export function CelebrityPanel() {
   const sc = c.scandal;
   const respond = (r: PrResponse) => act((pl, rng) => resolveScandal(pl, rng, r));
   const prCost = sc ? prFirmCost(p, sc.severity) : 0;
+  const lawCost = sc ? lawyerCost(p, sc.severity) : 0;
   return (
     <div className="flex flex-col gap-3">
       <SectionTitle hint={`${c.scandals} past scandal${c.scandals === 1 ? "" : "s"}`}>Life in the Spotlight</SectionTitle>
@@ -66,6 +67,7 @@ export function CelebrityPanel() {
             <ActionButton label="Ignore it" hint="Cheap, may blow over" onClick={() => respond("ignore")} />
             <ActionButton label="Double down" variant="gold" hint="Risky, can make you more famous" onClick={() => respond("doubleDown")} />
             <ActionButton label={`PR firm ${money0(prCost)}`} variant="primary" reason={p.bankBalance < prCost ? `Needs ${money0(prCost)}` : null} hint="Best odds of a clean exit" onClick={() => respond("prFirm")} />
+            <ActionButton label={`Lawyer ${money0(lawCost)}`} reason={p.bankBalance < lawCost ? `Needs ${money0(lawCost)}` : null} hint="Cheaper, good against claims, can drag on" onClick={() => respond("lawyer")} />
           </div>
         </Card>
       )}

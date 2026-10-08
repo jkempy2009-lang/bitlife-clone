@@ -77,7 +77,9 @@ export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
   if (blocked) return { ok: false, reason: blocked };
   let partTime = false;
   if (isStudyingFullTime(p)) {
-    if (!partTimeFriendly(line)) return { ok: false, reason: "You're studying. Only part-time work fits around classes." };
+    // Child actors work around school; every other pack career is full time.
+    const childActor = line.pack === "actor" && (p.education.stage === "Primary" || p.education.stage === "HighSchool");
+    if (!partTimeFriendly(line) && !childActor) return { ok: false, reason: "You're studying. Only part-time work fits around classes." };
     partTime = true;
   }
   if (!hasAnyDegree(p, line.requirements.degrees)) {

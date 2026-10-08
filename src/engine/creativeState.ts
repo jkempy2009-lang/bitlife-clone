@@ -67,6 +67,7 @@ export const newMusic = (): MusicState => ({
 
 export const newActing = (): ActingState => ({
   agent: null,
+  manager: null,
   reputation: 20,
   critics: 30,
   pull: 5,
@@ -75,12 +76,22 @@ export const newActing = (): ActingState => ({
   offers: [],
   pendingFilm: null,
   studioDeal: null,
+  series: null,
+  franchise: null,
+  franchiseOffer: null,
+  awardsRun: null,
+  callback: null,
+  rejections: 0,
+  residuals: [],
+  prepBonus: 0,
+  comebackYear: 0,
+  sideGigs: 0,
   awards: [],
   nominations: 0,
   earnings: 0,
   yearsSinceWork: 0,
   modelBookings: 0,
-  lastIncome: { fees: 0, bonuses: 0, agent: 0 },
+  lastIncome: { fees: 0, bonuses: 0, agent: 0, series: 0, residuals: 0 },
 });
 
 export const newCeleb = (): CelebState => ({
@@ -134,6 +145,10 @@ export function hydrateCreative(p: PlayerState): Pick<PlayerState, "influencer" 
   }
   const acting: ActingState = { ...newActing(), ...(p.acting as Partial<ActingState> | undefined) };
   acting.lastIncome = { ...newActing().lastIncome, ...(p.acting as Partial<ActingState> | undefined)?.lastIncome };
+  if (acting.agent) {
+    acting.agent = { ...acting.agent, kind: acting.agent.kind ?? "mid", trust: acting.agent.trust ?? 55 };
+  }
+  acting.residuals = acting.residuals ?? [];
   // An existing actor's job tier is their résumé.
   if (!p.acting && p.currentJob?.lineId === "actor") {
     acting.reputation = 20 + p.currentJob.tier * 20;

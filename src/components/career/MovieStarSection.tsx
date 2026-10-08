@@ -16,8 +16,6 @@ import {
   bookCampaign,
   buyOutStudioDeal,
   declineOffer,
-  fireAgent,
-  hireAgent,
   isActor,
   isModel,
   produceBlocker,
@@ -28,12 +26,14 @@ import {
   type ProduceTier,
 } from "@/engine/acting";
 import { applyForJob, jobEligibility, quitJob } from "@/engine/career";
+import { MEDIUM_LABEL } from "@/engine/actingShared";
 import { money } from "@/lib/format";
 import { Card, Pill, SectionTitle } from "../ui";
 import { ActionButton, Banner, Meter } from "./shared";
 import { BigStat, CelebrityPanel, Choice, Row, money0 } from "./creativeUi";
-
-const outcomeTone = (o: string) => (o === "flop" ? "red" : o === "blockbuster" ? "amber" : o === "hit" ? "green" : "slate");
+import {
+  AwardsPanel, CallbackCard, CareerSummaryCard, Filmography, FranchisePanel, LadderCard, ProductionPanel, RepresentationPanel, SeriesPanel, SideWorkPanel,
+} from "./ActingPanels";
 
 export function MovieStarSection() {
   const { player: p, act } = useGame();
@@ -58,11 +58,11 @@ export function MovieStarSection() {
         <Card>
           <h4 className="mb-1 font-bold">Break into show business</h4>
           <p className="mb-2 text-sm text-slate-300">
-            Acting and modelling are real jobs. You start at the bottom as a background actor or a junior model. Climb by auditioning, building credits and an industry reputation, and signing with an agent who takes 10% of your fees.
+            Acting and modelling are real jobs. You start at the bottom as a background actor or a junior model. Climb by auditioning, building credits and an industry reputation, and signing with an agent (and perhaps a manager) who take a cut of your fees.
           </p>
           <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-400">
             <li>It is a full-time job, so it replaces any other job you hold. You can quit from the Work tab or the button here.</li>
-            <li>Films come out when you age up. Flops hurt your pull and reputation, hits and awards lift them.</li>
+            <li>Films, plays and TV seasons come out when you age up. Auditions lead to call-backs; a TV contract or franchise locks you in for years. Flops hurt your pull and reputation, hits and awards lift them.</li>
             <li>Repeating one genre gets you typecast. Looks matter, and the industry is not kind to the ageing.</li>
             <li>Later you can produce or direct films with your own money and write a memoir.</li>
           </ul>
@@ -95,7 +95,7 @@ export function MovieStarSection() {
   const used = p.annual.audition ?? 0;
   const chance = actor ? auditionChance(p, genre) : 0;
   const inc = a.lastIncome;
-  const netLast = inc.fees + inc.bonuses - inc.agent;
+  const netLast = inc.fees + inc.series + inc.residuals + inc.bonuses - inc.agent;
   const studio = a.studioDeal;
   const signReason = !actor || !job ? "Only working actors sign studio deals."
     : job.tier < 1 ? "Studios sign supporting actors and above."
@@ -112,14 +112,18 @@ export function MovieStarSection() {
         <div className="mt-2 flex flex-wrap justify-center gap-1.5">
           {a.agent ? <Pill tone="green">Agent: {a.agent.name}</Pill> : <Pill tone="slate">No agent</Pill>}
           {a.typecast && <Pill tone="amber">Typecast: {a.typecast}</Pill>}
+          {a.manager && <Pill tone="green">Manager: {a.manager.name}</Pill>}
           {studio && <Pill tone="blue">{studio.studio} deal</Pill>}
+          {a.series && <Pill tone="blue">📺 {a.series.title}</Pill>}
+          {a.franchise && <Pill tone="blue">Saga: {a.franchise.name}</Pill>}
+          {a.rejections >= 3 && <Pill tone="red">{a.rejections} rejections in a row</Pill>}
           {a.awards.length > 0 && <Pill tone="amber">🏆 {a.awards.length}</Pill>}
         </div>
       </Card>
 
       {a.pendingFilm && (
         <Banner tone="blue">
-          🎞️ Shooting &quot;{a.pendingFilm.title}&quot; ({a.pendingFilm.genre}, {a.pendingFilm.role}). {money0(a.pendingFilm.budget)} budget{a.pendingFilm.invested ? `, with ${money0(a.pendingFilm.invested)} of your own money riding on it` : ""}. It will be released when you age up.
+          🎞️ {a.pendingFilm.medium === "stage" ? "Rehearsing" : "Shooting"} &quot;{a.pendingFilm.title}&quot; ({a.pendingFilm.genre}, {a.pendingFilm.role}{a.pendingFilm.method ? ", method" : ""}). {money0(a.pendingFilm.budget)} budget{a.pendingFilm.invested ? `, with ${money0(a.pendingFilm.invested)} of your own money riding on it` : ""}. It will be released when you age up.
         </Banner>
       )}
       {a.yearsSinceWork >= 2 && job && <Banner tone="amber">{a.yearsSinceWork} years without screen work. Your reputation is slipping.</Banner>}
@@ -141,36 +145,46 @@ export function MovieStarSection() {
         {a.awards.length > 0 && <p className="mt-1 text-xs text-amber-300">🏆 {a.awards.join(", ")}</p>}
       </Card>
 
+      <LadderCard />
+
       <SectionTitle>Finances</SectionTitle>
       <Card>
-        <Row label="Salary" value={job ? `${money0(job.salary)}/yr` : "none"} />
-        <Row label="Film fees and bookings (last year)" value={money0(inc.fees)} />
+        <Row label="Salary (retainer)" value={job ? `${money0(job.salary)}/yr` : "none"} />
+        <Row label="Film and stage fees (last year)" value={money0(inc.fees)} />
+        <Row label="Television seasons" value={money0(inc.series)} />
         <Row label="Bonuses and box-office share" value={money0(inc.bonuses)} />
-        <Row label="Agent's cut" value={`-${money0(inc.agent)}`} tone="bad" />
+        <Row label="Residuals" value={money0(inc.residuals)} />
+        <Row label="Agent and manager cuts" value={`-${money0(inc.agent)}`} tone="bad" />
         <Row label="Net extra income last year" value={money0(netLast)} tone={netLast >= 0 ? "good" : "bad"} />
         <Row label="Lifetime screen earnings" value={money0(a.earnings)} />
+        {a.residuals.length > 0 && <p className="mt-1 text-xs text-slate-500">{a.residuals.length} residual stream{a.residuals.length === 1 ? "" : "s"} still paying, about {money0(a.residuals.reduce((t, r) => t + r.amount, 0))} a year. Everything above is before tax. Guild minimums apply to every contract.</p>}
       </Card>
+
+      <CallbackCard />
+      <FranchisePanel />
+      <SeriesPanel />
 
       {a.offers.length > 0 && (
         <>
           <SectionTitle hint="expire when you age up">Film Offers</SectionTitle>
           <div className="flex flex-col gap-2">
             {a.offers.map((o) => {
-              const reason = a.pendingFilm ? "Already committed to a film" : studio ? "Your studio deal covers your film work" : null;
+              const reason = a.pendingFilm ? "Already committed to a film" : studio ? "Your studio deal covers your film work" : a.franchise ? "Your franchise covers your film work" : a.series ? "Your series contract is exclusive" : null;
               const pushed = (p.annual[`haggle:${o.id}`] ?? 0) >= 1;
               return (
                 <Card key={o.id}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-semibold">🎬 {o.title}</div>
-                      <div className="text-xs text-slate-400">{o.genre} · {o.role} · {money0(o.budget)} budget</div>
+                      <div className="font-semibold">{o.medium === "tv" ? "📺" : o.medium === "stage" ? "🎭" : "🎬"} {o.title}</div>
+                      <div className="text-xs text-slate-400">{MEDIUM_LABEL[o.medium ?? "film"]} · {o.genre} · {o.role}{o.medium === "tv" ? ` · ${o.seasons} seasons guaranteed` : ` · ${money0(o.budget)} budget`}</div>
                     </div>
-                    <div className="text-right font-bold tabular-nums text-emerald-300">{money0(o.fee)}</div>
+                    <div className="text-right font-bold tabular-nums text-emerald-300">{money0(o.fee)}{o.medium === "tv" && <div className="text-[10px] font-normal text-slate-500">per season</div>}</div>
                   </div>
                   <div className="mt-1 flex gap-1.5">
                     <Pill tone={o.script >= 65 ? "green" : o.script >= 45 ? "amber" : "red"}>Script {o.script}</Pill>
                     <Pill tone={o.prestige >= 65 ? "green" : "slate"}>Prestige {o.prestige}</Pill>
                     {a.typecast && a.typecast !== o.genre && <Pill tone="blue">Breaks typecast</Pill>}
+                    {o.comeback && <Pill tone="amber">Comeback</Pill>}
                   </div>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <ActionButton variant="primary" label="Accept" reason={reason} onClick={() => act((pl, rng) => acceptOffer(pl, rng, o.id))} />
@@ -184,31 +198,13 @@ export function MovieStarSection() {
         </>
       )}
 
-      {job && (
-        <>
-          <SectionTitle>Representation</SectionTitle>
-          <Card>
-            {a.agent ? (
-              <>
-                <Row label="Agent" value={a.agent.name} />
-                <Row label="Connections" value={`${a.agent.skill}/100`} />
-                <Row label="Commission" value={`${Math.round(a.agent.cut * 100)}%`} />
-                <Row label="Years together" value={a.agent.yearsWith} />
-                <p className="mt-1 text-xs text-slate-500">Agents bring offers, open lead auditions and extra audition slots at reputation 50+.</p>
-                <ActionButton className="mt-2" variant="ghost" label="Part ways with agent" hint="You will see fewer offers and no lead auditions." onClick={() => act((pl) => fireAgent(pl))} />
-              </>
-            ) : (
-              <ActionButton variant="primary" label="🤝 Hire an agent" hint="10% of film and booking fees. Required for leads. Unknowns may be turned down." onClick={() => act((pl, rng) => hireAgent(pl, rng))} />
-            )}
-          </Card>
-        </>
-      )}
+      <RepresentationPanel />
 
       {actor && job && (
         <>
           <SectionTitle hint={`${used}/${limit} auditions this year`}>Auditions</SectionTitle>
           <Card>
-            <p className="mb-2 text-xs text-slate-400">Pick the genre to audition in. Your typecasting helps in your usual genre and hurts elsewhere, but breaking out impresses critics. Success earns a promotion and a film to shoot.</p>
+            <p className="mb-2 text-xs text-slate-400">Pick the genre to audition in. Your typecasting helps in your usual genre and hurts elsewhere, but breaking out impresses critics. A good read earns a call-back, and a good call-back earns a promotion and a film to shoot. Rejection streaks wear you down.</p>
             <div className="mb-2 grid grid-cols-2 gap-2">
               {FILM_GENRES.map((g) => <Choice key={g} selected={genre === g} onClick={() => setGenre(g)} title={g} hint={a.typecast === g ? "your typecast" : undefined} />)}
             </div>
@@ -220,6 +216,9 @@ export function MovieStarSection() {
               onClick={() => act((pl, rng) => auditionForLead(pl, rng, genre))}
             />
           </Card>
+
+          <ProductionPanel />
+          <AwardsPanel />
 
           <SectionTitle>Studio Contract</SectionTitle>
           <Card>
@@ -242,11 +241,13 @@ export function MovieStarSection() {
               <ActionButton
                 label="🖋️ Sign a three-picture studio deal"
                 hint="Steady money: one film a year in a genre they choose. You lose control of your roles."
-                reason={signReason}
+                reason={signReason ?? (a.series ? "Your series contract is exclusive." : a.franchise ? "Your franchise contract covers your film work." : null)}
                 onClick={() => act((pl, rng) => signStudioDeal(pl, rng))}
               />
             )}
           </Card>
+
+          <SideWorkPanel />
         </>
       )}
 
@@ -308,26 +309,8 @@ export function MovieStarSection() {
         </div>
       </Card>
 
-      {a.credits.length > 0 && (
-        <>
-          <SectionTitle hint={`${a.credits.length} credit${a.credits.length === 1 ? "" : "s"}`}>Filmography</SectionTitle>
-          <div className="flex flex-col gap-2">
-            {[...a.credits].reverse().map((f) => (
-              <Card key={f.id} className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-semibold">🎞️ {f.title}{f.award ? " 🏆" : ""}</div>
-                    <div className="text-xs text-slate-400">{f.year} · {f.genre} · {f.role} · critics {f.critics}</div>
-                    <div className="text-xs text-slate-500">Budget {money0(f.budget)} · box office {money0(f.boxOffice)}</div>
-                    {f.award && <div className="text-xs text-amber-300">{f.award}</div>}
-                  </div>
-                  <Pill tone={outcomeTone(f.outcome)}>{f.outcome}</Pill>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </>
-      )}
+      <CareerSummaryCard />
+      <Filmography />
 
       {job && (
         <ActionButton variant="ghost" label="Quit performing" hint="Leave the industry. Your credits stay on your record." onClick={() => act((pl) => quitJob(pl))} />

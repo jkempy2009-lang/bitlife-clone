@@ -76,10 +76,10 @@ const CAUSES: Record<ScandalState["source"], string[]> = {
   general: ["a night out was captured on someone's phone", "a rumour about you took on a life of its own"],
 };
 
-export function raiseScandal(p: PlayerState, source: ScandalState["source"], rng: Rng, notices: Notices, severity?: 1 | 2 | 3): boolean {
+export function raiseScandal(p: PlayerState, source: ScandalState["source"], rng: Rng, notices: Notices, severity?: 1 | 2 | 3, cause?: string): boolean {
   if (p.celeb.scandal) return false;
   const sev = severity ?? (rng.chance(0.18 + p.fame / 400) ? 3 : rng.chance(0.5) ? 2 : 1);
-  const cause = rng.pick(CAUSES[source]);
+  cause = cause ?? rng.pick(CAUSES[source]);
   p.celeb.scandal = { source, cause, severity: sev };
   p.celeb.scandals += 1;
   const body = `Scandal: ${cause}. The press is calling. Decide how to respond in your fame career tab before it blows up on its own.`;
@@ -88,9 +88,11 @@ export function raiseScandal(p: PlayerState, source: ScandalState["source"], rng
   return true;
 }
 
-export type PrResponse = "apologise" | "ignore" | "doubleDown" | "prFirm";
+export type PrResponse = "apologise" | "ignore" | "doubleDown" | "prFirm" | "lawyer";
 
 export const prFirmCost = (p: PlayerState, severity: number) => Math.round(15_000 * severity * (1 + p.fame / 40));
+/** A lawyer is cheaper than a PR firm and good against claims, but a fight in the open can drag on. */
+export const lawyerCost = (p: PlayerState, severity: number) => Math.round(prFirmCost(p, severity) * 0.6);
 
 /** Apply the fallout. A negative factor is a windfall: the controversy made you more famous. */
 function applyDamage(p: PlayerState, source: ScandalState["source"], f: number, rng: Rng, notices: Notices) {
@@ -115,6 +117,8 @@ function applyDamage(p: PlayerState, source: ScandalState["source"], f: number, 
     m.labelStanding = clamp(m.labelStanding - 8 * f);
   } else if (source === "acting") {
     const a = p.acting;
+    // A manager who knows the press takes the edge off a bad week.
+    if (a.manager && f > 0) f *= 0.85;
     a.reputation = clamp(a.reputation - 8 * f);
     a.pull = clamp(a.pull - 4 * f);
     a.critics = clamp(a.critics - 2 * f);
@@ -146,6 +150,16 @@ function runScandal(p: PlayerState, rng: Rng, response: PrResponse, notices: Not
     success = rng.chance(0.88);
     factor = success ? 0.3 * sev : 1.1 * sev;
     text = success ? `The PR firm spun it into a "learning moment" for ${money(cost)}. It faded fast.` : `You paid ${money(cost)} and the story still got out of hand.`;
+  } else if (response === "lawyer") {
+    const cost = lawyerCost(p, sev);
+    if (p.bankBalance < cost) {
+      notices.push(info("Can't Afford It", `A good lawyer charges ${money(cost)} for this.`, "bad"));
+      return false;
+    }
+    p.bankBalance -= cost;
+    success = rng.chance(0.72 - (sev === 3 ? 0.1 : 0));
+    factor = success ? 0.4 * sev : 0.9 * sev;
+    text = success ? `Your lawyer's letters and a quiet settlement ended it for ${money(cost)}.` : `You paid ${money(cost)} and the fight went public. It dragged on for months.`;
   } else if (response === "apologise") {
     success = rng.chance(0.4 + cred / 200);
     factor = success ? 0.35 * sev : sev;
