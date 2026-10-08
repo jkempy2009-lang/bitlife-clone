@@ -3,7 +3,7 @@ import type { Rng } from "@/lib/rng";
 import { money } from "@/lib/format";
 import { newAthleteState } from "./athleteState";
 import { inheritBusiness } from "./business";
-import { inheritRoyalty } from "./royalty";
+import { inheritRoyalty, newRoyalLife } from "./royalty";
 import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 import {
   addLog,
@@ -127,7 +127,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
   relatives.push({
     ...makeRelativeBase(rng, "Parent", `${old.firstName} ${old.lastName}`, old.age, old.gender, Math.min(5, Math.max(1, Math.round(1 + netWorth(old) / 400_000))), 80),
     ...(living ? { alive: true, relationshipBar: Math.max(70, child.relationshipBar) } : { alive: false, deathAge: old.age, deathYear: year }),
-    ...(living && isRoyal(old) ? { royalTitle: old.gender === "Female" ? "Princess" : "Prince" } : {}),
+    ...(living && isRoyal(old) ? { royalTitle: old.royal?.crown === "self" ? (old.gender === "Female" ? "Queen" : "King") : old.gender === "Female" ? "Princess" : "Prince" } : {}),
     ...(living && (old.isInPrison || old.pendingTrial || old.isFugitive) ? { traits: [old.isInPrison ? "In prison" : old.isFugitive ? "On the run" : "Awaiting trial"] } : {}),
   });
   if (survivingPartner) {
@@ -141,11 +141,16 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
 
   let royalHeir = inheritRoyalty(old, child, heirsLeft, rng);
   if (living && old.royal?.crown === "self") {
-    // Abdication: the sovereign chooses who wears the crown, not birth order.
+    // Handing over is not abdication: the sovereign keeps reigning and the crown still follows birth order.
+    // Whichever child you pick, the eldest living child is crowned when the reign ends.
+    const older = heirsLeft.filter((k) => k.age > child.age).length;
+    const girl = child.gender !== "Male";
     royalHeir = {
-      royal: { crown: "self", hrh: true, peerage: null, line: 0 },
-      rank: royalRankFor(child.gender, true),
-      log: `${old.firstName} abdicated in your favour. The crown is yours: long live the ${royalRankFor(child.gender, true)}!`,
+      royal: newRoyalLife(older),
+      rank: girl ? "Princess" : "Prince",
+      log: older === 0
+        ? `${old.firstName} still reigns. As their eldest child you are heir to the throne.`
+        : `${old.firstName} still reigns. You are ${girl ? "a Princess" : "a Prince"}, number ${older + 1} in the line of succession: the crown goes to your eldest sibling, whoever is chosen to play on.`,
     };
   }
   const royalParent = !!royalHeir || isRoyal(old);

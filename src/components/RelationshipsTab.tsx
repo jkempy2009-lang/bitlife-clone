@@ -430,7 +430,7 @@ function HandOver({ rel }: { rel: Relative }) {
     <>
       <SectionTitle hint="play as them instead">Pass the Torch</SectionTitle>
       <p className="text-xs text-slate-400">
-        Step aside and live on as {first}. You'll stay in the family as their living parent. About {Math.round(HANDOVER_CASH_SHARE * 100)}% of your cash, plus your property, vehicles, investments and any business, goes with them. Your debts stay with you. If you wear a crown, you abdicate it to them. This ends your own story.
+        Step aside and live on as {first}. You'll stay in the family as their living parent. About {Math.round(HANDOVER_CASH_SHARE * 100)}% of your cash, plus your property, vehicles, investments and any business, goes with them. Your debts stay with you. If you wear a crown you keep reigning as an NPC, and the crown still goes to your eldest child, not necessarily the one you play. This ends your own story.
       </p>
       {blocker ? (
         <p className="text-xs text-amber-300">{blocker}</p>

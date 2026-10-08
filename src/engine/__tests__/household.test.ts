@@ -2,6 +2,7 @@ import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
 import { createNewPlayer, getPartner, makeRelativeBase } from "../state";
+import { ensureSuccession } from "../royalty";
 import { HANDOVER_CASH_SHARE, continueAsChild, handoverBlocker } from "../legacy";
 import { ageUp } from "../ageUp";
 import { endRelationship } from "../social";
@@ -226,7 +227,7 @@ describe("handing your life to a child while alive", () => {
     expect(next.relatives.some((r) => r.relation === "Parent" && r.name.startsWith(p.firstName))).toBe(true);
   });
 
-  it("works any time: from prison, on trial, or as a sovereign (abdication to the chosen child)", () => {
+  it("works any time: from prison, on trial, or as a sovereign (the crown still goes to the eldest)", () => {
     const { rng, p, kid } = setup();
     expect(handoverBlocker(p, kid)).toBeNull();
     expect(handoverBlocker(p, { ...kid, alive: false })).not.toBeNull();
@@ -234,10 +235,20 @@ describe("handing your life to a child while alive", () => {
     expect(jailed.isInPrison).toBe(false);
     expect(jailed.relatives.find((r) => r.relation === "Parent" && r.traits?.includes("In prison"))?.alive).toBe(true);
     const king = { ...p, royalRank: "King" as const, royal: { crown: "self" as const, hrh: true, peerage: null, line: 0 } };
-    const elder = makeRelativeBase(rng, "Child", "Eldest Royal", 30, "Female", 3, 70);
+    const elder = { ...makeRelativeBase(rng, "Child", "Eldest Royal", 30, "Female", 3, 70), royalTitle: "Princess" };
     king.relatives = [...p.relatives, elder];
     const crowned = continueAsChild(king, kid.id, rng, true)!;
-    expect(crowned.royalRank).toBe("King");
-    expect(crowned.royal?.crown).toBe("self");
+    // Chosen child is younger than the eldest: not crowned, still a Prince, second in line, and the sovereign still reigns.
+    expect(crowned.royalRank).toBe("Prince");
+    expect(crowned.royal?.crown).toBe("parent");
+    expect(crowned.royal?.line).toBe(2);
+    expect(crowned.relatives.find((r) => r.relation === "Parent" && r.royalTitle === "King")?.alive).toBe(true);
+    // When the reign ends, the eldest sibling is crowned, not the child you played.
+    const old = crowned.relatives.find((r) => r.relation === "Parent" && r.royalTitle === "King")!;
+    old.alive = false;
+    old.royalTitle = undefined;
+    ensureSuccession(crowned, rng, []);
+    expect(crowned.royal?.crown).toBe("sibling");
+    expect(crowned.relatives.find((r) => r.royalTitle === "King" || r.royalTitle === "Queen")?.name).toBe("Eldest Royal");
   });
 });
