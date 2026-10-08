@@ -590,6 +590,8 @@ export interface MusicState {
   lastIncome: { gigs: number; royalties: number; stipend: number; costs: number };
 }
 
+export type ActingMedium = "film" | "tv" | "stage";
+
 export interface FilmCredit {
   id: string;
   title: string;
@@ -602,6 +604,13 @@ export interface FilmCredit {
   critics: number;
   outcome: "flop" | "modest" | "hit" | "blockbuster";
   award?: string;
+  /** Film when absent (old saves). */
+  medium?: ActingMedium;
+  /** A low-budget film that outperformed everything. */
+  sleeper?: boolean;
+  /** Seasons (TV) or installment number (franchise). */
+  seasons?: number;
+  installment?: number;
 }
 
 export interface FilmOffer {
@@ -609,23 +618,49 @@ export interface FilmOffer {
   title: string;
   genre: string;
   role: "cameo" | "supporting" | "lead";
+  /** Film fee, or the fee per season for television. */
   fee: number;
   budget: number;
   /** Script quality, 0-100. */
   script: number;
   prestige: number;
+  medium?: ActingMedium;
+  /** TV only: seasons guaranteed by the contract. */
+  seasons?: number;
+  /** A passion project offered to a faded star. */
+  comeback?: boolean;
+  /** Franchise sequel number (1 = the original). */
+  installment?: number;
 }
 
 export interface PendingFilm extends Omit<FilmOffer, "role"> {
   role: FilmCredit["role"];
   /** Your own money riding on it (producer / director). */
   invested?: number;
+  /** Press and marketing push, 0-40. */
+  promo?: number;
+  /** You are staying in character for the shoot. */
+  method?: boolean;
 }
+
+export type AgentKind = "boutique" | "mid" | "major";
 
 export interface Agent {
   name: string;
   cut: number;
   /** 0-100: how hard they work for you. */
+  skill: number;
+  yearsWith: number;
+  /** Boutique agents are hungry for you, major agencies drop quiet clients. */
+  kind: AgentKind;
+  /** 0-100: their faith in you. */
+  trust: number;
+}
+
+/** A personal manager: an extra cut in return for steering the whole career. */
+export interface Manager {
+  name: string;
+  cut: number;
   skill: number;
   yearsWith: number;
 }
@@ -637,8 +672,77 @@ export interface StudioDeal {
   genre: string;
 }
 
+/** A television show you are contracted to. */
+export interface Series {
+  title: string;
+  genre: string;
+  network: string;
+  /** A pilot waits to be picked up; a running show airs a season a year. */
+  status: "pilot" | "running";
+  /** Seasons aired so far. */
+  season: number;
+  /** Seasons left on your contract. */
+  yearsLeft: number;
+  /** Your fee per season. */
+  fee: number;
+  /** Audience / ratings, 0-100. */
+  ratings: number;
+  script: number;
+  prestige: number;
+  role: "cameo" | "supporting" | "lead";
+  /** Running average of the critics' score. */
+  critics: number;
+}
+
+export interface Franchise {
+  name: string;
+  genre: string;
+  /** Sequels still owed. */
+  filmsLeft: number;
+  /** The installment currently in production or next up. */
+  installment: number;
+  fee: number;
+}
+
+export interface FranchiseOffer {
+  name: string;
+  genre: string;
+  films: number;
+  fee: number;
+}
+
+export type CampaignMode = "quiet" | "festivals" | "lunch" | "blitz";
+
+/** A film in the running for this year's prizes. */
+export interface AwardsRun {
+  filmId: string;
+  title: string;
+  genre: string;
+  role: FilmCredit["role"];
+  critics: number;
+  prestige: number;
+  indie: boolean;
+  medium: ActingMedium;
+  campaign: CampaignMode;
+  spent: number;
+}
+
+/** A second round of auditions you have been invited to. */
+export interface AuditionCallback {
+  genre: string;
+  /** Chance of winning the part if you wing it. */
+  odds: number;
+}
+
+export interface Residual {
+  title: string;
+  amount: number;
+  yearsLeft: number;
+}
+
 export interface ActingState {
   agent: Agent | null;
+  manager: Manager | null;
   /** Standing with the industry, 0-100. */
   reputation: number;
   /** Critical acclaim, 0-100. */
@@ -650,12 +754,26 @@ export interface ActingState {
   offers: FilmOffer[];
   pendingFilm: PendingFilm | null;
   studioDeal: StudioDeal | null;
+  series: Series | null;
+  franchise: Franchise | null;
+  franchiseOffer: FranchiseOffer | null;
+  awardsRun: AwardsRun | null;
+  callback: AuditionCallback | null;
+  /** Auditions failed in a row. */
+  rejections: number;
+  residuals: Residual[];
+  /** Coaching bonus applied to the next performance. */
+  prepBonus: number;
+  /** Year of the last comeback attempt. */
+  comebackYear: number;
+  /** Voice jobs and regional commercials booked, ever. */
+  sideGigs: number;
   awards: string[];
   nominations: number;
   earnings: number;
   yearsSinceWork: number;
   modelBookings: number;
-  lastIncome: { fees: number; bonuses: number; agent: number };
+  lastIncome: { fees: number; bonuses: number; agent: number; series: number; residuals: number };
 }
 
 export interface ScandalState {

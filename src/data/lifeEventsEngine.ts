@@ -24,6 +24,7 @@ import { LATER2_EVENTS } from "./events/later2";
 import { SPORTS_EVENTS } from "./events/sports";
 import { BUSINESS_EVENTS } from "./events/business";
 import { CREATIVE_EVENTS } from "./events/creative";
+import { ACTING_EVENTS } from "./events/acting";
 import { JUSTICE_EVENTS } from "./events/justice";
 import { POLITICS_EVENTS } from "./events/politics";
 import { ARC_EVENTS } from "./events/arcs";
@@ -219,6 +220,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...SPORTS_EVENTS,
   ...BUSINESS_EVENTS,
   ...CREATIVE_EVENTS,
+  ...ACTING_EVENTS,
   ...JUSTICE_EVENTS,
   ...POLITICS_EVENTS,
   ...ARC_EVENTS,
