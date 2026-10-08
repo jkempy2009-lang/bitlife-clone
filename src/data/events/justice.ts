@@ -154,7 +154,7 @@ export const JUSTICE_EVENTS: LifeEvent[] = [
   ], { cooldown: 6, requires: { custom: (p) => inAgency(p) && !p.spy.doubleAgent } }),
 
   ev("sx_after_burn", "career", 22, 80, "No Longer Cleared", "Years of secrecy, and now nobody will confirm you ever worked for the government. A defence contractor offers a quiet job, a publisher offers a lot of money, and your old life keeps shadowing you.", [
-    opt("Take the contractor's job", "Your skills still count for something. The job is dull, and the pay is respectable.", { bankBalanceDelta: 15000, happinessDelta: 2, apply: (p, rng) => { if (!p.currentJob) { p.currentJob = makeJob(CAREER_BY_ID.security, 0, rng as never); p.annualSalary = p.currentJob.salary; } } }),
+    opt("Take the contractor's job", "Your skills still count for something. The job is dull, and the pay is respectable.", { bankBalanceDelta: 15000, happinessDelta: 2, apply: (p, rng) => { if (!p.currentJob && !p.business) { p.currentJob = makeJob(CAREER_BY_ID.security, 0, rng as never); p.annualSalary = p.currentJob.salary; } } }),
     risk("Write the tell-all", 0.4, ["It sold well and nobody sued. You're famous for ten minutes.", { bankBalanceDelta: 90000, fameDelta: 8, karmaDelta: -3 }], ["Your old employer's lawyers called it a breach of the Official Secrets Act.", { arrest: { name: "Unauthorised Disclosure", description: "You published classified details in breach of your oath.", years: 4, severity: "serious", evidence: 85 }, karmaDelta: -3 }]),
     opt("Live quietly", "You took up gardening. Nobody asked what you used to do, and you never said.", { happinessDelta: 4 }),
   ], { once: true, requires: { custom: (p) => p.spy.burned && !!p.spy.burnedYear && p.year - p.spy.burnedYear <= 4 && !p.isInPrison } }),

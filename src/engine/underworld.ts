@@ -69,6 +69,7 @@ export function joinMob(p0: PlayerState, rng: Rng): ActionResult {
   if (isRoyal(p)) return { player: p0 };
   if (p.mob.witsec) return { player: p0, notices: [info("Dead to Them", "You testified. No family on earth will touch you.", "bad")] };
   if ((p.annual["apply:mafia"] ?? 0) >= 1) return { player: p0, notices: [info("Lie Low", "You've already asked around this year. Don't look desperate.")] };
+  if (p.business) return { player: p0, notices: [info("Too Busy", `You can't run ${p.business.name} and work for a family at the same time. Sell or close the business first.`)] };
   p.annual["apply:mafia"] = 1;
   if (!rng.chance(joinChance(p))) {
     changeStat(p, "happiness", -3);
