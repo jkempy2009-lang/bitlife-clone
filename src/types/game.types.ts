@@ -62,6 +62,23 @@ export interface Relative {
   interest?: "sport" | "music" | "art" | "science" | "none";
   /** Children: how much trouble they've been in lately. */
   trouble?: number;
+  /** Royal children: how they are being raised for public life (see engine/courtFamily.ts). */
+  royalTraining?: RoyalTraining;
+}
+
+/** How a royal child is being brought up. Carries into the next generation if they inherit. */
+export interface RoyalTraining {
+  /** 0-100: sense of public duty. */
+  duty: number;
+  /** 0-100: the common touch, from an ordinary upbringing. */
+  touch: number;
+  /** 0-100: media and etiquette polish. */
+  polish: number;
+  school: "tutors" | "boarding" | "state";
+  /** Military branch they have been steered towards (age 18+). */
+  service?: "army" | "navy" | "air";
+  /** Patronage they have taken up (age 16+). */
+  patron?: string;
 }
 
 export interface Property {
@@ -446,13 +463,88 @@ export interface PoliticsState {
 /** Where you stand in a royal family. Titles follow the British model (absolute primogeniture). */
 export interface RoyalLife {
   /** Who holds the crown relative to you. */
-  crown: "self" | "parent" | "grandparent" | "sibling" | "other";
+  crown: "self" | "parent" | "grandparent" | "sibling" | "other" | "abdicated";
   /** Styled His/Her Royal Highness: only children and grandchildren of the reigning sovereign. */
   hrh: boolean;
   /** A dukedom or courtesy title you hold, e.g. "Duke of Kent". */
   peerage: string | null;
   /** Position in the line of succession (0 = sovereign, 1 = heir). */
   line: number;
+}
+
+export type ServiceBranch = "army" | "navy" | "air";
+
+/** Military service as a young royal. */
+export interface MilitaryService {
+  branch: ServiceBranch;
+  years: number;
+  /** Index into the branch's rank ladder. */
+  rank: number;
+  /** On an operational posting this year. */
+  deployed: boolean;
+  deployments: number;
+  /** Service has ended (you can still be a veteran patron). */
+  done: boolean;
+}
+
+/** A scandal waiting for a response from the press office. */
+export interface CourtScandal {
+  id: string;
+  title: string;
+  story: string;
+  severity: 1 | 2 | 3;
+  year: number;
+}
+
+/** Everything about being a working royal that isn't succession: popularity, duties, the household and the purse. */
+export interface CourtState {
+  /** 0-100: how much the public like you personally (separate from Royal Respect, which guards against a coup). */
+  approval: number;
+  /** 0-100: public appetite for abolishing the monarchy. */
+  republic: number;
+  /** 0-100: how closely the tabloids are watching. */
+  heat: number;
+  /** 0-100: constitutional strain from meddling in politics. */
+  strain: number;
+  /** 0-100: your working relationship with the government (sovereign). */
+  government: number;
+  /** Name of the current Prime Minister. */
+  pm: string;
+  /** Household: 0 none, 1 press secretary, 2 private secretary, 3 full private office. */
+  secretary: number;
+  patronages: Array<{ id: string; years: number; lastYear: number }>;
+  service: MilitaryService | null;
+  scandal: CourtScandal | null;
+  /** Reigning name, e.g. "Charles III". */
+  regnalName: string | null;
+  /** Years of national mourning remaining. */
+  mourning: number;
+  /** If crowned as a minor: who governs for you until you are 18. */
+  regency: string | null;
+  coronated: boolean;
+  /** Realms that still share the sovereign as head of state. */
+  realmNames: string[];
+  /** Years left out of public life (withdrawn after a scandal). */
+  withdrawn: number;
+  /** Stripped of titles and funding after a disgrace. */
+  disgraced: boolean;
+  /** Left royal life (a former "senior royal"). */
+  steppedBack: boolean;
+  /** Gave up the throne in favour of an heir. */
+  abdicated: boolean;
+  lastReferendum: number;
+  /** Private estate open to paying visitors. */
+  estateOpen: boolean;
+  /** Accepted a slimmed-down, cheaper monarchy. */
+  slimmed: boolean;
+  /** Change to the Sovereign Grant after funding reviews (-0.4 .. +0.3). */
+  grantAdj: number;
+  /** Engagement days used this year, by booking key. Reset every Age Up. */
+  booked: Record<string, number>;
+  /** Engagement days you used last year (drives the allowance of working royals). */
+  slotsLast: number;
+  /** Last year's money in and out, for display. */
+  ledger: { grant: number; duchy: number; estate: number; allowance: number; staff: number; upkeep: number };
 }
 
 /** Hidden gifts and tendencies (0-100, 50 typical). Never shown in play; see data/talents.ts. */
@@ -958,6 +1050,8 @@ export interface PlayerState {
   royal: RoyalLife | null;
   royalRespect: number;
   nation: NationState;
+  /** Popularity, engagements, household and finances of a royal (defaults for everyone). */
+  court: CourtState;
   education: EducationState;
   skills: Skills;
   music: MusicState;

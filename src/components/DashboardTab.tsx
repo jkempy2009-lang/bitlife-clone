@@ -109,6 +109,7 @@ export default function DashboardTab() {
         </div>
         {showFame && <StatBar label="🌟 Fame" value={p.fame} color="amber" />}
         {p.royalRank !== "none" && <StatBar label="👑 Royal Respect" value={p.royalRespect} color="purple" />}
+        {p.royalRank !== "none" && <StatBar label="🗳️ Public Approval" value={p.court.approval} color="blue" />}
         <StatBar label="☯️ Karma" value={p.karma} color="slate" compact />
       </Card>
 

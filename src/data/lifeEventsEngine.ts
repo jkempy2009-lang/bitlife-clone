@@ -27,6 +27,7 @@ import { CREATIVE_EVENTS } from "./events/creative";
 import { JUSTICE_EVENTS } from "./events/justice";
 import { POLITICS_EVENTS } from "./events/politics";
 import { ARC_EVENTS } from "./events/arcs";
+import { COURT_EVENTS } from "./events/court";
 
 export type EventCategory =
   | "general"
@@ -222,6 +223,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...JUSTICE_EVENTS,
   ...POLITICS_EVENTS,
   ...ARC_EVENTS,
+  ...COURT_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

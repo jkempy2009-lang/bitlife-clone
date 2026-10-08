@@ -7,7 +7,7 @@ import {
   CAR_LOAN_RATE,
   MORTGAGE_RATE,
 } from "@/data/assetsCatalog";
-import { CAREER_BY_ID, PROGRAMS, ROYAL_ALLOWANCE } from "@/data/careersRegistry";
+import { CAREER_BY_ID, PROGRAMS } from "@/data/careersRegistry";
 import { CERT_BY_ID } from "@/data/certificates";
 import {
   addLog,
@@ -29,6 +29,7 @@ import { processTemper } from "./talentEffects";
 import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
 import { ensureSuccession } from "./royalty";
+import { processCourt, royalFinance } from "./court";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
 import { selectEvents } from "./events";
 import { convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
@@ -227,8 +228,10 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   if (adult && p.age < 65 && !p.currentJob && !isRoyal(p) && !p.isInPrison && !p.music.signed && p.pension === 0 && !marriedPartner(p)) {
     gross += 16_000;
   }
-  const allowance = isRoyal(p) ? Math.round(ROYAL_ALLOWANCE[p.royalRank] * (p.royalRespect < 20 ? 0.5 : 1)) : 0;
-  // Royal allowances are state-funded and tax exempt; all other income is taxed progressively.
+  // Royal funding (Sovereign Grant, allowances) is tax exempt; duchy and estate income is private and taxed like any other.
+  const fin = isRoyal(p) ? royalFinance(p) : null;
+  const allowance = fin ? fin.allowance : 0;
+  if (fin) gross += fin.duchy + fin.estate;
   const offBooks = (p.currentJob?.lineId === "mafia" || escortIsIllegal(p)) && !p.isInPrison ? p.currentJob!.salary : 0;
   // Retirement account: grows, funds retirees, and takes pre-tax contributions from workers (with an employer match).
   growRetirement(p, rng);
@@ -239,6 +242,10 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   const tax = incomeTaxFor(p.residence.country, Math.max(0, gross - offBooks - employee));
   p.taxesPaidThisYear = tax;
   p.bankBalance += gross - tax + allowance - employee;
+  if (fin) {
+    p.bankBalance -= fin.staff + fin.upkeep;
+    p.court.ledger = { grant: isSovereignRank(p) ? fin.allowance : 0, duchy: fin.duchy, estate: fin.estate, allowance: isSovereignRank(p) ? 0 : fin.allowance, staff: fin.staff, upkeep: fin.upkeep };
+  }
   p.retirementSavings += employee + employer;
   // A spouse's earnings join the household pot (taxed at a flat effective rate), and sharing a home costs extra.
   const spouse = marriedPartner(p);
@@ -513,13 +520,16 @@ function processEntertainment(p: PlayerState) {
 
 function processRoyalty(p: PlayerState, rng: Rng, notices: Notices) {
   if (!isRoyal(p)) return;
-  const drift = rng.int(-3, 1) + Math.round((p.karma - 50) / 25) + Math.round((p.nation.economy + p.nation.freedom - 100) / 50);
+  const drift = rng.int(-3, 1) + Math.round((p.karma - 50) / 25) + Math.round((p.nation.economy + p.nation.freedom - 100) / 50) + Math.round((p.court.approval - 50) / 25);
   changeStat(p, "royalRespect", drift);
   for (const k of ["economy", "freedom", "military"] as const) {
     p.nation[k] += p.nation[k] > 50 ? -1 : p.nation[k] < 50 ? 1 : 0;
   }
   ensureSuccession(p, rng, notices);
+  processCourt(p, rng, notices);
 }
+
+const isSovereignRank = (p: PlayerState) => p.royalRank === "King" || p.royalRank === "Queen";
 
 const MILESTONES: Record<number, { title: string; body: string }> = {
   5: { title: "First day of school", body: "School begins. Grades and friendships you build now will echo for years." },

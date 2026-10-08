@@ -35,6 +35,7 @@ import { money } from "@/lib/format";
 import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
 import { MovieStarSection } from "./career/MovieStarSection";
 import { MusicSection } from "./career/MusicSection";
+import { CourtSection, FormerRoyalCard } from "./career/CourtSection";
 import { AdultWorkSection, AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, SpySection, UnderworldSection } from "./CareerPaths";
 
 type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "spy" | "adult" | "stardom" | "music";
@@ -260,6 +261,7 @@ function CorporateCareer() {
 
   return (
     <div className="flex flex-col gap-3">
+      <FormerRoyalCard />
       {job ? (
         <>
           <SectionTitle>Current Job</SectionTitle>
@@ -344,7 +346,7 @@ function RoyalDuties() {
       <SectionTitle>{sovereign ? "Royal Duties" : "Royal Engagements"}</SectionTitle>
       <Card className="border-purple-500/40 bg-gradient-to-br from-purple-950/60 to-slate-800/70">
         <div className="text-xs uppercase tracking-wider text-purple-300">{p.birthCountry}</div>
-        <div className="text-2xl font-bold">{royalStyleText(p) || p.royalRank} {p.firstName}</div>
+        <div className="text-2xl font-bold">{royalStyleText(p) || p.royalRank}{p.court.regnalName && sovereign ? "" : ` ${p.firstName}`}</div>
         {p.royal && !sovereign && (
           <div className="mt-1 text-sm text-slate-300">
             {p.royal.line === 1 ? "Heir to the throne" : `Number ${p.royal.line} in the line of succession`}
@@ -361,38 +363,47 @@ function RoyalDuties() {
         </div>
       </Card>
 
-      <Button variant="gold" onClick={() => act((pl) => holdGala(pl))} disabled={used("gala")}>
-        🎉 {sovereign ? "Hold a Public Gala (−$100,000, +10 Respect)" : "Host a Charity Gala (−$100,000, +10 Respect)"}
-      </Button>
-      {sovereign ? (
-        <>
-          <Button variant="danger" onClick={() => act((pl, rng) => executeCitizen(pl, rng))} disabled={used("exec")}>
-            🪓 Execute a Citizen (Karma → 0, −30 Respect)
-          </Button>
+      <CourtSection />
 
-          <SectionTitle hint="one per year">Pass a Decree</SectionTitle>
-          <div className="flex flex-col gap-2">
-            {DECREES.map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                disabled={used("decree")}
-                onClick={() => act((pl) => passDecree(pl, d.id))}
-                className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3 text-left transition-colors hover:border-purple-400/60 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <div className="font-semibold">{d.name}</div>
-                <div className="text-xs text-slate-400">{d.blurb}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  Respect {d.respect >= 0 ? "+" : ""}{d.respect}
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <p className="text-xs text-slate-500">Only the sovereign sets policy. Princes and princesses carry out engagements, and the crown passes to the eldest child when the sovereign dies. If a sibling is crowned you are created a duke or duchess, and your own children will not be Princes or Princesses.</p>
-      )}
-      <p className="text-xs text-slate-500">Royals can't hold ordinary jobs. They receive a state allowance, tax-free.</p>
+      <details className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-300">⚖️ Royal prerogative (galas{sovereign ? ", decrees, executions" : ""})</summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <Button variant="gold" onClick={() => act((pl) => holdGala(pl))} disabled={used("gala")}>
+            🎉 {sovereign ? "Hold a Public Gala (−$100,000, +10 Respect)" : "Host a Charity Gala (−$100,000, +10 Respect)"}
+          </Button>
+          {p.court.mourning > 0 && <p className="text-xs text-amber-300">The nation is in mourning: a gala now would be tone-deaf.</p>}
+          {sovereign && !p.court.regency ? (
+            <>
+              <p className="text-xs text-slate-500">A modern constitutional monarch does not rule by decree. These powers still exist in this realm, but ministers resent them: each decree adds constitutional strain, and an execution is a catastrophe for approval.</p>
+              <Button variant="danger" onClick={() => act((pl, rng) => executeCitizen(pl, rng))} disabled={used("exec")}>
+                🪓 Execute a Citizen (Karma → 0, −30 Respect, −25 approval)
+              </Button>
+
+              <SectionTitle hint="one per year">Pass a Decree</SectionTitle>
+              <div className="flex flex-col gap-2">
+                {DECREES.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    disabled={used("decree")}
+                    onClick={() => act((pl) => passDecree(pl, d.id))}
+                    className="rounded-2xl border border-slate-700/60 bg-slate-800/70 p-3 text-left transition-colors hover:border-purple-400/60 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <div className="font-semibold">{d.name}</div>
+                    <div className="text-xs text-slate-400">{d.blurb}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Respect {d.respect >= 0 ? "+" : ""}{d.respect} · strain +8
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500">Only the reigning sovereign sets policy.</p>
+          )}
+        </div>
+      </details>
+      <p className="text-xs text-slate-500">Royals can't hold ordinary jobs. Funding comes from the Sovereign Grant, a duchy or an allowance: see the Finances tab.</p>
     </div>
   );
 }

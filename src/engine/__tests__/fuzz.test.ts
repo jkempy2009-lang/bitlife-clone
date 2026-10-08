@@ -68,6 +68,11 @@ function checkInvariants(p: PlayerState) {
     expect(p[k]).toBeGreaterThanOrEqual(0);
     expect(p[k]).toBeLessThanOrEqual(100);
   }
+  for (const k of ["approval", "republic", "heat", "strain", "government"] as const) {
+    expect(Number.isFinite(p.court[k]), `court.${k} finite`).toBe(true);
+    expect(p.court[k]).toBeGreaterThanOrEqual(0);
+    expect(p.court[k]).toBeLessThanOrEqual(100);
+  }
   expect(Number.isFinite(p.bankBalance)).toBe(true);
   expect(p.bankBalance).toBeGreaterThanOrEqual(0);
   expect(Number.isFinite(netWorth(p))).toBe(true);

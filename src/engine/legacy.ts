@@ -4,6 +4,7 @@ import { money } from "@/lib/format";
 import { newAthleteState } from "./athleteState";
 import { inheritBusiness } from "./business";
 import { inheritRoyalty } from "./royalty";
+import { beginMourning, beginReign, courtForHeir } from "./courtState";
 import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 import {
   addLog,
@@ -160,6 +161,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
     // Gifts run in families: half from the parent, half luck.
     talents: blendTalents(old.talents, fresh.talents),
     nation: royalParent ? { ...old.nation } : { economy: 50, freedom: 50, military: 50 },
+    court: royalHeir ? courtForHeir(old, child, royalHeir.royal.crown === "self" ? "self" : "other") : fresh.court,
     education: educationForAge(child.age),
     skills: { acting: 0, music: 0, charisma: 0, athletics: rng.int(0, 20) },
     music: newMusic(),
@@ -209,6 +211,11 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng): Pl
   if (bizHeir.business) next.flags.push("business_owner");
   if (bizHeir.note) addLog(next, bizHeir.note);
   if (royalHeir) addLog(next, royalHeir.log);
+  // The sovereign has died: the whole family mourns, and an heir who is crowned goes through accession.
+  if (royalHeir && (old.royal?.crown === "self" || old.royal?.crown === "abdicated")) {
+    if (royalHeir.royal.crown === "self") beginReign(next, rng);
+    else if (old.royal.crown === "self") beginMourning(next);
+  }
   applyFamilyLegacy(next, old, child, rng); // family continuity: upbringing, reputation, traits, flags, opening events
   return next;
 }
