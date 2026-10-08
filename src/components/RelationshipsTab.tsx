@@ -46,7 +46,7 @@ import { HANDOVER_CASH_SHARE, handoverBlocker } from "@/engine/legacy";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
 
-const RELATION_ORDER = ["Partner", "Lover", "Parent", "Child", "Grandchild", "Sibling", "Grandparent", "Friend", "Pet"] as const;
+const RELATION_ORDER = ["Partner", "Lover", "Parent", "Child", "Grandchild", "Sibling", "Nephew", "Grandparent", "Friend", "Pet"] as const;
 const ICONS: Record<string, string> = {
   Partner: "💞",
   Lover: "🔥",
@@ -56,6 +56,7 @@ const ICONS: Record<string, string> = {
   Friend: "🤝",
   Grandparent: "👵",
   Grandchild: "👶",
+  Nephew: "🧒",
   Pet: "🐾",
 };
 
@@ -70,8 +71,12 @@ function label(r: Relative) {
   if (r.relation === "Parent") return r.gender === "Female" ? "Mother" : r.gender === "Male" ? "Father" : "Parent";
   if (r.relation === "Sibling") return r.gender === "Female" ? "Sister" : r.gender === "Male" ? "Brother" : "Sibling";
   if (r.relation === "Child") return r.gender === "Female" ? "Daughter" : r.gender === "Male" ? "Son" : "Child";
-  if (r.relation === "Grandparent") return r.gender === "Female" ? "Grandmother" : "Grandfather";
+  if (r.relation === "Grandparent") {
+    const word = r.gender === "Female" ? "grandmother" : "grandfather";
+    return r.traits?.includes("Great-grandparent") ? `Great-${word}` : word.replace(/^./, (c) => c.toUpperCase());
+  }
   if (r.relation === "Grandchild") return "Grandchild";
+  if (r.relation === "Nephew") return r.gender === "Female" ? "Niece" : r.gender === "Male" ? "Nephew" : "Niece or nephew";
   return r.relation;
 }
 

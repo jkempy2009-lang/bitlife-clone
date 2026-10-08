@@ -3,7 +3,7 @@ import type { Rng } from "@/lib/rng";
 import { money } from "@/lib/format";
 import { newAthleteState } from "./athleteState";
 import { inheritBusiness } from "./business";
-import { inheritRoyalty, newRoyalLife } from "./royalty";
+import { inheritRoyalty } from "./royalty";
 import { beginMourning, beginReign, courtForHeir } from "./courtState";
 import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 import {
@@ -12,7 +12,6 @@ import {
   createNewPlayer,
   educationForAge,
   isRoyal,
-  royalRankFor,
   logHeader,
   makeRelativeBase,
   netWorth,
@@ -128,32 +127,36 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
   relatives.push({
     ...makeRelativeBase(rng, "Parent", `${old.firstName} ${old.lastName}`, old.age, old.gender, Math.min(5, Math.max(1, Math.round(1 + netWorth(old) / 400_000))), 80),
     ...(living ? { alive: true, relationshipBar: Math.max(70, child.relationshipBar) } : { alive: false, deathAge: old.age, deathYear: year }),
+    // Where this royal stood in line, so the family can work out who is crowned next once the reign ends.
+    ...(old.royal && (old.royal.crown === "parent" || old.royal.crown === "grandparent") ? { royalLine: old.royal.line } : {}),
     ...(living && isRoyal(old) ? { royalTitle: old.royal?.crown === "self" ? (old.gender === "Female" ? "Queen" : "King") : old.gender === "Female" ? "Princess" : "Prince" } : {}),
     ...(living && (old.isInPrison || old.pendingTrial || old.isFugitive) ? { traits: [old.isInPrison ? "In prison" : old.isFugitive ? "On the run" : "Awaiting trial"] } : {}),
   });
   if (survivingPartner) {
     relatives.push({ ...survivingPartner, id: rng.id(), relation: "Parent", partnerStatus: undefined, relationshipBar: Math.max(60, survivingPartner.relationshipBar) });
   }
-  for (const s of heirsLeft) relatives.push({ ...s, id: rng.id(), relation: "Sibling", partnerStatus: undefined });
+  // Brothers and sisters, including any who died (their children keep their place in the line of succession).
+  const idMap = new Map<string, string>();
+  for (const s of old.relatives.filter((r) => r.relation === "Child" && r.id !== child.id)) {
+    const nid = rng.id();
+    idMap.set(s.id, nid);
+    relatives.push({ ...s, id: nid, relation: "Sibling", partnerStatus: undefined });
+  }
+  // Your parent's grandchildren: your own children if they came through you, your nephews and nieces if through a sibling.
+  for (const g of old.relatives.filter((r) => r.relation === "Grandchild" && r.alive && r.parentId)) {
+    if (g.parentId === child.id) relatives.push({ ...g, id: rng.id(), relation: "Child", parentId: undefined });
+    else if (idMap.has(g.parentId!)) relatives.push({ ...g, id: rng.id(), relation: "Nephew", parentId: idMap.get(g.parentId!) });
+  }
   // The old player's own living parents become the new player's grandparents.
   for (const gp of old.relatives.filter((r) => r.relation === "Parent" && r.alive)) {
     relatives.push({ ...gp, id: rng.id(), relation: "Grandparent" });
   }
-
-  let royalHeir = inheritRoyalty(old, child, heirsLeft, rng);
-  if (living && old.royal?.crown === "self") {
-    // Handing over is not abdication: the sovereign keeps reigning and the crown still follows birth order.
-    // Whichever child you pick, the eldest living child is crowned when the reign ends.
-    const older = heirsLeft.filter((k) => k.age > child.age).length;
-    const girl = child.gender !== "Male";
-    royalHeir = {
-      royal: newRoyalLife(older),
-      rank: girl ? "Princess" : "Prince",
-      log: older === 0
-        ? `${old.firstName} still reigns. As their eldest child you are heir to the throne.`
-        : `${old.firstName} still reigns. You are ${girl ? "a Princess" : "a Prince"}, number ${older + 1} in the line of succession: the crown goes to your eldest sibling, whoever is chosen to play on.`,
-    };
+  // A reigning sovereign (or other royal) above them stays in the family tree, so the crown can still pass down to this line.
+  for (const gg of old.relatives.filter((r) => r.relation === "Grandparent" && r.alive && r.royalTitle)) {
+    relatives.push({ ...gg, id: rng.id(), relation: "Grandparent", traits: [...(gg.traits ?? []).filter((t) => t !== "Great-grandparent"), "Great-grandparent"] });
   }
+
+  const royalHeir = inheritRoyalty(old, child, heirsLeft, rng, living);
   const royalParent = !!royalHeir || isRoyal(old);
   const next: PlayerState = {
     ...fresh,

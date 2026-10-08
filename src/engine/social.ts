@@ -81,6 +81,9 @@ export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
   const first = randomName(p.residence.country, gender, rng).first;
   const last = parent.name.split(" ").slice(1).join(" ") || p.lastName;
   const kid = makeRelativeBase(rng, "Grandchild", `${first} ${last}`, 0, gender, parent.incomeTier, rng.int(60, 95));
+  kid.parentId = parent.id;
+  // A reigning sovereign's grandchildren are Princes and Princesses (and stand in the line of succession).
+  if (p.royal?.crown === "self") kid.royalTitle = gender === "Male" ? "Prince" : "Princess";
   kid.smarts = clamp(Math.round((parent.smarts + 50) / 2 + rng.int(-12, 12)));
   kid.looks = clamp(Math.round((parent.looks + 50) / 2 + rng.int(-12, 12)));
   p.relatives.push(kid);
@@ -174,6 +177,8 @@ SPEND.Pet = ["You took {n} for a long walk.", "You played fetch with {n} until y
 CONVERSE.Pet = ["You told {n} all your problems. {n} listened.", "{n} tilted their head at you in total understanding."];
 SPEND.Grandparent = ["You baked cookies with {n} and heard the old family stories.", "{n} taught you a card game and then cheated.", "You and {n} sat on the porch and watched the world go by."];
 SPEND.Grandchild = ["You read {n} a bedtime story.", "You took {n} to the zoo.", "You let {n} beat you at a board game (barely)."];
+SPEND.Nephew = SPEND.Grandchild;
+CONVERSE.Nephew = CONVERSE.Grandchild;
 CONVERSE.Grandparent = ["{n} told you what life was like \"back in the day\".", "{n} gave you some questionable advice about love."];
 CONVERSE.Grandchild = ["{n} told you a very long story about a dragon.", "{n} asked you why the sky is blue."];
 const COMPLIMENT = ["You told {n} they're wonderful. They beamed.", "You complimented {n}'s sense of humour.", "You told {n} how much they mean to you."];

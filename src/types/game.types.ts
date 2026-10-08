@@ -19,7 +19,7 @@ export interface Disease {
   yearsLeft?: number;
 }
 
-export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend" | "Grandparent" | "Grandchild" | "Pet" | "Lover";
+export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend" | "Grandparent" | "Grandchild" | "Nephew" | "Pet" | "Lover";
 export type PartnerStatus = "dating" | "married" | "ex" | "affair" | "fling";
 
 export interface Relative {
@@ -53,6 +53,10 @@ export interface Relative {
   knownTastes?: string[];
   /** Royal style of this person: "King", "Queen", "Prince", "Princess", "Duke of X", "Lord", "Lady". */
   royalTitle?: string;
+  /** Grandchildren and nephews/nieces: the id of their parent among your children or siblings. Drives succession. */
+  parentId?: string;
+  /** Royal ancestors who are not the sovereign: their own place in line (1 = heir) when you took over. Drives who is crowned next. */
+  royalLine?: number;
   /** Calendar year you married them (partners). */
   marriedYear?: number;
   /** Short occupation blurb for flavour ("Nurse", "Electrician"). */

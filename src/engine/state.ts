@@ -216,7 +216,7 @@ export function makeRelativeBase(
     looks: rng.int(20, 90),
     ...rollPersonality(rng),
   };
-  if (age >= 20 && relation !== "Pet" && relation !== "Child" && relation !== "Grandchild" && relation !== "Grandparent") {
+  if (age >= 20 && relation !== "Pet" && relation !== "Child" && relation !== "Grandchild" && relation !== "Nephew" && relation !== "Grandparent") {
     rel.occupation = age >= 67 ? `Retired ${occupationFor(incomeTier, rng).toLowerCase()}` : occupationFor(incomeTier, rng);
   }
   return rel;

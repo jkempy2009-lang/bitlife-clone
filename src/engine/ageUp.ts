@@ -28,7 +28,7 @@ import { processFriendLoans } from "./friends";
 import { processTemper } from "./talentEffects";
 import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
-import { ensureSuccession } from "./royalty";
+import { ensureSuccession, processRoyalFamily } from "./royalty";
 import { processCourt, royalFinance } from "./court";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
 import { selectEvents } from "./events";
@@ -519,13 +519,21 @@ function processEntertainment(p: PlayerState) {
 }
 
 function processRoyalty(p: PlayerState, rng: Rng, notices: Notices) {
-  if (!isRoyal(p)) return;
+  if (!isRoyal(p)) {
+    // Not styled HRH, but still in the line of succession: the crown can still reach you.
+    if (p.royal) {
+      ensureSuccession(p, rng, notices);
+      processRoyalFamily(p, rng, notices);
+    }
+    return;
+  }
   const drift = rng.int(-3, 1) + Math.round((p.karma - 50) / 25) + Math.round((p.nation.economy + p.nation.freedom - 100) / 50) + Math.round((p.court.approval - 50) / 25);
   changeStat(p, "royalRespect", drift);
   for (const k of ["economy", "freedom", "military"] as const) {
     p.nation[k] += p.nation[k] > 50 ? -1 : p.nation[k] < 50 ? 1 : 0;
   }
   ensureSuccession(p, rng, notices);
+  processRoyalFamily(p, rng, notices);
   processCourt(p, rng, notices);
 }
 
