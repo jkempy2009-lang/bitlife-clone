@@ -4,6 +4,7 @@ import { hydrateAthlete } from "./athleteState";
 import { upgradeBusiness } from "./business";
 import { hydrateCrimeLife } from "./justiceState";
 import { hydrateCreative } from "./creativeState";
+import { hydrateCourt } from "./courtState";
 
 const KEY = "lifeline-save-v1";
 const PREV_KEY = "lifeline-save-prev";
@@ -97,6 +98,7 @@ export function hydrate(p: PlayerState): PlayerState {
     retirementSavings: p.retirementSavings ?? 0,
     savingsLevel: p.savingsLevel ?? 1,
     royal: p.royal ?? (p.royalRank === "none" ? null : { crown: p.royalRank === "King" || p.royalRank === "Queen" ? "self" : "parent", hrh: true, peerage: null, line: p.royalRank === "King" || p.royalRank === "Queen" ? 0 : 1 }),
+    court: hydrateCourt(p.court, p),
     outlook: p.outlook ?? 84,
     talents: { ...legacyTalents(p.id), ...(p.talents ?? {}) },
     matureContent: p.matureContent ?? true,

@@ -18,7 +18,10 @@ Your game autosaves to `localStorage` (no backend). Use the gear icon to export/
 - **Grow up:** 380+ data-driven life events from infancy to 100+, school, romance, family, crime, health, fame.
 - **Study:** high school, university (7 majors), medical school, law school, graduate school; student debt.
 - **Work:** 45+ careers with ladders, plus special packs: movie star, rock star, pro athlete, influencer,
-  entrepreneur (6 businesses), politician (elections), secret agent, astronaut, crime family, model, royalty.
+  entrepreneur (6 businesses), politician (elections), secret agent, astronaut, crime family, model, royalty (modelled on the British monarchy: public approval and a republican
+  movement, an engagement diary with patronages, tours and military service, a private office, scandals and the press office,
+  the Sovereign Grant and duchy income, audiences, royal assent and constitutional crises, accession, coronation, mourning,
+  regency, abdication, stepping back, marriage consent, and raising heirs who inherit across generations).
 - **Money:** taxes by country, loans, mortgages, rent tiers, investments (bonds, index, tech, crypto) and a
   boom/recession economy that moves layoffs, hiring, housing and markets.
 - **Live:** hobbies with milestones, addictions and rehab, relocate abroad, adopt, grandchildren, pets, faith.

@@ -9,6 +9,7 @@ import type { ActionResult, PlayerState, Relative, RoyalLife } from "@/types/gam
 import type { Rng } from "@/lib/rng";
 import { getCountry } from "@/data/countries";
 import { addLog, changeStat, royalRankFor } from "./state";
+import { beginMourning, beginReign } from "./courtState";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
@@ -42,7 +43,7 @@ export function royalStyleForChild(p: PlayerState, gender: string): string | und
 export function royalStyleText(p: PlayerState): string {
   const r = p.royal;
   if (!r) return "";
-  if (r.crown === "self") return male(p.gender) ? "King" : "Queen";
+  if (r.crown === "self") return `${male(p.gender) ? "King" : "Queen"}${p.court?.regnalName ? ` ${p.court.regnalName}` : ""}`;
   const base = r.hrh ? `HRH ${male(p.gender) ? "Prince" : "Princess"}` : r.peerage ? (male(p.gender) ? "Lord" : "Lady") : "";
   const heir = r.line === 1 && r.hrh ? (male(p.gender) ? "Crown Prince" : "Crown Princess") : base;
   return [heir, r.peerage].filter(Boolean).join(" · ");
@@ -78,6 +79,7 @@ export function ensureSuccession(p: PlayerState, rng: Rng, notices: Notices) {
       r.crown = "sibling";
       r.line = Math.max(2, older.length);
       grantDukedom(p, rng);
+      beginMourning(p);
       const body = `The sovereign has died. Your ${male(heir.gender) ? "brother" : "sister"}, ${heir.name.split(" ")[0]}, was crowned ${heir.royalTitle}. You remain a ${male(p.gender) ? "Prince" : "Princess"} and the new ${heir.royalTitle === "King" ? "king" : "queen"} created you ${p.royal?.peerage}.`;
       addLog(p, body);
       notices.push(info("The Crown Passes", body, "neutral"));
@@ -93,6 +95,7 @@ export function ensureSuccession(p: PlayerState, rng: Rng, notices: Notices) {
     r.hrh = true;
     r.peerage = null;
     changeStat(p, "royalRespect", 10);
+    beginReign(p, rng);
     const body = `The sovereign has died and the crown passes to you. Long live the ${p.royalRank}!`;
     addLog(p, body);
     notices.push(info("Long Live the Crown!", body, "jackpot"));
@@ -102,6 +105,7 @@ export function ensureSuccession(p: PlayerState, rng: Rng, notices: Notices) {
   r.crown = "other";
   r.line = Math.max(2, r.line);
   grantDukedom(p, rng);
+  beginMourning(p);
   const body = "The sovereign has died and the crown has passed to another branch of the family. You keep your style and titles.";
   addLog(p, body);
   notices.push(info("A New Reign", body, "neutral"));
@@ -120,13 +124,15 @@ export function inheritRoyalty(old: PlayerState, child: Relative, siblingsAfter:
   const eldest = livingKids[0];
   const eldestSon = livingKids.filter((k) => male(k.gender))[0];
 
-  if (o.crown === "self") {
-    if (eldest.id === child.id) {
+  if (o.crown === "self" || o.crown === "abdicated") {
+    // After an abdication the crown already sits on a living child's head; otherwise the eldest is crowned.
+    const reigning = o.crown === "abdicated" ? livingKids.find((k) => isSovereignTitle(k.royalTitle)) ?? eldest : eldest;
+    if (reigning.id === child.id) {
       return { royal: { crown: "self", hrh: true, peerage: null, line: 0 }, rank: royalRankFor(gender, true), log: `The crown passes to you. Long live the ${royalRankFor(gender, true)}!` };
     }
-    const taken = [eldest.royalTitle ?? ""];
+    const taken = [reigning.royalTitle ?? ""];
     const peerage = dukedomFor(old, gender, rng, taken);
-    return { royal: { crown: "sibling", hrh: true, peerage, line: 2 }, rank: male(gender) ? "Prince" : "Princess", log: `Your elder sibling ${eldest.name.split(" ")[0]} inherits the crown. You remain ${male(gender) ? "a Prince" : "a Princess"} and are created ${peerage}.` };
+    return { royal: { crown: "sibling", hrh: true, peerage, line: 2 }, rank: male(gender) ? "Prince" : "Princess", log: `Your ${reigning.age >= child.age ? "elder " : ""}sibling ${reigning.name.split(" ")[0]} ${o.crown === "abdicated" ? "wears" : "inherits"} the crown. You remain ${male(gender) ? "a Prince" : "a Princess"} and are created ${peerage}.` };
   }
   const sov = old.relatives.find((r) => r.alive && r.relation === "Parent" && isSovereignTitle(r.royalTitle));
   if (o.crown === "parent" && sov) {

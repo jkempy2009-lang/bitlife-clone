@@ -14,6 +14,8 @@ import { hiringModifier } from "./world";
 import { careerBlocker, hiringPenalty } from "./justice";
 import { PART_TIME_FACTOR, blockerFor, isStudyingFullTime, partTimeFriendly } from "./occupation";
 import { CERT_BY_ID } from "@/data/certificates";
+import { isSovereign } from "./courtState";
+import { addApproval, addGovernment, addHeat, addRepublic, addStrain } from "./court";
 
 // ---------------------------------------------------------------------------
 // Corporate career
@@ -434,7 +436,7 @@ export const CHAOTIC_EXECUTIONS = [
 
 export function executeCitizen(p0: PlayerState, rng: Rng): ActionResult {
   const p = clone(p0);
-  if (!isRoyal(p)) return { player: p0 };
+  if (!isRoyal(p) || !isSovereign(p) || p.court.regency) return { player: p0 };
   if ((p.annual.exec ?? 0) >= 1) {
     return { player: p0, notices: [{ kind: "info", title: "Enough Bloodshed", body: "Your advisors begged you to rest the axe this year.", tone: "neutral" }] };
   }
@@ -442,16 +444,20 @@ export function executeCitizen(p0: PlayerState, rng: Rng): ActionResult {
   p.karma = 0;
   changeStat(p, "royalRespect", -30);
   changeStat(p, "happiness", -4);
+  addApproval(p, -25);
+  addRepublic(p, 10);
+  addStrain(p, 15);
+  addHeat(p, 25);
   const body = rng.pick(CHAOTIC_EXECUTIONS);
   p.stats.crimesCommitted += 1;
   addLog(p, body);
-  return { player: p, notices: [{ kind: "info", title: "Executed a Citizen", body: body + " Karma zeroed. Respect −30.", tone: "bad" }] };
+  return { player: p, notices: [{ kind: "info", title: "Executed a Citizen", body: body + " Karma zeroed. Respect −30, approval −25.", tone: "bad" }] };
 }
 
 export function passDecree(p0: PlayerState, decreeId: string): ActionResult {
   const p = clone(p0);
   const d = DECREES.find((x) => x.id === decreeId);
-  if (!isRoyal(p) || !d) return { player: p0 };
+  if (!isRoyal(p) || !isSovereign(p) || p.court.regency || !d) return { player: p0 };
   if ((p.annual.decree ?? 0) >= 1) {
     return { player: p0, notices: [{ kind: "info", title: "One Decree a Year", body: "The scribes are exhausted. Wait until next year.", tone: "neutral" }] };
   }
@@ -460,7 +466,11 @@ export function passDecree(p0: PlayerState, decreeId: string): ActionResult {
   p.nation.freedom = clamp(p.nation.freedom + d.freedom);
   p.nation.military = clamp(p.nation.military + d.military);
   changeStat(p, "royalRespect", d.respect);
-  const body = `You decreed: ${d.name}. ${d.blurb}`;
+  // Ministers don't like a sovereign who legislates by decree.
+  addApproval(p, Math.round(d.respect * 0.6));
+  addStrain(p, 8);
+  addGovernment(p, -4);
+  const body = `You decreed: ${d.name}. ${d.blurb} Ministers bristled at a sovereign who rules by decree.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Royal Decree", body, tone: d.respect >= 0 ? "good" : "bad" }] };
 }
@@ -476,9 +486,18 @@ export function holdGala(p0: PlayerState): ActionResult {
   }
   p.annual.gala = 1;
   p.bankBalance -= 100_000;
+  if (p.court.mourning > 0) {
+    changeStat(p, "royalRespect", -10);
+    addApproval(p, -6);
+    addHeat(p, 10);
+    const body = "You threw a gala while the nation was in mourning. The papers called it tone-deaf. Respect -10, approval -6.";
+    addLog(p, body);
+    return { player: p, notices: [{ kind: "info", title: "Tone-Deaf Gala", body, tone: "bad" }] };
+  }
   changeStat(p, "royalRespect", 10);
   changeStat(p, "happiness", 5);
-  const body = "You threw a dazzling public gala. The people loved it. Respect +10.";
+  addApproval(p, 3);
+  const body = "You threw a dazzling public gala. The people loved it. Respect +10, approval +3.";
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Public Gala", body, tone: "good" }] };
 }

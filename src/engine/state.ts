@@ -13,6 +13,7 @@ import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { occupationFor } from "@/data/occupations";
 import { newRoyalLife, royalStyleText } from "./royalty";
 import { newAthleteState } from "./athleteState";
+import { newCourt, realmNamesFor } from "./courtState";
 import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
 import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 
@@ -353,6 +354,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     royal: royalLife,
     royalRespect: royal ? 60 : 50,
     nation: { economy: 50, freedom: 50, military: 50 },
+    court: { ...newCourt(royal ? 62 : 55), realmNames: royal ? realmNamesFor(country.name) : [] },
     education: educationForAge(0),
     skills: { acting: 0, music: 0, charisma: rng.int(0, 10), athletics: rng.int(0, 20) },
     music: newMusic(),
