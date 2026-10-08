@@ -31,6 +31,7 @@ import {
   proposeOpenRelationship,
   romanticGetaway,
   seduce,
+  SEDUCE_TARGETS,
   spiceItUp,
   swingerClub,
 } from "@/engine/intimacy";
@@ -194,9 +195,11 @@ export default function RelationshipsTab() {
             })}
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            <Button variant="secondary" onClick={() => act((pl, rng) => seduce(pl, "friend", safe, rng))}>🤝 A Friend</Button>
-            <Button variant="secondary" onClick={() => act((pl, rng) => seduce(pl, "ex", safe, rng))}>💔 An Ex</Button>
-            <Button variant="secondary" disabled={!p.currentJob} onClick={() => act((pl, rng) => seduce(pl, "coworker", safe, rng))}>💼 A Coworker</Button>
+            {SEDUCE_TARGETS.map((t) => (
+              <Button key={t.id} variant="secondary" disabled={!!t.need(p)} title={t.need(p) ?? t.blurb} onClick={() => act((pl, rng) => seduce(pl, t.id, safe, rng))}>
+                {t.emoji} {t.label}{t.cost ? ` ($${t.cost})` : ""}
+              </Button>
+            ))}
             <Button variant="secondary" disabled={!!partner && !p.flags.includes("open_relationship") && !p.flags.includes("polyamorous")} onClick={() => act((pl, rng) => swingerClub(pl, safe, rng))}>
               🪩 Swinger Club (${SWINGER_COST})
             </Button>

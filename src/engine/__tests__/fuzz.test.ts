@@ -202,7 +202,7 @@ function playBot(seed: number, scenario: "random" | "royal" | "wealthy"): Player
       (pl, r) => setIntimacyPrefs(pl, { ageAuto: r.chance(0.5), ageMin: r.int(0, 80), ageMax: r.int(0, 120) }),
       (pl, r) => proposeOpenRelationship(pl, r, r.pick(["open", "poly"] as const)),
       (pl) => closeRelationship(pl),
-      (pl, r) => seduce(pl, r.pick(["friend", "coworker", "ex"] as const), r.chance(0.5), r),
+      (pl, r) => seduce(pl, r.pick(["friend", "coworker", "ex", "boss", "employee", "client", "classmate", "trainer", "neighbour", "fan"] as const), r.chance(0.5), r),
       (pl) => endLover(pl, (pl.relatives.find((x) => x.relation === "Lover") ?? { id: "x" }).id),
       (pl, r) => leaveForLover(pl, (pl.relatives.find((x) => x.relation === "Lover") ?? { id: "x" }).id, r),
       (pl, r) => commitMurder(pl, r.pick(targetsFor(pl)).id, r.pick(["poison", "stab", "shoot", "accident", "hitman"]), r),

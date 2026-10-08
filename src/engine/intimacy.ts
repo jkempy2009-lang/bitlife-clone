@@ -417,36 +417,90 @@ export function hookUp(p0: PlayerState, venue: Venue, protectedSex: boolean, rng
   return { player: p, notices: [info(cheating ? "Cheating..." : "Hookup", `${line}${tail}${cheating ? " Your partner doesn't know." : ""}`, cheating ? "bad" : "good"), ...notices] };
 }
 
-export type SeduceKind = "friend" | "coworker" | "ex";
+export type SeduceKind = "friend" | "coworker" | "ex" | "boss" | "employee" | "neighbour" | "classmate" | "trainer" | "client" | "fan";
+
+export interface SeduceDef {
+  id: SeduceKind;
+  label: string;
+  emoji: string;
+  blurb: string;
+  /** Null when this is possible right now, otherwise why not. */
+  need: (p: PlayerState) => string | null;
+  cost?: number;
+}
+
+const inCollege = (p: PlayerState) => p.age >= 18 && p.education.yearsLeft > 0 && !["None", "Primary", "HighSchool"].includes(p.education.stage);
+
+export const SEDUCE_TARGETS: SeduceDef[] = [
+  { id: "friend", label: "A Friend", emoji: "🤝", blurb: "The closer you are, the better the odds. A no can cool the friendship.", need: (p) => (p.relatives.some((r) => r.alive && r.relation === "Friend" && r.age >= 18 && r.partnerStatus !== "ex") ? null : "You don't have an adult friend who fits.") },
+  { id: "ex", label: "An Ex", emoji: "💔", blurb: "Old habits. Even odds.", need: (p) => (p.relatives.some((r) => r.alive && r.relation === "Partner" && r.partnerStatus === "ex" && r.age >= 18) ? null : "You don't have an ex to call.") },
+  { id: "coworker", label: "A Coworker", emoji: "💼", blurb: "Late nights at the office. Gossip travels.", need: (p) => (p.currentJob ? null : "You need a job for that.") },
+  { id: "boss", label: "Your Boss", emoji: "👔", blurb: "Both adults, but the power gap is real. If it surfaces, HR gets involved.", need: (p) => (p.currentJob ? null : "You need a job for that.") },
+  { id: "employee", label: "An Employee", emoji: "🧑‍💼", blurb: "You sign their pay cheque. They may not feel free to say no, and the fallout can be serious.", need: (p) => (p.business && p.business.staff > 0 ? null : "You need staff in your business.") },
+  { id: "client", label: "A Client", emoji: "🤵", blurb: "Business and pleasure. Mixing them can cost you the account.", need: (p) => (p.currentJob || p.business ? null : "You need a job or a business.") },
+  { id: "classmate", label: "A Classmate", emoji: "🎓", blurb: "Study sessions that run late.", need: (p) => (inCollege(p) ? null : "You need to be in college or university.") },
+  { id: "trainer", label: "Your Trainer", emoji: "🏋️", blurb: "Sessions cost $90. Fit, focused, and paid by the hour.", need: (p) => (p.bankBalance >= 90 ? null : "You can't afford a session."), cost: 90 },
+  { id: "neighbour", label: "A Neighbour", emoji: "🏘️", blurb: "Convenient. Awkward if it ends badly.", need: () => null },
+  { id: "fan", label: "A Fan", emoji: "⭐", blurb: "Fame opens doors. Kiss-and-tell is the risk.", need: (p) => (p.fame >= 30 ? null : "You need more fame (30+).") },
+];
+
+interface GenSpec {
+  age: (p: PlayerState, rng: Rng) => number;
+  base: number;
+  trait: string;
+  win: (n: string) => string;
+  lose: (n: string) => string;
+}
+
+const GEN: Partial<Record<SeduceKind, GenSpec>> = {
+  coworker: { age: (p, r) => p.age + r.int(-8, 10), base: 0.4, trait: "Coworker", win: (n) => `Late nights at the office turned into something else with ${n}.`, lose: (n) => `${n} wasn't interested. Awkward.` },
+  boss: { age: (p, r) => Math.max(26, p.age + r.int(0, 15)), base: 0.28, trait: "Your boss", win: (n) => `After a long project, ${n} said what you were both thinking. You agreed to keep it quiet.`, lose: (n) => `${n} gently said it wouldn't be appropriate. Professional, and a little awkward.` },
+  employee: { age: (p, r) => p.age + r.int(-12, 3), base: 0.35, trait: "Your employee", win: (n) => `${n} said yes, but you'll never be sure how freely it was given.`, lose: (n) => `${n} politely declined and changed the subject. You both pretended it hadn't happened.` },
+  client: { age: (p, r) => p.age + r.int(-8, 12), base: 0.3, trait: "Client", win: (n) => `A dinner to close the deal ended somewhere else with ${n}.`, lose: (n) => `${n} kept it strictly business. You kept the contract, just.` },
+  classmate: { age: (p, r) => Math.max(18, p.age + r.int(-3, 5)), base: 0.45, trait: "Classmate", win: (n) => `Study sessions with ${n} stopped being about studying.`, lose: (n) => `${n} just wanted a study partner.` },
+  trainer: { age: (p, r) => Math.max(21, p.age + r.int(-10, 5)), base: 0.3, trait: "Personal trainer", win: (n) => `${n} noticed you noticing. The session finished a different way.`, lose: (n) => `${n} smiled, said "nice try", and added ten minutes of squats.` },
+  neighbour: { age: (p, r) => Math.max(18, p.age + r.int(-8, 10)), base: 0.45, trait: "Neighbour", win: (n) => `A borrowed cup of sugar led to ${n}'s sofa.`, lose: (n) => `${n} laughed it off. You'll see them at the bins tomorrow.` },
+  fan: { age: (p, r) => Math.max(18, p.age + r.int(-10, 6)), base: 0.7, trait: "Fan", win: (n) => `${n} had followed your work for years. Meeting you was everything they hoped.`, lose: (n) => `${n} froze, then fled in embarrassment.` },
+};
 
 export function seduce(p0: PlayerState, kind: SeduceKind, protectedSex: boolean, rng: Rng): ActionResult {
   const blocked = gate(p0);
   if (blocked) return { ...blocked, player: p0 };
+  const def = SEDUCE_TARGETS.find((d) => d.id === kind)!;
+  const why = def.need(p0);
+  if (why) return { player: p0, notices: [info("Not Possible", why)] };
   const p = clone(p0);
   if ((p.annual[`seduce:${kind}`] ?? 0) >= 1) return { player: p0, notices: [info("Too Obvious", "You've already tried that this year.")] };
-  if (kind === "coworker" && !p.currentJob) return { player: p0, notices: [info("No Coworkers", "You need a job for that.")] };
+  const gen = GEN[kind];
   let target: Relative | undefined;
   if (kind === "friend") target = p.relatives.filter((r) => r.alive && r.relation === "Friend" && r.age >= 18 && r.partnerStatus !== "ex").sort((a, b) => b.relationshipBar - a.relationshipBar)[0];
   if (kind === "ex") target = p.relatives.find((r) => r.alive && r.relation === "Partner" && r.partnerStatus === "ex" && r.age >= 18);
-  if (kind === "coworker") {
+  if (gen) {
     const ad = adultSpec(p, rng);
-    target = createRelative(p, { relation: "Partner", ageOffset: [-8, 10], partnerStatus: "dating", gender: ad.gender, ageRange: ad.ageRange }, rng);
-    target.age = Math.max(18, target.age);
+    const age = clamp(Math.round(gen.age(p, rng)), 18, 75);
+    target = createRelative(p, { relation: "Partner", ageOffset: [-8, 10], partnerStatus: "dating", gender: ad.gender, ageRange: [age, age] }, rng);
+    target.age = age;
     target.relation = "Lover";
     target.partnerStatus = "fling";
     target.relationshipBar = rng.int(40, 60);
+    target.traits = [gen.trait];
   }
-  if (!target) return { player: p0, notices: [info("Nobody There", kind === "friend" ? "You don't have a friend who fits." : "You don't have an ex to call.")] };
+  if (!target) return { player: p0, notices: [info("Nobody There", "Nobody fits.")] };
   p.annual[`seduce:${kind}`] = 1;
+  if (def.cost) p.bankBalance -= def.cost;
   const partner = getPartner(p);
   const cheating = !!partner && !isOpen(p);
-  const base = kind === "friend" ? target.relationshipBar / 120 : kind === "ex" ? 0.5 : 0.4;
-  const chance = clamp(base + (p.looks - 50) / 250 + (target.openness ?? 40) / 400, 0.1, 0.85);
+  const base = gen ? gen.base : kind === "friend" ? target.relationshipBar / 120 : 0.5;
+  const chance = clamp(base + (p.looks - 50) / 250 + p.skills.charisma / 600 + (target.openness ?? 40) / 400, 0.08, 0.88);
   const name = target.name.split(" ")[0];
   if (!rng.chance(chance)) {
     if (kind === "friend") target.relationshipBar = clamp(target.relationshipBar - 20);
     changeStat(p, "happiness", -3);
-    const body = kind === "friend" ? `${name} politely turned you down. Things are weird now.` : `${name} wasn't interested. Awkward.`;
+    let body = gen ? gen.lose(name) : kind === "friend" ? `${name} politely turned you down. Things are weird now.` : `${name} wasn't interested. Awkward.`;
+    if (kind === "boss" && p.currentJob && rng.chance(0.2)) {
+      p.currentJob.performance = clamp(p.currentJob.performance - 5);
+      body += " Your next review was noticeably cooler.";
+    }
     addLog(p, body);
     return { player: p, notices: [info("Rejected", body, "bad")] };
   }
@@ -459,13 +513,39 @@ export function seduce(p0: PlayerState, kind: SeduceKind, protectedSex: boolean,
     p.relatives = p.relatives.filter((r) => r.id !== target!.id);
     lover = { ...target, relation: "Lover", partnerStatus: cheating || isOpen(p) ? "affair" : "fling" };
   }
-  if (kind === "coworker" && cheating) lover.partnerStatus = "affair";
+  if (gen && cheating) lover.partnerStatus = "affair";
   p.relatives.push(lover);
   encounter(p, lover, protectedSex, rng, notices, 0.1);
-  const body =
-    kind === "coworker" ? `Late nights at the office turned into something else with ${name}.`
-    : kind === "ex" ? `One thing led to another with your ex, ${name}. Old habits.`
-    : `A friendship with ${name} crossed a line, in the best way.`;
+  let body = gen ? gen.win(name) : kind === "ex" ? `One thing led to another with your ex, ${name}. Old habits.` : `A friendship with ${name} crossed a line, in the best way.`;
+  // Mixing intimacy with a working relationship has knock-on effects.
+  if (kind === "employee" && p.business) {
+    if (rng.chance(0.3)) {
+      const settlement = rng.int(8_000, 25_000);
+      p.bankBalance = Math.max(0, p.bankBalance - settlement);
+      p.business.staff = Math.max(0, p.business.staff - 1);
+      p.business.reputation = clamp(p.business.reputation - 8);
+      lover.partnerStatus = "ex";
+      body += ` Weeks later ${name} resigned, saying they hadn't felt able to refuse. A settlement of ${money(settlement)} kept it out of court, but word got round.`;
+      changeStat(p, "karma", -6);
+    } else {
+      body += " Staff noticed. Morale wobbled.";
+      p.business.morale = clamp(p.business.morale - 6);
+    }
+  }
+  if (kind === "client" && rng.chance(0.25)) {
+    if (p.business) p.business.reputation = clamp(p.business.reputation - 6);
+    else if (p.currentJob) p.currentJob.performance = clamp(p.currentJob.performance - 5);
+    body += " The account was moved elsewhere soon afterwards.";
+  }
+  if (kind === "coworker" && rng.chance(0.2) && p.currentJob) {
+    p.currentJob.performance = clamp(p.currentJob.performance - 3);
+    body += " The office gossip didn't help your reputation.";
+  }
+  if (kind === "fan" && rng.chance(0.25)) {
+    changeStat(p, "fame", 3);
+    changeStat(p, "happiness", -3);
+    body += " A tabloid ran their version of the night.";
+  }
   addLog(p, body);
   if (cheating) recordCheating(p, rng, notices, 0.1);
   return { player: p, notices: [info(cheating ? "Cheating..." : "Fling", body, cheating ? "bad" : "good"), ...notices] };
@@ -534,6 +614,28 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
     if (l.relationshipBar <= 0) {
       l.partnerStatus = "ex";
       addLog(p, `${l.name} drifted out of your life.`);
+    }
+  }
+  // Workplace romances across a power gap tend to surface.
+  for (const l of p.relatives) {
+    if (l.relation !== "Lover" || !l.alive || l.partnerStatus === "ex" || !l.traits) continue;
+    if (l.traits.includes("Your boss") && p.currentJob && rng.chance(0.14)) {
+      const fired = rng.chance(0.25);
+      const body = fired
+        ? `HR found out about you and ${firstName(l)}. Because of the reporting line, you were let go with a signed agreement to stay quiet.`
+        : `HR found out about you and ${firstName(l)}. One of you had to move teams, and it was you. The gossip didn't stop.`;
+      if (fired) { p.currentJob = null; p.annualSalary = 0; } else p.currentJob.performance = clamp(p.currentJob.performance - 12);
+      l.partnerStatus = "ex";
+      changeStat(p, "happiness", -5);
+      addLog(p, body);
+      notices.push(info("The Office Finds Out", body, "bad"));
+    } else if (l.traits.includes("Your employee") && p.business && rng.chance(0.14)) {
+      p.business.reputation = clamp(p.business.reputation - 10);
+      p.business.morale = clamp(p.business.morale - 10);
+      l.partnerStatus = "ex";
+      const body = `The staff learned about you and ${firstName(l)}. Resentment about favouritism spread, and the relationship couldn't survive the scrutiny.`;
+      addLog(p, body);
+      notices.push(info("Trouble at Work", body, "bad"));
     }
   }
   const partner = getPartner(p);

@@ -4,7 +4,7 @@ import { makeRng } from "@/lib/rng";
 import { createNewPlayer } from "../state";
 import { discussDesires, setIntimacyPrefs, shareExperience, toggleGender, toggleInterest } from "../desire";
 import { adultRange, tasteOf } from "../people";
-import { closeRelationship, hookUp, proposeOpenRelationship, askThreesome } from "../intimacy";
+import { closeRelationship, hookUp, proposeOpenRelationship, askThreesome, seduce, SEDUCE_TARGETS, processIntimacy } from "../intimacy";
 import { meetSomeone } from "../social";
 import { EXPERIENCES } from "@/data/experiences";
 import type { PlayerState, Relative } from "@/types/game.types";
@@ -210,5 +210,35 @@ describe("planning an evening", () => {
     // Adults only and mature content off
     const off = { ...structuredClone(p), matureContent: false };
     expect(playScene(off, "L1", { setting: "home", mood: "tender", extra: "none", checkIn: true, aftercare: true }, true, makeRng(1)).player).toBe(off);
+  });
+});
+
+describe("more people to be intimate with", () => {
+  it("every kind is adult-only, gated by circumstance, and workplace ones carry consequences", () => {
+    let bossLovers = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const { rng, p } = adult(seed);
+      p.matureContent = true;
+      p.fame = 60;
+      p.currentJob = { id: "j", title: "Analyst", company: "Acme", salary: 60_000, performance: 70, tier: 2, lineId: "corporate" } as never;
+      p.annualSalary = 60_000;
+      for (const t of SEDUCE_TARGETS) {
+        if (t.need(p) && t.id !== "employee" && t.id !== "classmate") continue;
+        const res = seduce(p, t.id, true, rng);
+        for (const r of res.player.relatives) if (r.relation === "Lover") expect(r.age).toBeGreaterThanOrEqual(18);
+        if (t.id === "boss" && res.player.relatives.some((r) => r.relation === "Lover" && r.traits?.includes("Your boss"))) {
+          bossLovers++;
+          // Over the years a boss romance ends, one way or another, and it never improves your standing.
+          const q = res.player;
+          for (let y = 0; y < 30; y++) processIntimacy(q, {}, rng, []);
+          expect(q.relatives.filter((r) => r.traits?.includes("Your boss")).every((r) => r.partnerStatus === "ex")).toBe(true);
+        }
+      }
+    }
+    expect(bossLovers).toBeGreaterThan(0);
+    // Employees need staff.
+    const { p } = adult(2);
+    p.matureContent = true;
+    expect(SEDUCE_TARGETS.find((t) => t.id === "employee")!.need(p)).not.toBeNull();
   });
 });
