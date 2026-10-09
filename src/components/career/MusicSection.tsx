@@ -1,5 +1,6 @@
 "use client";
 
+import { BandDepth, RightsDepth, TourSettings } from "./MusicDepth";
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import { MUSIC_GENRES } from "@/data/careersRegistry";
@@ -107,6 +108,8 @@ export function MusicSection() {
   const [title, setTitle] = useState("");
   const [producer, setProducer] = useState<string>("local");
   const [direction, setDirection] = useState<"commercial" | "balanced" | "artistic">("balanced");
+  const [pace, setPace] = useState<"light" | "standard" | "punishing">("standard");
+  const [mode, setMode] = useState<"headline" | "support">("headline");
   const m = p.music;
   const c = m.contract;
   const inScene = m.status !== "none" || m.signed;
@@ -383,7 +386,9 @@ export function MusicSection() {
         )}
       </Card>
 
+      <BandDepth />
       <SectionTitle hint="one per year">Tour</SectionTitle>
+      <TourSettings pace={pace} setPace={setPace} mode={mode} setMode={setMode} />
       <div className="flex flex-col gap-2">
         {tourOptions(p).map((t) => {
           const upfront = Math.round(t.fixed * 0.5);
@@ -398,11 +403,13 @@ export function MusicSection() {
               label={`🚌 ${t.label}`}
               hint={`${t.shows} shows · ${t.capacity.toLocaleString()} seats · $${t.price} tickets · fixed costs ${money0(t.fixed)}${indie ? ` (${money0(upfront)} up front)` : ""}. Poor attendance can lose money.`}
               reason={reason}
-              onClick={() => act((pl, rng) => goOnTour(pl, rng, t.id))}
+              onClick={() => act((pl, rng) => goOnTour(pl, rng, t.id, { pace, mode }))}
             />
           );
         })}
       </div>
+
+      <RightsDepth />
 
       {m.albums.length > 0 && (
         <>

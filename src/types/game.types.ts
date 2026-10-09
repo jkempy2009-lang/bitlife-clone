@@ -518,6 +518,10 @@ export interface SponsorDeal {
   /** Authenticity lost per year for pushing this product. */
   authCost: number;
   shady: boolean;
+  /** Clean brands have a morals clause: a serious scandal ends the deal. Shady ones don't care. Defaults to !shady. */
+  morals?: boolean;
+  /** Years you missed the output target while burnt out. A first strike is forgiven, a second breaches. */
+  strikes?: number;
 }
 
 export interface IncomeBreakdown {
@@ -565,6 +569,19 @@ export interface InfluencerState {
   peakFollowers: number;
   viralHits: number;
   followerHistory: number[];
+  /** Collaborations done in your whole career. */
+  collabs?: number;
+  /** An ongoing public feud: it feeds attention and starves trust until it burns out. */
+  feud?: CreatorFeud | null;
+  /** A collaborator whose behaviour can splash onto you for a couple of years. */
+  associate?: { name: string; years: number } | null;
+}
+
+export interface CreatorFeud {
+  name: string;
+  years: number;
+  /** 0-100: how loud it is. */
+  heat: number;
 }
 
 // ---- Sports career (engine: src/engine/athlete*.ts, data: src/data/sports.ts) ----
@@ -986,6 +1003,13 @@ export interface Album {
   /** The label owns it and keeps the royalties. */
   labelOwned?: boolean;
   award?: string;
+  /** Floor under the yearly royalty: a loved record never quite stops earning. */
+  evergreen?: number;
+  /** The catalogue was sold: it no longer pays you. */
+  sold?: boolean;
+  /** An unexpected streaming breakout rather than a planned hit. */
+  breakout?: boolean;
+  direction?: "commercial" | "balanced" | "artistic";
 }
 
 export interface BandMember {
@@ -997,6 +1021,38 @@ export interface BandMember {
   loyalty: number;
   ego: number;
   partier: boolean;
+  /** Personality. Shapes what they want and how they fall apart. */
+  trait?: BandTrait;
+  /** Share (0-100) of the band's songs credited to them. The rest is yours. */
+  credit?: number;
+  /** Years in the band. */
+  years?: number;
+  /** What is eating them right now, if anything. Unaddressed grievances end careers. */
+  grievance?: "credit" | "money" | "direction" | "habit" | null;
+  /** Years the grievance has gone unanswered. */
+  grievanceYears?: number;
+  /** The player talked to them this year. */
+  talked?: boolean;
+}
+
+export type BandTrait = "peacemaker" | "diva" | "workaholic" | "flake" | "addict" | "mercenary" | "loyalist";
+
+/** A band that no longer exists but might one day reunite. */
+export interface FormerBand {
+  name: string;
+  year: number;
+  members: BandMember[];
+  /** How it ended: shapes whether anyone will pick up the phone. */
+  split: "amicable" | "bitter";
+}
+
+/** A rights or credit dispute over your work. */
+export interface RightsDispute {
+  kind: "credit" | "plagiarism" | "masters";
+  claimant: string;
+  /** What they want, in dollars. */
+  amount: number;
+  yearsLeft: number;
 }
 
 export interface RecordContract {
@@ -1017,6 +1073,8 @@ export interface RecordContract {
   creativeControl: number;
   tourCut: number;
   renegotiatedYear: number;
+  /** Times the label has extended the term to make you finish owed albums. */
+  extended?: number;
 }
 
 export interface PendingAlbum {
@@ -1062,6 +1120,17 @@ export interface MusicState {
   earnings: number;
   droppedCount: number;
   lastIncome: { gigs: number; royalties: number; stipend: number; costs: number };
+  /** How band income is carved up: equally, or by who wrote the songs. */
+  split?: "equal" | "writers";
+  /** Largest audience you ever had. */
+  peakFans?: number;
+  /** The band you used to be in, if it broke up. */
+  formerBand?: FormerBand | null;
+  dispute?: RightsDispute | null;
+  /** Cash taken for selling catalogue rights over the years. */
+  catalogSold?: number;
+  /** Summary of the last tour for the dashboard. */
+  lastTour?: { year: number; label: string; shows: number; attendance: number; net: number; mode: "headline" | "support" } | null;
 }
 
 export type ActingMedium = "film" | "tv" | "stage";
@@ -1266,6 +1335,14 @@ export interface CelebState {
   businessManager: boolean;
   scandal: ScandalState | null;
   scandals: number;
+  /** 0-100: how intense your fans' attachment is. Loyal, but a few go too far. */
+  devotion?: number;
+  /** Paying to keep a partner and children out of the press. */
+  familyShield?: boolean;
+  /** Restraining orders obtained over your career. */
+  orders?: number;
+  /** A restraining order is in force: stalker incidents are rarer but a breach is dangerous. */
+  orderYears?: number;
 }
 
 export interface NationState {

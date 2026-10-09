@@ -3,92 +3,26 @@
  * demos, local fame). Stage two is the label (contract terms, recoupment, creative control).
  * Albums are driven by skill, songwriting, producer, direction and effort; tours pay and cost.
  */
-import type { ActionResult, BandMember, PlayerState, RecordContract } from "@/types/game.types";
+import type { ActionResult, PlayerState, RecordContract } from "@/types/game.types";
 import { makeRng, type Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
-import { ALBUM_RATINGS, MUSIC_GENRES } from "@/data/careersRegistry";
-import { addLog, changeStat, clone, getPartner, isRoyal, livingRelatives } from "./state";
+import { MUSIC_GENRES } from "@/data/careersRegistry";
+import { addLog, changeStat, clone, isRoyal } from "./state";
 import { blockerFor } from "./occupation";
 import { addVice } from "./vices";
 import { info, logEvent, outputFor, payout, talentCeiling, trained, type Notices } from "./creativeCore";
 import { raiseScandal } from "./celebrity";
+import {
+  BAND_A, BAND_B, LABELS, PRODUCERS, ROLES, UNIT_VALUE, albumRating, audienceFor, bandSkill, chemistry, fanRetention, legacyScore,
+  makeMember, playerShare,
+} from "./musicCore";
+import { bandTick } from "./musicBand";
+import { disputeTick } from "./musicLegacy";
 
-// ---------------------------------------------------------------------------
-// Catalogue
-// ---------------------------------------------------------------------------
-
-export const PRODUCERS = [
-  { id: "self", label: "Produce it yourself", cost: 0, quality: -6, minFame: 0, blurb: "Free, and it sounds like it." },
-  { id: "local", label: "Local engineer", cost: 6_000, quality: 0, minFame: 0, blurb: "Competent and affordable." },
-  { id: "pro", label: "Industry producer", cost: 60_000, quality: 8, minFame: 15, blurb: "Radio-ready polish." },
-  { id: "star", label: "Star producer", cost: 400_000, quality: 16, minFame: 45, blurb: "Their name sells records." },
-] as const;
-
-export const DIRECTIONS = [
-  { id: "commercial", label: "Go commercial", blurb: "Chase the radio. More hits, thinner credibility." },
-  { id: "balanced", label: "Balanced", blurb: "A bit of both." },
-  { id: "artistic", label: "Artistic statement", blurb: "Your vision. Critics may love it, labels may not." },
-] as const;
-
-export const TOUR_SCALES = [
-  { id: "club", label: "Club tour", minFans: 200, shows: 14, capacity: 400, price: 18, fixed: 6_000 },
-  { id: "theatre", label: "Theatre tour", minFans: 8_000, shows: 24, capacity: 2_500, price: 45, fixed: 60_000 },
-  { id: "arena", label: "Arena tour", minFans: 150_000, shows: 36, capacity: 15_000, price: 85, fixed: 500_000 },
-  { id: "stadium", label: "Stadium tour", minFans: 2_000_000, shows: 44, capacity: 60_000, price: 140, fixed: 4_000_000 },
-] as const;
-export type TourScale = (typeof TOUR_SCALES)[number]["id"];
-
-const LABELS = ["Neon Records", "Blackbird Music", "Eastside Sound", "Crown & Anchor", "Velvet Vinyl", "Meridian Entertainment", "Static Garden", "Big Dog Records"];
-const FIRST = ["Alex", "Sam", "Jo", "Max", "Riley", "Dani", "Kit", "Remy", "Jules", "Tariq", "Mina", "Leo", "Priya", "Cole", "Nico", "Bea", "Omar", "Ivy", "Mateo", "Zoe"];
-const LAST = ["Vance", "Okafor", "Reyes", "Lindqvist", "Moreau", "Tanaka", "Walsh", "Costa", "Novak", "Hart", "Dubois", "Singh", "Kowalski", "Brandt"];
-const ROLES = ["Guitar", "Bass", "Drums", "Keys", "Vocals"];
-const BAND_A = ["Velvet", "Neon", "Broken", "Midnight", "Paper", "Electric", "Lost", "Hollow", "Rust", "Golden"];
-const BAND_B = ["Hearts", "Static", "Parade", "Wolves", "Highway", "Echo", "Ghosts", "Rivals", "Radio", "Fire"];
-
-export const MAX_MEMBERS = 4;
-
-export function albumRating(score: number) {
-  let chosen: (typeof ALBUM_RATINGS)[number] = ALBUM_RATINGS[0];
-  for (const r of ALBUM_RATINGS) if (score >= r.min) chosen = r;
-  return chosen;
-}
-
-// ---------------------------------------------------------------------------
-// Derived values
-// ---------------------------------------------------------------------------
-
-export function bandSkill(p: PlayerState): number {
-  const ms = p.music.members;
-  if (ms.length === 0) return p.skills.music;
-  return (p.skills.music * 1.5 + ms.reduce((s, m) => s + m.skill, 0)) / (1.5 + ms.length);
-}
-
-export function chemistry(p: PlayerState): number {
-  const ms = p.music.members;
-  return ms.length === 0 ? 100 : Math.round(ms.reduce((s, m) => s + m.loyalty, 0) / ms.length);
-}
-
-/** Your cut of whatever the act earns. */
-export function playerShare(p: PlayerState): number {
-  const n = p.music.members.length;
-  return n === 0 ? 1 : Math.max(0.3, 1 / (n + 1) + 0.08);
-}
-
-export const isOneHitWonder = (p: PlayerState) => p.music.hits === 1 && p.music.yearsSinceHit >= 5 && p.music.albums.length >= 2;
-
-export function musicTier(p: PlayerState): string {
-  const m = p.music;
-  if (m.status === "none" && m.albums.length === 0) return "Hobbyist";
-  if (!m.signed) return m.localFame < 20 ? "Garage act" : m.localFame < 45 ? "Local favourite" : "Buzzing unsigned act";
-  if (m.fans < 50_000) return "Signed act";
-  if (m.fans < 500_000) return "Rising act";
-  if (m.fans < 5_000_000) return "Headliner";
-  return "Superstar";
-}
-
-export function contractOutstanding(c: RecordContract | null): number {
-  return c ? c.unrecouped : 0;
-}
+export * from "./musicCore";
+export * from "./musicBand";
+export * from "./musicTour";
+export * from "./musicLegacy";
 
 export function qualityEstimate(p: PlayerState, producerId: string, direction: "commercial" | "balanced" | "artistic"): number {
   const m = p.music;
@@ -97,20 +31,6 @@ export function qualityEstimate(p: PlayerState, producerId: string, direction: "
   const dirBonus = direction === "artistic" ? 2 : 0;
   const q = 0.34 * bandSkill(p) + 0.22 * m.songwriting + 12 + prod.quality + (chemistry(p) - 60) / 10 + effortBonus + dirBonus - Math.max(0, m.burnout - 60) * 0.3;
   return clamp(Math.round(q));
-}
-
-const memberName = (rng: Rng) => `${rng.pick(FIRST)} ${rng.pick(LAST)}`;
-
-function makeMember(rng: Rng, skillBase: number, role?: string): BandMember {
-  return {
-    id: rng.id(),
-    name: memberName(rng),
-    role: role ?? rng.pick(ROLES),
-    skill: clamp(Math.round(skillBase + rng.int(-14, 10))),
-    loyalty: rng.int(55, 80),
-    ego: rng.int(15, 85),
-    partier: rng.chance(0.3),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +94,7 @@ export function formBand(p0: PlayerState, tapScore: number, rng: Rng = makeRng(p
     const r = rng;
     const m = p.music;
     m.status = "band";
+    m.formerBand = null;
     m.members = Array.from({ length: 2 }, (_, i) => makeMember(r, rating * 0.8, ROLES[(i + 1) % ROLES.length]));
     m.bandName = `${r.pick(BAND_A)} ${r.pick(BAND_B)}`;
     changeStat(p, "fame", 2);
@@ -186,50 +107,6 @@ export function formBand(p0: PlayerState, tapScore: number, rng: Rng = makeRng(p
   const body = `Nobody wanted to join your band. Rating: ${Math.round(rating)} (needed 40). Practise and try again.`;
   addLog(p, body);
   return { player: p, notices: [info("Band Fell Apart", body, "bad")] };
-}
-
-export function recruitMember(p0: PlayerState, rng: Rng): ActionResult {
-  const p = clone(p0);
-  const m = p.music;
-  if (m.status !== "band") return { player: p0, notices: [info("No Band", "Form a band first.")] };
-  if (m.members.length >= MAX_MEMBERS) return { player: p0, notices: [info("Full Line-up", `${MAX_MEMBERS} members is plenty.`)] };
-  if ((p.annual.recruit ?? 0) >= 1) return { player: p0, notices: [info("Auditions Over", "You've already auditioned players this year.")] };
-  p.annual.recruit = 1;
-  const taken = new Set(m.members.map((x) => x.role));
-  const role = ROLES.find((r) => !taken.has(r)) ?? rng.pick(ROLES);
-  const member = makeMember(rng, clamp(p.skills.music + rng.int(-10, 5), 15, 25 + m.localFame * 0.6 + 30), role);
-  m.members.push(member);
-  const body = `${member.name} joined on ${role.toLowerCase()} (skill ${member.skill}). Chemistry is untested.`;
-  addLog(p, body);
-  return { player: p, notices: [info("New Member", body, "good")] };
-}
-
-export function dismissMember(p0: PlayerState, id: string): ActionResult {
-  const p = clone(p0);
-  const m = p.music;
-  const mem = m.members.find((x) => x.id === id);
-  if (!mem) return { player: p0 };
-  m.members = m.members.filter((x) => x.id !== id);
-  for (const o of m.members) o.loyalty = clamp(o.loyalty - 6);
-  if (m.members.length === 0 && !m.signed) m.status = "solo";
-  const body = `You showed ${mem.name} the door. The others are uneasy about how easy that was.`;
-  addLog(p, body);
-  return { player: p, notices: [info("Band Shake-Up", body)] };
-}
-
-export function teamNight(p0: PlayerState): ActionResult {
-  const p = clone(p0);
-  const m = p.music;
-  if (m.members.length === 0) return { player: p0, notices: [info("No Band", "You need bandmates to bond with.")] };
-  if ((p.annual.teamnight ?? 0) >= 1) return { player: p0, notices: [info("Enough Bonding", "You already took the band out this year.")] };
-  if (p.bankBalance < 400) return { player: p0, notices: [info("Can't Afford It", "A night out for the band costs $400.", "bad")] };
-  p.annual.teamnight = 1;
-  p.bankBalance -= 400;
-  for (const o of m.members) o.loyalty = clamp(o.loyalty + 12);
-  changeStat(p, "happiness", 3);
-  const body = "You took the band out for food and a long argument about the best album ever made. Chemistry up.";
-  addLog(p, body);
-  return { player: p, notices: [info("Band Night", body, "good")] };
 }
 
 export function recordDemo(p0: PlayerState, rng: Rng): ActionResult {
@@ -285,7 +162,8 @@ function rollTerms(p: PlayerState, leverage: number, rng: Rng): RecordContract {
     advance,
     stipend: 25_000,
     royaltyRate: Number(clamp(0.1 + leverage * 0.0025 + (m.manager ? 0.02 : 0), 0.1, 0.2).toFixed(3)),
-    albumsOwed: years >= 5 ? 4 : 3,
+    // Always one year of slack: a studio year and a touring year can't be the same year.
+    albumsOwed: Math.max(2, years - (years >= 5 ? 2 : 1)),
     albumsDelivered: 0,
     unrecouped: advance,
     creativeControl: Math.round(clamp(25 + leverage * 1.5 + m.localFame / 4, 15, 80)),
@@ -444,77 +322,10 @@ export function recordAlbum(
   const quality = qualityEstimate(p, prod.id, direction);
   m.genre = genre;
   m.pendingAlbum = { title: name, genre, quality, producer: prod.id, direction, indie };
+  m.formerBand = m.status === "band" ? null : m.formerBand;
   const body = `You recorded a ${genre} album called "${name}" with ${prod.label.toLowerCase()}${cost ? ` (${money(cost)}${indie ? " from your pocket" : ", added to your label debt"})` : ""}. It will be released this year!${notes.length ? " " + notes.join(" ") : ""}`;
   addLog(p, body);
   return { player: p, notices: [info("In the Studio", body, "good")] };
-}
-
-export function tourOptions(p: PlayerState) {
-  return TOUR_SCALES.map((t) => ({ ...t, ok: p.music.fans >= t.minFans }));
-}
-
-export function goOnTour(p0: PlayerState, rng: Rng, scaleId: TourScale): ActionResult {
-  const p = clone(p0);
-  const m = p.music;
-  const scale = TOUR_SCALES.find((t) => t.id === scaleId);
-  if (!scale || m.status === "none") return { player: p0 };
-  if ((p.annual.tour ?? 0) >= 1) return { player: p0, notices: [info("Already Toured", "One tour a year is all your body can take.")] };
-  if (m.pendingAlbum || (p.annual.album ?? 0) >= 1) return { player: p0, notices: [info("Studio Year", "You're making a record this year. You can't also be on the road.", "bad")] };
-  if (m.fans < scale.minFans) return { player: p0, notices: [info("Not Enough Fans", `A ${scale.label.toLowerCase()} needs about ${scale.minFans.toLocaleString()} fans. You have ${Math.round(m.fans).toLocaleString()}.`)] };
-  const indie = !m.signed;
-  if (indie && p.bankBalance < scale.fixed * 0.5) return { player: p0, notices: [info("Can't Afford It", `You need ${money(Math.round(scale.fixed * 0.5))} up front to put a ${scale.label.toLowerCase()} on the road.`, "bad")] };
-  p.annual.tour = 1;
-  m.tours += 1;
-  const relFactor = 0.5 + m.relevance / 100;
-  const attendance = Math.min(scale.capacity, Math.round(m.fans * 0.04 * relFactor + m.localFame * 4 + 40));
-  const fill = attendance / scale.capacity;
-  const ticketRev = attendance * scale.shows * scale.price * (fill < 0.35 ? rng.float(0.7, 1) : 1);
-  const merchRev = attendance * scale.shows * scale.price * 0.25;
-  const gross = ticketRev + merchRev;
-  const crew = ticketRev * 0.55;
-  let net = gross - crew - scale.fixed;
-  const notices: Notices = [];
-  const c = m.contract;
-  let labelCut = 0;
-  if (net > 0 && m.signed && c) labelCut = net * c.tourCut;
-  const mgrCut = net > 0 && m.manager ? net * 0.15 : 0;
-  let yours = 0;
-  if (net > 0) yours = (net - labelCut - mgrCut) * playerShare(p);
-  else if (m.signed && c) {
-    c.unrecouped += Math.round(-net);
-    yours = 0;
-  } else {
-    yours = net * playerShare(p);
-  }
-  net = Math.round(net);
-  const received = yours > 0 ? payout(p, yours) : Math.round(yours);
-  if (yours < 0) p.bankBalance += Math.round(yours);
-  m.earnings += Math.max(0, received);
-  m.fans += attendance * scale.shows * 0.02;
-  m.relevance = clamp(m.relevance + 4);
-  m.burnout = clamp(m.burnout + 8 + TOUR_SCALES.indexOf(scale) * 4);
-  changeStat(p, "health", -Math.round(scale.shows / 8));
-  const success = net > 0;
-  changeStat(p, "happiness", success ? 5 : -4);
-  changeStat(p, "fame", success ? 2 : 0);
-  const partner = getPartner(p);
-  if (partner) partner.relationshipBar = clamp(partner.relationshipBar - 4);
-  for (const k of livingRelatives(p, "Child")) if (k.age < 18) k.relationshipBar = clamp(k.relationshipBar - 2);
-  let body = `${scale.label}: ${scale.shows} shows, about ${attendance.toLocaleString()} a night (${Math.round(fill * 100)}% full). ${
-    net > 0 ? `You banked ${money(received)} after crew, label${m.manager ? ", manager" : ""} and band cuts and withholding.` : m.signed ? `It lost ${money(-net)}, which the label added to your debt.` : `It lost ${money(-net)} and you ate the cost.`
-  }`;
-  if (rng.chance(0.3 + m.burnout / 400 + m.members.filter((x) => x.partier).length * 0.06)) {
-    const key = rng.chance(0.55) ? "alcohol" : "drugs";
-    addVice(p, key, rng.int(4, 10));
-    body += ` The tour bus had a lot of ${key === "alcohol" ? "drinking" : "pills and powders"}, and you joined in.`;
-  }
-  if (rng.chance(0.08)) {
-    changeStat(p, "health", -10);
-    body += " You strained your voice and cracked a rib on stage and had to cancel dates.";
-  }
-  addLog(p, body);
-  notices.push(info(success ? "Tour Complete" : "Tour Loses Money", body, success ? "good" : "bad"));
-  return { player: p, notices };
 }
 
 // ---------------------------------------------------------------------------
@@ -538,6 +349,13 @@ function dropFromLabel(p: PlayerState, notices: Notices, why: string, forfeit: b
   logEvent(p, notices, "Dropped by the Label", why, "bad");
 }
 
+/** What an album sells as a share of the audience it can reach, by how it landed. */
+const SALES_SHARE: Record<string, number> = { Flop: 0.02, Modest: 0.1, Hit: 0.28, Gold: 0.5, Platinum: 0.85, Diamond: 1.4 };
+/** Certifications are about real units: a small act can have a great record without it being "Platinum". */
+const CERT_FLOOR: Record<string, number> = { Gold: 40_000, Platinum: 200_000, Diamond: 1_000_000 };
+const RATING_ORDER = ["Flop", "Modest", "Hit", "Gold", "Platinum", "Diamond"];
+const ALBUM_MINS = [0, 35, 55, 70, 82, 94];
+
 function releaseAlbum(p: PlayerState, rng: Rng, notices: Notices) {
   const m = p.music;
   const pending = m.pendingAlbum;
@@ -545,17 +363,32 @@ function releaseAlbum(p: PlayerState, rng: Rng, notices: Notices) {
   const indie = pending.indie ?? !m.signed;
   const quality = pending.quality ?? qualityEstimate(p, "local", "balanced");
   const dir = pending.direction ?? "balanced";
+  const audience = audienceFor(p);
   const hitChance = clamp((quality - 55) / 70 + (dir === "commercial" ? 0.14 : dir === "artistic" ? -0.08 : 0) + (m.relevance - 50) / 400 + (indie ? 0 : 0.06), 0.02, 0.75);
   const hit = rng.chance(hitChance);
+  // A song can catch fire on streaming far beyond the audience that was waiting for it.
+  const breakout = hit && m.fans < 1_500_000 && rng.chance(clamp(0.1 + (quality - 60) / 200, 0.04, 0.3));
   const score = quality * 0.7 + p.fame * 0.25 + (m.relevance - 50) * 0.1 + (hit ? 8 : 0) + rng.int(-12, 14) + (dir === "commercial" ? 4 : dir === "artistic" ? -3 : 0);
-  const r = albumRating(score);
-  const sales = Math.round(r.sales * rng.float(0.8, 1.25) * (hit ? 1.5 : 1) * (indie ? 0.35 : 1));
+  const planned = albumRating(score);
+  // Releasing every single year floods your own market; a global audience also has only so much attention.
+  const last = m.albums[m.albums.length - 1];
+  const fatigue = last && p.year - last.year <= 1 ? 0.75 : 1;
+  const saturation = 1 / (1 + audience / 12_000_000);
+  const sales = Math.max(
+    12,
+    Math.round(audience * SALES_SHARE[planned.rating] * rng.float(0.75, 1.3) * (hit ? 1.5 : 1) * (breakout ? rng.float(3, 12) : 1) * (indie ? 0.8 : 1) * fatigue * saturation),
+  );
+  // Cap the headline rating at what the units actually support.
+  let idx = RATING_ORDER.indexOf(planned.rating);
+  while (idx > 0 && CERT_FLOOR[RATING_ORDER[idx]] !== undefined && sales < CERT_FLOOR[RATING_ORDER[idx]]) idx -= 1;
+  const r = albumRating(ALBUM_MINS[idx]);
   const c = m.contract;
   const rate = indie ? 0.7 : c?.royaltyRate ?? 0.14;
-  const royalty = Math.round(sales * 9 * rate);
-  m.albums.push({ title: pending.title, genre: pending.genre, rating: r.rating, sales, royalty, year: p.year, quality, hit, indie });
+  const royalty = Math.round(sales * UNIT_VALUE * rate);
+  const evergreen = idx >= 2 ? Math.round(royalty * 0.1) : 0;
+  m.albums.push({ title: pending.title, genre: pending.genre, rating: r.rating, sales, royalty, year: p.year, quality, hit, indie, evergreen, breakout, direction: dir });
   m.pendingAlbum = null;
-  m.fans += sales * 0.1 + (hit ? 2_000 : 0);
+  m.fans += sales * (breakout ? 0.3 : 0.1) + (hit ? audience * 0.03 : 0);
   m.relevance = clamp(m.relevance + (hit ? 25 : r.fame >= 4 ? 12 : r.fame < 0 ? -12 : 2));
   if (hit) {
     m.hits += 1;
@@ -567,9 +400,9 @@ function releaseAlbum(p: PlayerState, rng: Rng, notices: Notices) {
     m.labelStanding = clamp(m.labelStanding + delta);
   }
   changeStat(p, "fame", r.fame);
-  const body = `Your ${pending.genre} album "${pending.title}" ${hit ? "spawned a chart single and " : ""}sold ${sales.toLocaleString()} copies and was rated ${r.rating.toUpperCase()}.${indie ? " It was self-released." : ""} Royalties: ${money(royalty)}${!indie && c && c.unrecouped > 0 ? ` (they go against your ${money(c.unrecouped)} label debt first)` : ""}.`;
+  const body = `Your ${pending.genre} album "${pending.title}" ${breakout ? "had a single explode on streaming and " : hit ? "spawned a chart single and " : ""}sold ${sales.toLocaleString()} copies and was rated ${r.rating.toUpperCase()}.${indie ? " It was self-released." : ""} Royalties: ${money(royalty)}${!indie && c && c.unrecouped > 0 ? ` (they go against your ${money(c.unrecouped)} label debt first)` : ""}.`;
   addLog(p, body);
-  notices.push(info(`Album Released: ${r.rating}`, body, r.fame >= 7 ? "jackpot" : r.fame > 0 ? "good" : "bad"));
+  notices.push(info(`Album Released: ${r.rating}`, body, breakout || r.fame >= 7 ? "jackpot" : r.fame > 0 ? "good" : "bad"));
 
   // Awards season
   const album = m.albums[m.albums.length - 1];
@@ -592,7 +425,7 @@ function royaltyIncome(p: PlayerState): { toPlayer: number; label: number } {
   let label = 0;
   let indie = 0;
   for (const a of m.albums) {
-    if (a.labelOwned) continue;
+    if (a.labelOwned || a.sold) continue;
     if (a.indie) indie += a.royalty;
     else label += a.royalty;
   }
@@ -604,30 +437,6 @@ function royaltyIncome(p: PlayerState): { toPlayer: number; label: number } {
     labelNet = label - applied;
   }
   return { toPlayer: Math.round((labelNet + indie) * playerShare(p)), label };
-}
-
-function bandTick(p: PlayerState, rng: Rng, notices: Notices, output: number) {
-  const m = p.music;
-  for (const mem of [...m.members]) {
-    mem.skill = clamp(mem.skill + rng.int(0, 2) - (output < 0.4 ? 1 : 0));
-    const drift =
-      (output >= 0.8 ? 3 : output < 0.4 ? -3 : 0) - Math.round(mem.ego / 30) - (mem.partier ? 2 : 0) - (p.effort === "coast" ? 2 : 0) + (m.signed && m.labelStanding > 60 ? 2 : 0) + rng.int(-3, 4);
-    mem.loyalty = clamp(mem.loyalty + drift);
-    if (mem.loyalty < 20 && rng.chance(0.55)) {
-      m.members = m.members.filter((x) => x.id !== mem.id);
-      for (const o of m.members) o.loyalty = clamp(o.loyalty - 5);
-      logEvent(p, notices, "Bandmate Quits", `${mem.name} (${mem.role.toLowerCase()}) quit the band after too many clashes and not enough rehearsal. The others are shaken.`, "bad");
-    }
-  }
-  if (m.status === "band" && m.members.length === 0) {
-    m.status = "solo";
-    logEvent(p, notices, "The Band Is Over", `${m.bandName || "The band"} has no members left but you. You carry on as a solo act.`, "bad");
-  }
-  if (m.members.length >= 2 && chemistry(p) < 35 && rng.chance(0.3)) {
-    for (const mem of m.members) mem.loyalty = clamp(mem.loyalty - 8);
-    logEvent(p, notices, "Band Feud", "A blazing row backstage spilled onto social media. Chemistry took a beating.", "bad");
-    if (m.fans >= 5_000) raiseScandal(p, "music", rng, notices, 1);
-  }
 }
 
 /** Returns the year's gross (taxable) music income. */
@@ -651,7 +460,7 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
   const royalty = royaltyIncome(p);
   income.royalties = royalty.toPlayer;
   gross += royalty.toPlayer;
-  for (const a of m.albums) a.royalty = a.royalty < 500 ? 0 : Math.round(a.royalty * 0.55);
+  for (const a of m.albums) a.royalty = a.sold ? 0 : Math.max(a.evergreen ?? 0, a.royalty * 0.55 < 500 ? 0 : Math.round(a.royalty * 0.55));
 
   if (active) {
     // Playing is practice too: skills creep up with the hours you put in, up to your natural ceiling.
@@ -665,6 +474,8 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
     const ageDecay = p.age > 40 ? (p.age - 40) * 0.35 : 0;
     const genreDecay = m.genre === "Pop" || m.genre === "Hip-Hop" ? 3 : m.genre === "Jazz" || m.genre === "Country" ? -3 : 0;
     m.relevance = clamp(m.relevance - (7 + ageDecay + genreDecay - (m.yearsSinceHit <= 1 ? 3 : 0)));
+    // A legend never sounds entirely out of date: the catalogue keeps a floor under relevance.
+    m.relevance = Math.max(m.relevance, Math.round(legacyScore(p) * 0.25), Math.round(8 + m.localFame * 0.3));
 
     // Burnout, writer's block
     const burnDelta = output > 1.15 ? (output - 1.15) * 18 : output < 0.75 ? -6 : -2;
@@ -696,14 +507,14 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
       costs += gigCosts;
       const lf = m.localFame;
       m.localFame = clamp(lf + gigs * 0.7 * skillF * (1 - lf / 110) - (gigs < 4 ? lf * 0.12 : lf * 0.03));
-      m.fans = Math.max(0, Math.round(m.fans * (gigs >= 6 ? 0.96 : 0.88) + gigs * (5 + m.localFame * 0.7) * skillF));
+      m.fans = Math.max(0, Math.round(m.fans * fanRetention(p, gigs >= 6 ? 0.96 : 0.88) + gigs * (5 + m.localFame * 0.7) * skillF));
     } else if (m.contract) {
       const c = m.contract;
       income.stipend = c.stipend;
       gross += c.stipend;
       c.unrecouped += c.stipend;
       c.yearsLeft -= 1;
-      m.fans = Math.round(m.fans * (m.yearsSinceHit <= 1 ? 0.97 : 0.92));
+      m.fans = Math.round(m.fans * fanRetention(p, m.yearsSinceHit <= 1 ? 0.97 : 0.92));
       const sinceRelease = p.year - (m.albums[m.albums.length - 1]?.year ?? p.year - 3);
       if (sinceRelease >= 2 && !m.pendingAlbum) m.labelStanding = clamp(m.labelStanding - 6);
       const last2 = m.albums.filter((a) => !a.indie).slice(-2);
@@ -720,8 +531,9 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
             advance: Math.round(c.advance * 1.5),
             stipend: Math.round(c.stipend * 1.4),
             royaltyRate: Number(Math.min(0.3, c.royaltyRate + 0.03).toFixed(3)),
-            albumsOwed: rng.int(2, 3),
+            albumsOwed: Math.max(1, years - 1),
             albumsDelivered: 0,
+            extended: 0,
             creativeControl: clamp(c.creativeControl + 10),
             renegotiatedYear: 0,
           };
@@ -734,6 +546,14 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
           m.pendingAlbum = null;
           if (p.specialCareerPath === "musician") p.specialCareerPath = "none";
           logEvent(p, notices, "Contract Expired", `${c.label} let your contract lapse. You keep your catalogue and your freedom, but not their budget. Release independently or look for another deal.`, "neutral");
+        } else if ((c.extended ?? 0) < 1 && m.labelStanding > 25) {
+          // The label would rather have the records than the lawsuit: one extension, at a price.
+          const short = c.albumsOwed - c.albumsDelivered;
+          c.extended = (c.extended ?? 0) + 1;
+          c.yearsLeft = Math.min(2, short);
+          c.totalYears += c.yearsLeft;
+          m.labelStanding = clamp(m.labelStanding - 8);
+          logEvent(p, notices, "Contract Extended", `You still owe ${c.label} ${short} album${short > 1 ? "s" : ""}. They extended your term by ${c.yearsLeft} year${c.yearsLeft > 1 ? "s" : ""} to get them, with no new advance and a grudge.`, "bad");
         } else {
           dropFromLabel(p, notices, `You didn't deliver the ${c.albumsOwed} albums you owed ${c.label}. They terminated the contract and kept the masters.`, true);
         }
@@ -754,6 +574,8 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
     if (m.manager && gross > 0) costs += Math.round(gross * 0.15);
   }
   m.fans = Math.round(m.fans);
+  m.peakFans = Math.max(m.peakFans ?? 0, m.fans);
+  disputeTick(p, rng, notices);
   income.costs = costs;
   p.bankBalance -= costs;
   m.lastIncome = income;

@@ -33,6 +33,9 @@ export const newInfluencer = (): InfluencerState => ({
   peakFollowers: 0,
   viralHits: 0,
   followerHistory: [],
+  collabs: 0,
+  feud: null,
+  associate: null,
 });
 
 export const newMusic = (): MusicState => ({
@@ -63,6 +66,12 @@ export const newMusic = (): MusicState => ({
   earnings: 0,
   droppedCount: 0,
   lastIncome: { gigs: 0, royalties: 0, stipend: 0, costs: 0 },
+  split: "equal",
+  peakFans: 0,
+  formerBand: null,
+  dispute: null,
+  catalogSold: 0,
+  lastTour: null,
 });
 
 export const newActing = (): ActingState => ({
@@ -101,6 +110,10 @@ export const newCeleb = (): CelebState => ({
   businessManager: false,
   scandal: null,
   scandals: 0,
+  devotion: 20,
+  familyShield: false,
+  orders: 0,
+  orderYears: 0,
 });
 
 /** The contract an old save's signed artist is assumed to be on. */
@@ -134,7 +147,21 @@ export function hydrateCreative(p: PlayerState): Pick<PlayerState, "influencer" 
   const oldMusic = p.music as Partial<MusicState> | undefined;
   const music: MusicState = { ...newMusic(), ...oldMusic };
   music.albums = (oldMusic?.albums ?? []).map((a) => ({ ...a }));
-  music.members = oldMusic?.members ?? [];
+  music.members = (oldMusic?.members ?? []).map((m) => ({
+    ...m,
+    trait: m.trait ?? (m.partier ? "flake" : m.ego >= 65 ? "diva" : m.loyalty >= 70 ? "loyalist" : "peacemaker"),
+    credit: m.credit ?? 0,
+    years: m.years ?? 1,
+    grievance: m.grievance ?? null,
+    grievanceYears: m.grievanceYears ?? 0,
+    talked: false,
+  }));
+  music.split = oldMusic?.split ?? "equal";
+  music.peakFans = Math.max(oldMusic?.peakFans ?? 0, oldMusic?.fans ?? 0);
+  music.formerBand = oldMusic?.formerBand ?? null;
+  music.dispute = oldMusic?.dispute ?? null;
+  music.catalogSold = oldMusic?.catalogSold ?? 0;
+  music.lastTour = oldMusic?.lastTour ?? null;
   music.awards = oldMusic?.awards ?? [];
   music.lastIncome = { ...newMusic().lastIncome, ...oldMusic?.lastIncome };
   if (music.signed && !music.contract) music.contract = legacyContract();
@@ -155,5 +182,7 @@ export function hydrateCreative(p: PlayerState): Pick<PlayerState, "influencer" 
     acting.pull = 5 + p.currentJob.tier * 20;
   }
   const celeb: CelebState = { ...newCeleb(), ...(p.celeb as Partial<CelebState> | undefined) };
+  influencer.deals = (influencer.deals ?? []).map((d) => ({ ...d, morals: d.morals ?? !d.shady, strikes: d.strikes ?? 0 }));
+  influencer.offers = (influencer.offers ?? []).map((d) => ({ ...d, morals: d.morals ?? !d.shady, strikes: d.strikes ?? 0 }));
   return { influencer, music, acting, celeb };
 }
