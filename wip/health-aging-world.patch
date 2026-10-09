@@ -1,0 +1,2483 @@
+diff --git a/src/data/countryProfiles.ts b/src/data/countryProfiles.ts
+new file mode 100644
+index 0000000..09ec9ea
+--- /dev/null
++++ b/src/data/countryProfiles.ts
+@@ -0,0 +1,138 @@
++/**
++ * What a country is actually like to live (and die) in, beyond its tax table and its names:
++ * the healthcare system, how risky childhood and old age are, which disasters it suffers,
++ * how politically and economically stable it is, and how hard it is to move there.
++ */
++
++export type Region = "north_america" | "europe" | "east_asia" | "south_asia" | "latin_america" | "africa" | "oceania";
++export type CareSystem = "universal" | "insured" | "private";
++export type Disaster = "earthquake" | "flood" | "hurricane" | "wildfire" | "heatwave" | "typhoon" | "drought";
++
++export interface CountryProfile {
++  region: Region;
++  care: CareSystem;
++  /** 0-100: how good the health service is when you can reach it. */
++  careQuality: number;
++  /** Multiplier on childhood death rates against a rich-country baseline. */
++  childRisk: number;
++  /** Multiplier on death rates for adults (violence, roads, untreated illness). */
++  adultRisk: number;
++  /** Multiplier on death rates after 60 (care, diet, pollution). */
++  elderRisk: number;
++  /** Multiplier on infectious disease (sanitation, climate, vaccination). */
++  infection: number;
++  /** Disasters this country is prone to. */
++  disasters: Disaster[];
++  /** 0-1: yearly appetite for war and unrest. */
++  conflict: number;
++  /** How violently its economy swings (recessions, currency crises). */
++  volatility: number;
++  language: string;
++  /** 0-100: how hard it is to be admitted (higher = tougher). */
++  entry: number;
++  /** One-line portrait for the relocation screen. */
++  blurb: string;
++}
++
++export const COUNTRY_PROFILES: Record<string, CountryProfile> = {
++  "United States": {
++    region: "north_america", care: "insured", careQuality: 78, childRisk: 1.25, adultRisk: 1.2, elderRisk: 1.05, infection: 1,
++    disasters: ["hurricane", "wildfire", "flood"], conflict: 0.015, volatility: 1, language: "English", entry: 72,
++    blurb: "World-class hospitals if you are insured, bankruptcy if you are not. High pay, thin safety net.",
++  },
++  "United Kingdom": {
++    region: "europe", care: "universal", careQuality: 74, childRisk: 0.95, adultRisk: 0.95, elderRisk: 1, infection: 1,
++    disasters: ["flood", "heatwave"], conflict: 0.01, volatility: 0.9, language: "English", entry: 66,
++    blurb: "Free public healthcare with long waits. A stable democracy with a stormy economy.",
++  },
++  Canada: {
++    region: "north_america", care: "universal", careQuality: 80, childRisk: 0.9, adultRisk: 0.95, elderRisk: 0.95, infection: 1,
++    disasters: ["wildfire", "flood"], conflict: 0.005, volatility: 0.8, language: "English", entry: 42,
++    blurb: "Public healthcare, cold winters and an immigration system that actively wants workers.",
++  },
++  Australia: {
++    region: "oceania", care: "universal", careQuality: 83, childRisk: 0.85, adultRisk: 0.9, elderRisk: 0.9, infection: 0.95,
++    disasters: ["wildfire", "flood", "heatwave", "drought"], conflict: 0.004, volatility: 0.8, language: "English", entry: 55,
++    blurb: "Sunny, safe and long-lived, but the country burns and floods more each decade.",
++  },
++  Germany: {
++    region: "europe", care: "universal", careQuality: 86, childRisk: 0.8, adultRisk: 0.95, elderRisk: 0.95, infection: 0.95,
++    disasters: ["flood", "heatwave"], conflict: 0.008, volatility: 0.8, language: "German", entry: 50,
++    blurb: "Statutory health insurance that covers nearly everyone. Industrial, orderly, exposed to energy shocks.",
++  },
++  France: {
++    region: "europe", care: "universal", careQuality: 86, childRisk: 0.8, adultRisk: 0.95, elderRisk: 0.9, infection: 0.95,
++    disasters: ["heatwave", "flood", "wildfire"], conflict: 0.01, volatility: 0.9, language: "French", entry: 60,
++    blurb: "Excellent public healthcare, strong unions, frequent strikes, hot summers.",
++  },
++  Japan: {
++    region: "east_asia", care: "universal", careQuality: 91, childRisk: 0.5, adultRisk: 0.75, elderRisk: 0.75, infection: 0.85,
++    disasters: ["earthquake", "typhoon"], conflict: 0.006, volatility: 0.7, language: "Japanese", entry: 86,
++    blurb: "The longest lives on Earth. Quakes and typhoons, a shrinking population and a very closed door.",
++  },
++  India: {
++    region: "south_asia", care: "private", careQuality: 42, childRisk: 4.5, adultRisk: 1.9, elderRisk: 1.35, infection: 2,
++    disasters: ["flood", "heatwave", "drought"], conflict: 0.04, volatility: 1.2, language: "Hindi", entry: 45,
++    blurb: "Superb private hospitals for those who can pay, overstretched public ones for the rest. Fast growth, heat and monsoons.",
++  },
++  Brazil: {
++    region: "latin_america", care: "private", careQuality: 52, childRisk: 2.5, adultRisk: 1.6, elderRisk: 1.1, infection: 1.5,
++    disasters: ["flood", "drought"], conflict: 0.03, volatility: 1.5, language: "Portuguese", entry: 36,
++    blurb: "A free public health service that is patchy, and violence that shortens young lives. Volatile currency.",
++  },
++  Mexico: {
++    region: "latin_america", care: "private", careQuality: 52, childRisk: 2.2, adultRisk: 1.6, elderRisk: 1.1, infection: 1.4,
++    disasters: ["earthquake", "hurricane", "drought"], conflict: 0.035, volatility: 1.3, language: "Spanish", entry: 40,
++    blurb: "Public care is thin; most people pay for private. Quakes, hurricanes and cartel violence.",
++  },
++  Spain: {
++    region: "europe", care: "universal", careQuality: 86, childRisk: 0.7, adultRisk: 0.85, elderRisk: 0.8, infection: 0.95,
++    disasters: ["heatwave", "wildfire", "drought"], conflict: 0.008, volatility: 1.1, language: "Spanish", entry: 46,
++    blurb: "Universal healthcare and some of the longest lives in Europe. Youth unemployment is high.",
++  },
++  Sweden: {
++    region: "europe", care: "universal", careQuality: 88, childRisk: 0.5, adultRisk: 0.8, elderRisk: 0.85, infection: 0.9,
++    disasters: ["flood"], conflict: 0.006, volatility: 0.7, language: "Swedish", entry: 56,
++    blurb: "A generous welfare state with the highest taxes on the list. Safe, quiet and dark in winter.",
++  },
++  Netherlands: {
++    region: "europe", care: "universal", careQuality: 88, childRisk: 0.55, adultRisk: 0.85, elderRisk: 0.85, infection: 0.9,
++    disasters: ["flood"], conflict: 0.005, volatility: 0.7, language: "Dutch", entry: 54,
++    blurb: "Compulsory insurance, bicycles and a low country that depends on its dykes.",
++  },
++  Nigeria: {
++    region: "africa", care: "private", careQuality: 25, childRisk: 10, adultRisk: 3, elderRisk: 1.8, infection: 3,
++    disasters: ["flood", "drought"], conflict: 0.09, volatility: 1.6, language: "English", entry: 30,
++    blurb: "Malaria, thin public clinics and costly private ones. Africa's biggest economy, with a volatile naira and regional insecurity.",
++  },
++  "South Korea": {
++    region: "east_asia", care: "universal", careQuality: 89, childRisk: 0.5, adultRisk: 0.8, elderRisk: 0.8, infection: 0.9,
++    disasters: ["typhoon", "flood", "heatwave"], conflict: 0.02, volatility: 0.9, language: "Korean", entry: 80,
++    blurb: "National health insurance, brutal exam culture and a long-running standoff with the North.",
++  },
++  Italy: {
++    region: "europe", care: "universal", careQuality: 83, childRisk: 0.6, adultRisk: 0.85, elderRisk: 0.8, infection: 0.95,
++    disasters: ["earthquake", "heatwave", "flood"], conflict: 0.008, volatility: 1.2, language: "Italian", entry: 56,
++    blurb: "A national health service that is strong in the north and strained in the south. Quakes and sluggish growth.",
++  },
++};
++
++const FALLBACK: CountryProfile = COUNTRY_PROFILES["United States"];
++
++export const profileOf = (country: string): CountryProfile => COUNTRY_PROFILES[country] ?? FALLBACK;
++
++export const REGION_LABEL: Record<Region, string> = {
++  north_america: "North America",
++  europe: "Europe",
++  east_asia: "East Asia",
++  south_asia: "South Asia",
++  latin_america: "Latin America",
++  africa: "Africa",
++  oceania: "Oceania",
++};
++
++/** Countries that share a region with `country` (excluding itself). */
++export const neighboursOf = (country: string): string[] => {
++  const r = profileOf(country).region;
++  return Object.keys(COUNTRY_PROFILES).filter((c) => c !== country && COUNTRY_PROFILES[c].region === r);
++};
+diff --git a/src/data/diseases.ts b/src/data/diseases.ts
+index 637bb10..45f0935 100644
+--- a/src/data/diseases.ts
++++ b/src/data/diseases.ts
+@@ -1,4 +1,5 @@
+ import type { Disease, Severity } from "@/types/game.types";
++import type { Region } from "./countryProfiles";
+ 
+ export interface DiseaseTemplate {
+   id: string;
+@@ -12,6 +13,14 @@ export interface DiseaseTemplate {
+   baseChance: number;
+   /** Fatal diseases: [min, max] years left. */
+   fatalYears?: [number, number];
++  /** Spreads person to person: scaled by the country's sanitation and by outbreaks. */
++  infectious?: boolean;
++  /** Odds multiplier by region (malaria is an African disease, not a Swedish one). */
++  regional?: Partial<Record<Region, number>>;
++  /** Multiplier in regions not listed above (default 1). */
++  elsewhere?: number;
++  /** Only caught while this kind of world event is under way. */
++  gate?: "pandemic";
+ }
+ 
+ export const DISEASE_CATALOG: DiseaseTemplate[] = [
+@@ -35,6 +44,10 @@ export const DISEASE_CATALOG: DiseaseTemplate[] = [
+   { id: "chlamydia", name: "Chlamydia", severity: "mild", happinessImpact: 3, healthImpact: 3, minAge: 14, baseChance: 0 },
+   { id: "herpes", name: "Herpes", severity: "chronic", incurable: true, happinessImpact: 3, healthImpact: 0, minAge: 14, baseChance: 0 },
+   { id: "hiv", name: "HIV", severity: "chronic", incurable: true, happinessImpact: 4, healthImpact: 3, minAge: 14, baseChance: 0 },
++  { id: "malaria", name: "Malaria", severity: "mild", happinessImpact: 5, healthImpact: 11, minAge: 0, baseChance: 0.03, infectious: true, regional: { africa: 8, south_asia: 1.6, latin_america: 0.8 }, elsewhere: 0 },
++  { id: "waterborne", name: "Typhoid & Waterborne Illness", severity: "mild", happinessImpact: 4, healthImpact: 8, minAge: 0, baseChance: 0.02, infectious: true, regional: { africa: 4, south_asia: 4, latin_america: 1.5 }, elsewhere: 0.15 },
++  { id: "tuberculosis", name: "Tuberculosis", severity: "chronic", happinessImpact: 4, healthImpact: 5, minAge: 5, baseChance: 0.003, infectious: true, regional: { africa: 8, south_asia: 8, latin_america: 2, east_asia: 1.5 }, elsewhere: 0.1 },
++  { id: "pandemic_virus", name: "Pandemic Virus", severity: "mild", happinessImpact: 6, healthImpact: 13, minAge: 0, baseChance: 0.14, infectious: true, gate: "pandemic" },
+   { id: "cancer", name: "Cancer", severity: "fatal", happinessImpact: 8, healthImpact: 10, minAge: 25, baseChance: 0.0016, fatalYears: [2, 6] },
+   { id: "kidney_failure", name: "Kidney Failure", severity: "fatal", happinessImpact: 5, healthImpact: 8, minAge: 35, baseChance: 0.0015, fatalYears: [2, 5] },
+   { id: "stroke", name: "Stroke Complications", severity: "fatal", happinessImpact: 6, healthImpact: 9, minAge: 55, baseChance: 0.004, fatalYears: [1, 4] },
+@@ -60,9 +73,13 @@ export function instantiateDisease(
+   };
+ }
+ 
+-/** Chance (0-1) that a single doctor visit cures a disease of this severity. */
++/**
++ * Chance (0-1) that a single doctor visit cures a disease of this severity. Chronic and terminal
++ * conditions are managed with a treatment plan (engine/treatment.ts), not cured by one appointment:
++ * a visit only occasionally turns up an easy fix.
++ */
+ export const CURE_CHANCE: Record<Severity, number> = {
+   mild: 0.75,
+-  chronic: 0.35,
+-  fatal: 0.1,
++  chronic: 0.05,
++  fatal: 0.02,
+ };
+diff --git a/src/data/worldEvents.ts b/src/data/worldEvents.ts
+new file mode 100644
+index 0000000..c41d982
+--- /dev/null
++++ b/src/data/worldEvents.ts
+@@ -0,0 +1,232 @@
++/**
++ * The catalogue of things that happen to whole countries: pandemics, wars, recessions, inflation,
++ * technology shifts, policy changes and natural disasters. The engine (engine/worldEvents.ts) rolls
++ * them year by year for every country, and what is under way where you live changes prices, jobs,
++ * healthcare and safety for you.
++ */
++import type { Climate } from "@/types/game.types";
++import { profileOf, type CountryProfile, type Disaster } from "./countryProfiles";
++
++export interface WorldEffects {
++  /** Extra yearly cost-of-living pressure (fraction). */
++  prices?: number;
++  /** Added to the yearly chance of being laid off. */
++  layoff?: number;
++  /** Added to the chance of getting hired (negative = harder). */
++  hiring?: number;
++  /** Multiplier on infectious illness. */
++  infection?: number;
++  /** Multiplier on everyone's yearly death risk (before the country's care quality is applied for pandemics). */
++  mortality?: number;
++  /** Extra mortality for people aged 15-40 (wars). */
++  youngMortality?: number;
++  /** Multiplier on what care costs. */
++  care?: number;
++  /** Yearly mood change. */
++  happiness?: number;
++  /** Shift to investment returns (fraction). */
++  market?: number;
++  /** Shift to the housing market (fraction). */
++  housing?: number;
++  /** Forces the economic climate while the event lasts. */
++  climate?: Climate;
++  /** Multiplier on income tax. */
++  tax?: number;
++}
++
++export type WorldKind = "pandemic" | "war" | "recession" | "inflation" | "tech" | "policy" | "disaster" | "unrest";
++
++export interface WorldEventDef {
++  id: string;
++  name: string;
++  emoji: string;
++  kind: WorldKind;
++  /** "global" events strike every country at once; "country" events strike one (and may spill over to its region). */
++  scope: "global" | "country";
++  /** Yearly chance of beginning (per country for country events, once for global ones). */
++  rate: number;
++  duration: [number, number];
++  /** Years that must pass between starts. */
++  gap: number;
++  /** How exposed a country is (0 = never). Defaults to 1. */
++  exposure?: (c: CountryProfile, country: string) => number;
++  headline: (country: string, severity: number) => string;
++  /** Effects in the country it hits. */
++  fx: WorldEffects;
++  /** Milder effects in the rest of the region (wars, crises, shocks that travel). */
++  spill?: WorldEffects;
++  /** A life event (id) offered to residents when it begins. */
++  prompt?: string;
++  /** One-line summary of what it does to you, for the Dashboard. */
++  gist: string;
++}
++
++const hits = (d: Disaster) => (c: CountryProfile) => (c.disasters.includes(d) ? 1 : 0);
++
++export const WORLD_EVENTS: WorldEventDef[] = [
++  {
++    id: "pandemic", name: "Pandemic", emoji: "🦠", kind: "pandemic", scope: "global", rate: 0.02, duration: [2, 3], gap: 25,
++    headline: (_c, s) => (s >= 3 ? "A deadly new virus is spreading across the world. Hospitals are overwhelmed." : s === 2 ? "A new respiratory virus is circulating worldwide. Borders close and cities lock down." : "A new virus spreads internationally, but health systems cope."),
++    fx: { infection: 2.6, mortality: 1.5, care: 1.25, layoff: 0.05, hiring: -0.12, happiness: -3, market: -0.08, climate: "recession" },
++    prompt: "world_pandemic",
++    gist: "Infections surge, hospitals strain, jobs vanish and everyone is anxious.",
++  },
++  {
++    id: "financial_crisis", name: "Global Financial Crisis", emoji: "📉", kind: "recession", scope: "global", rate: 0.022, duration: [2, 4], gap: 12,
++    exposure: (c) => 0.6 + c.volatility * 0.4,
++    headline: () => "Banks are failing and credit has frozen. A global financial crisis is destroying jobs and savings.",
++    fx: { layoff: 0.06, hiring: -0.15, housing: -0.07, market: -0.2, happiness: -1, climate: "recession", prices: 0.0 },
++    prompt: "world_crisis",
++    gist: "Layoffs, falling house prices, crashing markets and hard-to-find jobs.",
++  },
++  {
++    id: "energy_shock", name: "Energy & Inflation Shock", emoji: "⛽", kind: "inflation", scope: "global", rate: 0.02, duration: [2, 3], gap: 12,
++    exposure: (c) => 0.7 + c.volatility * 0.3,
++    headline: () => "Energy prices have spiked and inflation is surging. Everything costs more.",
++    fx: { prices: 0.07, layoff: 0.01, hiring: -0.04, happiness: -1, market: -0.06 },
++    gist: "Prices climb faster than pay for a few years.",
++  },
++  {
++    id: "automation_wave", name: "Automation Wave", emoji: "🤖", kind: "tech", scope: "global", rate: 0.028, duration: [6, 10], gap: 30,
++    headline: () => "A new wave of automation and AI tools is reshaping work. Entire job categories are shrinking.",
++    fx: { layoff: 0.015, hiring: -0.03, market: 0.04 },
++    prompt: "world_automation",
++    gist: "Routine jobs are shrinking and markets love it. Staying employable takes effort.",
++  },
++  {
++    id: "tech_boom", name: "Technology Boom", emoji: "🚀", kind: "tech", scope: "global", rate: 0.025, duration: [3, 6], gap: 20,
++    headline: () => "A breakthrough technology sparks a global investment boom. Hiring is hot.",
++    fx: { hiring: 0.07, market: 0.1, layoff: -0.005, climate: "boom" },
++    gist: "Hiring is hot and markets climb.",
++  },
++  {
++    id: "recession_local", name: "National Recession", emoji: "📉", kind: "recession", scope: "country", rate: 0.026, duration: [2, 3], gap: 8,
++    exposure: (c) => c.volatility,
++    headline: (c) => `${c} slides into a deep recession. Factories close and unemployment climbs.`,
++    fx: { layoff: 0.06, hiring: -0.14, housing: -0.05, market: -0.12, climate: "recession" },
++    gist: "Layoffs, hard hiring and falling asset prices at home.",
++  },
++  {
++    id: "currency_crisis", name: "Currency Crisis", emoji: "💸", kind: "inflation", scope: "country", rate: 0.012, duration: [2, 4], gap: 15,
++    exposure: (c) => (c.volatility >= 1.3 ? c.volatility : c.volatility >= 1.1 ? 0.3 : 0),
++    headline: (c) => `The currency in ${c} has collapsed. Prices are rocketing and savings are melting away.`,
++    fx: { prices: 0.16, layoff: 0.03, hiring: -0.08, happiness: -2, market: -0.1, climate: "recession" },
++    spill: { prices: 0.02 },
++    prompt: "world_currency",
++    gist: "Prices explode while pay stands still. Savings lose their value.",
++  },
++  {
++    id: "housing_bust", name: "Housing Crash", emoji: "🏚️", kind: "recession", scope: "country", rate: 0.012, duration: [2, 3], gap: 14,
++    headline: (c) => `House prices are crashing in ${c}. Mortgages are underwater and builders are laying off.`,
++    fx: { housing: -0.1, layoff: 0.02, hiring: -0.05, happiness: -1 },
++    gist: "Property values fall and mortgages bite.",
++  },
++  {
++    id: "housing_boom", name: "Housing Boom", emoji: "🏘️", kind: "recession", scope: "country", rate: 0.016, duration: [3, 5], gap: 10,
++    headline: (c) => `A property frenzy grips ${c}. Homes are changing hands within days at record prices.`,
++    fx: { housing: 0.06, prices: 0.01, hiring: 0.02 },
++    gist: "Property values soar; renting gets pricier.",
++  },
++  {
++    id: "war", name: "War", emoji: "⚔️", kind: "war", scope: "country", rate: 0.011, duration: [2, 8], gap: 30,
++    exposure: (c) => c.conflict * 12,
++    headline: (c, s) => (s >= 3 ? `War has engulfed ${c}. Cities are under bombardment and refugees are fleeing.` : `Fighting has broken out in ${c}. The army is mobilising and the border is tense.`),
++    fx: { mortality: 1.8, youngMortality: 2.5, prices: 0.09, layoff: 0.07, hiring: -0.2, happiness: -4, market: -0.15, care: 1.3, climate: "recession" },
++    spill: { prices: 0.03, layoff: 0.015, happiness: -1, market: -0.05 },
++    prompt: "world_war",
++    gist: "Violence, rationing, conscription and a collapsing economy. Neighbouring countries feel the shock.",
++  },
++  {
++    id: "unrest", name: "Political Crisis", emoji: "🔥", kind: "unrest", scope: "country", rate: 0.025, duration: [1, 3], gap: 8,
++    exposure: (c) => c.conflict * 8,
++    headline: (c) => `Mass protests and a political crisis shake ${c}. Strikes and clashes in the streets.`,
++    fx: { mortality: 1.1, layoff: 0.025, hiring: -0.05, happiness: -2, market: -0.05 },
++    gist: "Strikes, clashes and uncertainty.",
++  },
++  {
++    id: "austerity", name: "Austerity", emoji: "✂️", kind: "policy", scope: "country", rate: 0.016, duration: [4, 8], gap: 15,
++    exposure: (c) => (c.care === "universal" ? 1 : 0.3),
++    headline: (c) => `The government of ${c} announces deep spending cuts. Hospitals and schools are told to do more with less.`,
++    fx: { care: 1.35, layoff: 0.015, hiring: -0.03, happiness: -1 },
++    gist: "Public services are cut: care costs rise and waiting lists grow.",
++  },
++  {
++    id: "health_reform", name: "Healthcare Reform", emoji: "🏥", kind: "policy", scope: "country", rate: 0.016, duration: [6, 12], gap: 25,
++    headline: (c) => `${c} passes a landmark healthcare reform. More people are covered and costs fall.`,
++    fx: { care: 0.7, happiness: 0 },
++    gist: "Medical care becomes cheaper and easier to reach.",
++  },
++  {
++    id: "tax_hike", name: "Tax Rise", emoji: "🧾", kind: "policy", scope: "country", rate: 0.016, duration: [5, 10], gap: 15,
++    headline: (c) => `${c} raises income taxes to plug a budget gap. Pay packets shrink.`,
++    fx: { tax: 1.1 },
++    gist: "You keep less of what you earn.",
++  },
++  {
++    id: "tax_cut", name: "Tax Cut", emoji: "🏷️", kind: "policy", scope: "country", rate: 0.014, duration: [5, 10], gap: 15,
++    headline: (c) => `${c} slashes income taxes. Pay packets grow, public services stretch.`,
++    fx: { tax: 0.9, care: 1.05 },
++    gist: "You keep more of what you earn.",
++  },
++  {
++    id: "earthquake", name: "Major Earthquake", emoji: "🏚️", kind: "disaster", scope: "country", rate: 0.016, duration: [1, 1], gap: 6,
++    exposure: hits("earthquake"),
++    headline: (c, s) => `A ${s >= 3 ? "devastating" : "powerful"} earthquake strikes ${c}. Buildings have collapsed.`,
++    fx: { mortality: 1.25, layoff: 0.02, prices: 0.02, happiness: -2, housing: -0.04 },
++    prompt: "world_disaster",
++    gist: "Damage, disruption and grief.",
++  },
++  {
++    id: "flood", name: "Catastrophic Floods", emoji: "🌊", kind: "disaster", scope: "country", rate: 0.03, duration: [1, 1], gap: 4,
++    exposure: hits("flood"),
++    headline: (c) => `Severe flooding has swamped large parts of ${c}. Thousands are displaced.`,
++    fx: { mortality: 1.1, prices: 0.02, happiness: -1, housing: -0.03 },
++    prompt: "world_disaster",
++    gist: "Homes damaged and roads cut.",
++  },
++  {
++    id: "hurricane", name: "Hurricane Season", emoji: "🌀", kind: "disaster", scope: "country", rate: 0.04, duration: [1, 1], gap: 3,
++    exposure: hits("hurricane"),
++    headline: (c) => `A major hurricane has made landfall in ${c}. Power is out and coastal towns are wrecked.`,
++    fx: { mortality: 1.1, prices: 0.02, happiness: -1, housing: -0.03 },
++    prompt: "world_disaster",
++    gist: "Storm damage and power cuts.",
++  },
++  {
++    id: "typhoon", name: "Super Typhoon", emoji: "🌪️", kind: "disaster", scope: "country", rate: 0.04, duration: [1, 1], gap: 3,
++    exposure: hits("typhoon"),
++    headline: (c) => `A super typhoon has battered ${c}. Transport is shut down and coastlines are flooded.`,
++    fx: { mortality: 1.08, prices: 0.01, happiness: -1 },
++    prompt: "world_disaster",
++    gist: "Storm damage and disruption.",
++  },
++  {
++    id: "wildfire", name: "Wildfire Season", emoji: "🔥", kind: "disaster", scope: "country", rate: 0.04, duration: [1, 1], gap: 3,
++    exposure: hits("wildfire"),
++    headline: (c) => `Record wildfires are burning across ${c}. Smoke blankets the cities and whole towns are evacuated.`,
++    fx: { mortality: 1.05, infection: 1.1, prices: 0.01, happiness: -1, housing: -0.02 },
++    prompt: "world_disaster",
++    gist: "Smoke, evacuations and burned homes.",
++  },
++  {
++    id: "heatwave", name: "Deadly Heatwave", emoji: "🌡️", kind: "disaster", scope: "country", rate: 0.05, duration: [1, 1], gap: 3,
++    exposure: hits("heatwave"),
++    headline: (c) => `An unprecedented heatwave grips ${c}. Hospitals fill with the elderly.`,
++    fx: { mortality: 1.12, happiness: -1 },
++    gist: "Dangerous for the old and the sick.",
++  },
++  {
++    id: "drought", name: "Severe Drought", emoji: "🏜️", kind: "disaster", scope: "country", rate: 0.03, duration: [2, 3], gap: 6,
++    exposure: hits("drought"),
++    headline: (c) => `A severe drought has gripped ${c}. Harvests are failing and food prices are climbing.`,
++    fx: { prices: 0.05, mortality: 1.05, happiness: -1 },
++    gist: "Food prices rise and the countryside suffers.",
++  },
++];
++
++export const WORLD_EVENT_BY_ID: Record<string, WorldEventDef> = Object.fromEntries(WORLD_EVENTS.map((e) => [e.id, e]));
++
++/** How exposed `country` is to an event kind. */
++export function exposureOf(def: WorldEventDef, country: string): number {
++  return def.exposure ? def.exposure(profileOf(country), country) : 1;
++}
+diff --git a/src/engine/__tests__/zz_child.test.ts b/src/engine/__tests__/zz_child.test.ts
+new file mode 100644
+index 0000000..0379118
+--- /dev/null
++++ b/src/engine/__tests__/zz_child.test.ts
+@@ -0,0 +1,35 @@
++import { it } from "vitest";
++import { makeRng } from "@/lib/rng";
++import { ageUp } from "../ageUp";
++import { createNewPlayer } from "../state";
++import { resolveEvent } from "../events";
++import type { Notice, PlayerState } from "@/types/game.types";
++import fs from "node:fs";
++
++const OUT = "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/";
++
++it("childhood logs", () => {
++  const lines: string[] = [];
++  const repeats: Record<string, number> = {};
++  for (const [seed, country] of [[11, "United States"], [12, "India"], [13, "Nigeria"], [14, "Japan"]] as const) {
++    const rng = makeRng(seed);
++    let p: PlayerState = createNewPlayer({ scenario: "average", startYear: 2026, country }, rng);
++    lines.push(`=== seed ${seed} ${country} ===`);
++    for (let g = 0; g < 19 && p.alive; g++) {
++      const res = ageUp(p, rng);
++      p = res.player;
++      for (const n of (res.notices ?? []) as Notice[]) {
++        if (n.kind === "event" && p.alive) {
++          repeats[n.event.id] = (repeats[n.event.id] ?? 0) + 1;
++          const i = rng.int(0, n.event.options.length - 1);
++          lines.push(`  [${p.age}] EVENT ${n.event.id}: ${n.event.title} -> opt ${i}`);
++          p = resolveEvent(p, n.event, i, rng).player;
++        } else if (n.kind === "info") lines.push(`  [${p.age}] INFO ${n.title}: ${n.body}`);
++      }
++    }
++    const idx = p.lifeLog.findIndex((l) => l.startsWith("## Age 0"));
++    lines.push(p.lifeLog.slice(Math.max(0, idx)).join("\n"));
++    lines.push(`END age ${p.age} alive ${p.alive} cause ${p.causeOfDeath} friends ${p.relatives.filter((r) => r.relation === "Friend").length} grades ${p.education.grades}`);
++  }
++  fs.writeFileSync(OUT + "child.txt", lines.join("\n"));
++});
+diff --git a/src/engine/__tests__/zz_play.test.ts b/src/engine/__tests__/zz_play.test.ts
+new file mode 100644
+index 0000000..9c82c1d
+--- /dev/null
++++ b/src/engine/__tests__/zz_play.test.ts
+@@ -0,0 +1,69 @@
++import { it } from "vitest";
++import { makeRng } from "@/lib/rng";
++import { ageUp } from "../ageUp";
++import { createNewPlayer } from "../state";
++import { resolveEvent } from "../events";
++import { setHabit } from "../health";
++import { visitDoctor } from "../activities";
++import type { Notice, PlayerState } from "@/types/game.types";
++import { resolveTrial } from "../crime";
++import fs from "node:fs";
++
++const OUT = "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/";
++type Strat = "random" | "healthy" | "party" | "doctor";
++function life(seed: number, country: string, startYear: number, strat: Strat) {
++  const rng = makeRng(seed);
++  let p: PlayerState = createNewPlayer({ scenario: "average", startYear, country }, rng);
++  const evCount: Record<string, number> = {};
++  for (let g = 0; g < 150 && p.alive; g++) {
++    if (p.pendingTrial) p = resolveTrial(p, "public", rng).player;
++    if (p.pendingTrial) break;
++    const res = ageUp(p, rng);
++    p = res.player;
++    for (const n of (res.notices ?? []) as Notice[]) {
++      if (n.kind === "event" && p.alive) {
++        evCount[n.event.id] = (evCount[n.event.id] ?? 0) + 1;
++        p = resolveEvent(p, n.event, rng.int(0, n.event.options.length - 1), rng).player;
++      }
++    }
++    if (strat === "healthy" && p.age >= 14) {
++      p = setHabit(setHabit(p, "exercise", 2).player, "diet", 2).player;
++    }
++    if (strat === "party" && p.age >= 16) {
++      p.vices.alcohol = Math.max(p.vices.alcohol, 40);
++      p.vices.smoking = Math.max(p.vices.smoking, 30);
++    }
++    if (strat === "doctor" && p.age >= 30) {
++      p = visitDoctor(p, null, rng).player;
++      for (const d of p.diseases) p = visitDoctor(p, d.id, rng).player;
++    }
++  }
++  return { p, evCount };
++}
++
++it("mortality survey", () => {
++  const out: string[] = [];
++  const countries = ["United States", "India", "Nigeria", "Japan"];
++  for (const strat of ["random", "party"] as Strat[]) {
++    for (const c of countries) {
++      const N = 40;
++      const ages: number[] = [];
++      const causes: Record<string, number> = {};
++      let under5 = 0, under18 = 0, under40 = 0, over90 = 0;
++      for (let s = 1; s <= N; s++) {
++        const { p } = life(s * 31 + 7, c, 2026, strat);
++        ages.push(p.age);
++        if (p.age < 5) under5++;
++        if (p.age < 18) under18++;
++        if (p.age < 40) under40++;
++        if (p.age >= 90) over90++;
++        const k = p.causeOfDeath ?? "?";
++        causes[k] = (causes[k] ?? 0) + 1;
++      }
++      ages.sort((a, b) => a - b);
++      const top = Object.entries(causes).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k}:${v}`).join("; ");
++      out.push(`${strat.padEnd(7)} ${c.padEnd(15)} median ${ages[N >> 1]} mean ${(ages.reduce((a, b) => a + b, 0) / N).toFixed(1)} <5:${under5} <18:${under18} <40:${under40} 90+:${over90} | ${top}`);
++    }
++  }
++  fs.writeFileSync(OUT + "mortality.txt", out.join("\n"));
++});
+diff --git a/src/engine/activities.ts b/src/engine/activities.ts
+index 1555032..4d18e35 100644
+--- a/src/engine/activities.ts
++++ b/src/engine/activities.ts
+@@ -48,9 +48,17 @@ export function visitDoctor(p0: PlayerState, diseaseId: string | null, rng: Rng)
+     addLog(p, body);
+     return { player: p, notices: [info("Cured!", body, "good")] };
+   }
+-  const body = "The doctor couldn't find a cure.";
+-  addLog(p, `You visited the doctor about your ${target.name}, but the doctor couldn't find a cure.`);
+-  return { player: p, notices: [info("No Cure Found", body, "bad")] };
++  if (target.severity === "mild") {
++    const body = "The doctor couldn't find a cure.";
++    addLog(p, `You visited the doctor about your ${target.name}, but the doctor couldn't find a cure.`);
++    return { player: p, notices: [info("No Cure Found", body, "bad")] };
++  }
++  // Chronic and terminal: no quick fix, but there are ways to manage it.
++  const body = p.age >= 18
++    ? `There is no quick fix for ${target.name}, but the doctor laid out your options. Choose a treatment plan under Medical in the Activities tab; it makes a real difference.`
++    : `There is no quick fix for ${target.name}. Your parents will take charge of its treatment until you are 18.`;
++  addLog(p, `You saw the doctor about ${target.name}. There is no quick cure, but there are treatment plans.`);
++  return { player: p, notices: [info("No Quick Cure", body, "neutral")] };
+ }
+ 
+ export function visitWitchDoctor(p0: PlayerState, rng: Rng): ActionResult {
+diff --git a/src/engine/ageUp.ts b/src/engine/ageUp.ts
+index d4ae3ab..b25f0b9 100644
+--- a/src/engine/ageUp.ts
++++ b/src/engine/ageUp.ts
+@@ -2,7 +2,7 @@ import type { ActionResult, PlayerState } from "@/types/game.types";
+ import type { Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+ import { incomeTaxFor } from "@/data/countries";
+-import { DISEASE_CATALOG, instantiateDisease } from "@/data/diseases";
++import { DISEASE_BY_ID, DISEASE_CATALOG, instantiateDisease } from "@/data/diseases";
+ import {
+   CAR_LOAN_RATE,
+   MORTGAGE_RATE,
+@@ -31,7 +31,7 @@ import { processLaterLife } from "./later";
+ import { ensureSuccession, processRoyalFamily } from "./royalty";
+ import { processCourt, royalFinance } from "./court";
+ import { contributionFor, drawdownFor, growRetirement } from "./retirement";
+-import { selectEvents } from "./events";
++import { addDisease, selectEvents } from "./events";
+ import { convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
+ import { checkAchievements } from "./achievements";
+ import { checkChallenge } from "./challenges";
+@@ -49,6 +49,11 @@ import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupa
+ import { applyHabitEffects, applyMoodEffects, habitCost, illnessCosts, riskMultiplier } from "./health";
+ import { SHARED_LIVING_FACTOR, SPOUSE_TAX, childSupportDue, marriedPartner, spouseIncome } from "./household";
+ import { LIFESTYLES, RENT_TIERS, livesWithParents, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
++import { advanceWorld, worldHousingShift, worldLayoff, worldPriceLevel, worldTaxFactor } from "./worldEvents";
++import { diseaseExposure, mortalityMultiplier } from "./demography";
++import { deathPhrase, diseaseToll, palliativeFarewell, processTreatment, slowsCountdown } from "./treatment";
++import { processSchoolYear } from "./school";
++import { processImmigration } from "./visa";
+ 
+ type Notices = NonNullable<ActionResult["notices"]>;
+ 
+@@ -117,7 +122,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
+       : rng.int(0, 3);
+     r.relationshipBar = clamp(r.relationshipBar - Math.max(0, Math.round(decay * (1.25 - p.talents.empathy / 200))) - (p.isInPrison ? 3 : 0));
+     // Mortality: spec asks for a death roll for the elderly; we use a graded curve so younger deaths are possible but rare.
+-    if (r.age > 40 && rng.chance(deathChance(r.age, r.health))) {
++    if (r.age > 40 && rng.chance(deathChance(r.age, r.health, mortalityMultiplier(p, r.age)))) {
+       r.alive = false;
+       r.deathAge = r.age;
+       r.deathYear = p.year;
+@@ -173,7 +178,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
+ // ---------------------------------------------------------------------------
+ 
+ function processAssets(p: PlayerState, rng: Rng) {
+-  const marketIndex = housingIndex(p.economy.climate, rng);
++  const marketIndex = housingIndex(p.economy.climate, rng) + worldHousingShift(p);
+   if (p.properties.length > 0) {
+     addLog(p, `The housing market ${marketIndex >= 0 ? "rose" : "fell"} ${(Math.abs(marketIndex) * 100).toFixed(1)}% this year.`);
+   }
+@@ -239,7 +244,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
+   p.retirementSavings -= draw;
+   gross += draw;
+   const { employee, employer } = contributionFor(p);
+-  const tax = incomeTaxFor(p.residence.country, Math.max(0, gross - offBooks - employee));
++  const tax = Math.round(incomeTaxFor(p.residence.country, Math.max(0, gross - offBooks - employee)) * worldTaxFactor(p));
+   p.taxesPaidThisYear = tax;
+   p.bankBalance += gross - tax + allowance - employee;
+   if (fin) {
+@@ -258,7 +263,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
+     // Lifestyle inflation: the more you earn, the more you spend.
+     const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
+     const ls = LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1];
+-    living = (BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope) * (1 - (p.talents.moneySense - 50) / 700);
++    living = (BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope) * (1 - (p.talents.moneySense - 50) / 700) * worldPriceLevel(p);
+     living += childSupportDue(p, gross) + schoolCosts(p);
+   }
+   living = Math.round(living);
+@@ -317,26 +322,29 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
+ 
+   for (const d of [...p.diseases]) {
+     // Stat impacts are applied every year; mild and chronic conditions are dampened so a life on autopilot stays survivable.
+-    const scale = d.severity === "fatal" ? 1 : d.severity === "chronic" ? 0.3 : 0.4;
++    // A treatment plan (engine/treatment.ts) lowers the toll further; going without raises it.
++    const scale = (d.severity === "fatal" ? 1 : d.severity === "chronic" ? 0.3 : 0.4) * diseaseToll(p, d);
+     p.health -= d.healthImpact * scale;
+     p.happiness -= d.happinessImpact * scale;
+     if (d.severity === "mild" && rng.chance(0.8)) {
+       p.diseases = p.diseases.filter((x) => x.id !== d.id);
+       addLog(p, `You recovered from ${d.name}.`);
+     } else if (d.severity === "fatal" && d.yearsLeft !== undefined) {
+-      d.yearsLeft -= 1;
++      if (!slowsCountdown(d, rng)) d.yearsLeft -= 1;
+       if (d.yearsLeft <= 0) {
+-        killPlayer(p, d.name.toLowerCase());
++        palliativeFarewell(p, d);
++        killPlayer(p, deathPhrase(p, d));
+         return;
+       }
+     }
+   }
++  processTreatment(p, rng, notices, addDisease);
+ 
+   // New diagnoses (at most one a year)
+   const owned = new Set(p.diseases.map((d) => d.id));
+   const healthFactor = clamp((100 - p.health) / 40 + 0.6, 0.5, 2.2);
+-  const candidates = DISEASE_CATALOG.filter((d) => !owned.has(d.id) && p.age >= d.minAge);
+-  const weight = (d: (typeof candidates)[number]) => d.baseChance * healthFactor * riskMultiplier(p, d.id);
++  const weight = (d: (typeof DISEASE_CATALOG)[number]) => d.baseChance * healthFactor * riskMultiplier(p, d.id) * diseaseExposure(p, d);
++  const candidates = DISEASE_CATALOG.filter((d) => !owned.has(d.id) && p.age >= d.minAge && weight(d) > 0);
+   let roll = rng.weighted(candidates, (d) => weight(d) * (d.severity === "mild" ? 1 : 1 + (p.age - d.minAge) / 40));
+   if (roll && rng.chance(Math.min(0.5, 0.45 * candidates.reduce((s, d) => s + weight(d), 0)))) {
+     // Regular check-ups catch cancer early, when it is treatable.
+@@ -348,10 +356,11 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
+     }
+     p.diseases.push(instantiateDisease(roll, (a, b) => rng.int(a, b)));
+     addLog(p, `You were diagnosed with ${roll.name}${earlyCatch ? ", caught early at a routine check-up" : ""}.`);
++    const plansExist = roll.severity !== "mild" && p.age >= 18;
+     notices.push(
+       info(
+         "Diagnosis",
+-        `You were diagnosed with ${roll.name}.${earlyCatch ? " Your last check-up caught it early, which makes it far more treatable." : roll.severity === "fatal" ? " The prognosis is grim." : roll.severity === "chronic" ? " It's a chronic condition that will wear on you each year." : " It should pass in time."}`,
++        `You were diagnosed with ${roll.name}.${earlyCatch ? " Your last check-up caught it early, which makes it far more treatable." : roll.severity === "fatal" ? " The prognosis is grim." : roll.severity === "chronic" ? " It's a chronic condition that will wear on you each year." : " It should pass in time."}${plansExist ? " Choose a treatment plan in Activities → Medical." : ""}`,
+         "bad",
+       ),
+     );
+@@ -360,9 +369,10 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
+ 
+   p.health = clamp(Math.round(p.health));
+   if (p.health <= 0) return; // finalize() handles the cause of death
+-  if (rng.chance(deathChance(p.age, p.health))) {
++  if (rng.chance(deathChance(p.age, p.health, mortalityMultiplier(p)))) {
+     const worst = [...p.diseases].filter((d) => d.severity !== "mild").sort((a, b) => b.healthImpact - a.healthImpact)[0];
+-    killPlayer(p, worst && p.age >= 40 ? worst.name.toLowerCase() : naturalCause(p.age, rng));
++    const contagion = p.diseases.find((d) => DISEASE_BY_ID[d.id]?.infectious);
++    killPlayer(p, worst && p.age >= 40 ? deathPhrase(p, worst) : contagion && rng.chance(0.7) ? contagion.name.toLowerCase() : naturalCause(p.age, rng, p));
+   }
+ }
+ 
+@@ -470,7 +480,7 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
+     notices.push(info("You're Fired", body, "bad"));
+     return;
+   }
+-  if (rng.chance(layoffChance(p.economy.climate))) {
++  if (rng.chance(layoffChance(p.economy.climate) + worldLayoff(p))) {
+     const body = `${job.company} downsized and let you go. You received a small severance package.`;
+     p.currentJob = null;
+     p.bankBalance += Math.round(job.salary * 0.15);
+@@ -599,7 +609,9 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
+   const prevAnnual = p.annual;
+   p.annual = {};
+   addLog(p, logHeader(p));
++  advanceWorld(p, rng, notices);
+   advanceClimate(p, rng, notices);
++  processImmigration(p, rng, notices);
+ 
+   processSocial(p, rng, notices); // 2. social graph
+   processFriendLoans(p, rng, notices);
+@@ -614,6 +626,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
+   if (p.alive) processLaterLife(p, notices);
+   if (p.alive) {
+     processEducation(p, rng, notices);
++    processSchoolYear(p, rng, notices);
+     processCareer(p, rng, notices);
+     applyEffortCosts(p, rng, notices);
+     processEntertainment(p);
+diff --git a/src/engine/arcEffects.ts b/src/engine/arcEffects.ts
+index e83ec72..0fc1429 100644
+--- a/src/engine/arcEffects.ts
++++ b/src/engine/arcEffects.ts
+@@ -8,6 +8,7 @@ import type { Rng } from "@/lib/rng";
+ import { COUNTRIES, getCountry } from "@/data/countries";
+ import { clamp } from "@/lib/format";
+ import { addLog, changeStat, setFlag } from "./state";
++import { settle } from "./visa";
+ 
+ /** How many calendar years past its due date an event may wait for eligibility before it lapses. */
+ export const SCHEDULE_GRACE = 4;
+@@ -124,6 +125,7 @@ export function emigrate(p: PlayerState, how: "abroad" | "home", rng: Rng) {
+       : rng.pick(COUNTRIES.filter((c) => c.name !== p.residence.country));
+   const city = rng.pick(target.cities);
+   p.residence = { ...p.residence, country: target.name, city };
++  settle(p, target.name, how === "home" || p.immigration.citizenship.includes(target.name) ? null : "work");
+   p.currentJob = null;
+   p.annualSalary = 0;
+   if (how === "abroad") {
+diff --git a/src/engine/careCosts.ts b/src/engine/careCosts.ts
+new file mode 100644
+index 0000000..b8d00a9
+--- /dev/null
++++ b/src/engine/careCosts.ts
+@@ -0,0 +1,31 @@
++/** What care costs where you live: the health system, insurance, outbreaks and policy, and your immigration status. */
++import type { PlayerState } from "@/types/game.types";
++import { profileOf, type CareSystem } from "@/data/countryProfiles";
++import { getPartner } from "./state";
++import { worldCareFactor } from "./worldEvents";
++
++export type { CareSystem };
++
++export const careSystem = (country: string): CareSystem => profileOf(country).care;
++
++/** Employed (or married to someone who is) in an insurance-based system; migrants without papers are never covered. */
++export function hasInsurance(p: PlayerState): boolean {
++  if (p.immigration?.status === "overstay") return false;
++  const sys = careSystem(p.residence.country);
++  if (sys === "universal") return true;
++  if (p.pension > 0 && p.age >= 65) return true;
++  if (p.currentJob && !p.currentJob.partTime) return true;
++  const partner = getPartner(p);
++  return !!partner && partner.partnerStatus === "married" && partner.incomeTier >= 2;
++}
++
++/** Multiplier on medical prices. */
++export function medicalCostFactor(p: PlayerState): number {
++  const sys = careSystem(p.residence.country);
++  const policy = worldCareFactor(p);
++  if (sys === "universal") return (p.immigration?.status === "overstay" ? 1 : 0.15) * policy;
++  if (sys === "insured") return (hasInsurance(p) ? 0.3 : 1.8) * policy;
++  return policy;
++}
++
++export const medicalPrice = (p: PlayerState, base: number) => Math.max(5, Math.round(base * medicalCostFactor(p)));
+diff --git a/src/engine/career.ts b/src/engine/career.ts
+index 19218df..93e76b3 100644
+--- a/src/engine/career.ts
++++ b/src/engine/career.ts
+@@ -11,6 +11,7 @@ import {
+ } from "@/data/careersRegistry";
+ import { addLog, changeStat, clone, hasAnyDegree, hasFlag, isRoyal, setFlag } from "./state";
+ import { hiringModifier } from "./world";
++import { jobMarketShift } from "./visa";
+ import { careerBlocker, hiringPenalty } from "./justice";
+ import { PART_TIME_FACTOR, blockerFor, isStudyingFullTime, partTimeFriendly } from "./occupation";
+ import { CERT_BY_ID } from "@/data/certificates";
+@@ -134,7 +135,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
+   const referred = p.flags.includes("referral");
+   if (referred) p.flags = p.flags.filter((f) => f !== "referral");
+   const chance = clamp(
+-    0.55 + (referred ? 0.2 : 0) + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - hiringPenalty(p) + hiringModifier(p.economy.climate),
++    0.55 + (referred ? 0.2 : 0) + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - hiringPenalty(p) + hiringModifier(p.economy.climate) + jobMarketShift(p),
+     0.15,
+     0.95,
+   );
+diff --git a/src/engine/demography.ts b/src/engine/demography.ts
+new file mode 100644
+index 0000000..f28df0e
+--- /dev/null
++++ b/src/engine/demography.ts
+@@ -0,0 +1,89 @@
++/**
++ * Where and when you live shapes how long you live: childhood is far riskier in some countries than
++ * others, adult risk follows violence, roads and untreated illness, old age follows care and diet,
++ * and the whole picture improves with the decades. Wars and pandemics layer on top.
++ */
++import type { PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp } from "@/lib/format";
++import { profileOf } from "@/data/countryProfiles";
++import type { DiseaseTemplate } from "@/data/diseases";
++import { activeEvents, worldInfection, worldMortality } from "./worldEvents";
++
++/** Medicine and sanitation get better with the years (and were far worse in 1950). Returns the multiplier on death risk. */
++export function eraFactor(year: number, band: "child" | "adult" | "elder"): number {
++  const decades = (2026 - year) / 10;
++  const k = band === "child" ? 1.22 : band === "adult" ? 1.12 : 1.07;
++  if (decades >= 0) return Math.pow(k, decades);
++  const floor = band === "child" ? 0.6 : band === "adult" ? 0.7 : 0.75;
++  const gain = band === "child" ? 0.97 : band === "adult" ? 0.98 : 0.985;
++  return Math.max(floor, Math.pow(gain, -decades));
++}
++
++/** Smooth blend across the age bands: childhood fades out by 12, old-age risk fades in from 55 to 70. */
++export function countryAgeRisk(country: string, age: number): number {
++  const c = profileOf(country);
++  if (age < 12) {
++    const fade = age < 1 ? 1 : Math.max(0.2, 1 - age / 10);
++    return 1 + (c.childRisk - 1) * fade;
++  }
++  if (age < 15) return 1 + (c.childRisk - 1) * 0.15;
++  if (age < 55) return c.adultRisk;
++  if (age < 70) {
++    const t = (age - 55) / 15;
++    return c.adultRisk * (1 - t) + c.elderRisk * t;
++  }
++  return c.elderRisk;
++}
++
++/** Everything about your time and place that scales your yearly chance of dying. */
++export function mortalityMultiplier(p: PlayerState, age = p.age): number {
++  const band = age < 15 ? "child" : age < 60 ? "adult" : "elder";
++  return countryAgeRisk(p.residence.country, age) * eraFactor(p.year, band) * worldMortality(p, age);
++}
++
++/** Region-driven odds of catching a given illness (malaria, TB, water-borne disease) plus pandemic surges. */
++export function diseaseExposure(p: PlayerState, t: DiseaseTemplate): number {
++  const c = profileOf(p.residence.country);
++  if (t.gate === "pandemic" && !activeEvents(p.world, p.residence.country, p.year).some((a) => a.def.kind === "pandemic")) return 0;
++  let m = t.regional ? (t.regional[c.region] ?? t.elsewhere ?? 1) : 1;
++  if (t.infectious) m *= c.infection * worldInfection(p) * (p.year < 1990 ? 1.5 : 1);
++  return m;
++}
++
++const pick = <T,>(rng: Rng, xs: T[]) => xs[rng.int(0, xs.length - 1)];
++
++/** What actually killed you, given your age, country and the times. */
++export function causeOfDeath(p: PlayerState, age: number, rng: Rng): string {
++  const c = profileOf(p.residence.country);
++  const war = activeEvents(p.world, p.residence.country, p.year).find((a) => a.def.kind === "war" && a.reach === "home");
++  const pandemic = activeEvents(p.world, p.residence.country, p.year).find((a) => a.def.kind === "pandemic");
++  if (war && age >= 10 && rng.chance(0.55)) return age >= 17 && age <= 45 && rng.chance(0.6) ? "the war (killed in the fighting)" : "the war (a bombing raid)";
++  if (pandemic && age >= 30 && rng.chance(0.55)) return "the pandemic";
++  if (age < 5) {
++    if (c.childRisk >= 3) {
++      const tropical = c.region === "africa" || c.region === "south_asia";
++      return pick(rng, tropical ? ["malaria", "diarrhoeal disease", "pneumonia", "severe malnutrition", "measles"] : ["pneumonia", "diarrhoeal disease", "an untreated infection"]);
++    }
++    return pick(rng, ["a rare childhood illness", "a congenital condition", "sudden infant death", "meningitis"]);
++  }
++  if (age < 18) {
++    if (c.childRisk >= 3) return pick(rng, ["malaria", "typhoid", "a drowning accident", "tuberculosis", "a road accident"]);
++    return pick(rng, ["a tragic accident", "a road accident", "a drowning accident", "leukaemia", "a rare childhood illness"]);
++  }
++  if (age < 60) {
++    const violent = c.adultRisk >= 1.4 || c.conflict >= 0.04;
++    return pick(rng, violent
++      ? ["a shooting", "a car accident", "a sudden heart attack", "an act of violence", "an undiagnosed illness"]
++      : ["a sudden heart attack", "a car accident", "an undiagnosed illness", "a freak accident", "a stroke"]);
++  }
++  if (age >= 80) return pick(rng, ["old age", "heart failure in your sleep", "a peaceful passing at home", "pneumonia"]);
++  return pick(rng, ["a heart attack", "a stroke", "pneumonia", "complications from old age"]);
++}
++
++/** Expected-lifespan helper for the relocation screen: a rough number, from the country's risk bands. */
++export function lifeExpectancyHint(country: string): number {
++  const c = profileOf(country);
++  const risk = (c.childRisk * 0.5 + c.adultRisk * 2 + c.elderRisk * 2.5) / 5;
++  return Math.round(clamp(86 - (risk - 0.75) * 14, 52, 88));
++}
+diff --git a/src/engine/health.ts b/src/engine/health.ts
+index ab401f9..8962a48 100644
+--- a/src/engine/health.ts
++++ b/src/engine/health.ts
+@@ -4,7 +4,12 @@
+  */
+ import type { ActionResult, PlayerState, Vices } from "@/types/game.types";
+ import { money } from "@/lib/format";
+-import { addLog, changeStat, clone, getPartner } from "./state";
++import { addLog, changeStat, clone } from "./state";
++import { careSystem, hasInsurance, medicalCostFactor, medicalPrice, type CareSystem } from "./careCosts";
++import { activePlan, planYearlyCost } from "./treatment";
++
++export { careSystem, hasInsurance, medicalCostFactor, medicalPrice };
++export type { CareSystem };
+ 
+ const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
+   ({ kind: "info" as const, title, body, tone });
+@@ -63,51 +68,21 @@ export function applyHabitEffects(p: PlayerState) {
+   // Money is deducted by the caller (processFinance) via habitCost.
+ }
+ 
+-// ---------------------------------------------------------------------------
+-// Care costs by country
+-// ---------------------------------------------------------------------------
+-
+-type CareSystem = "universal" | "insured" | "private";
+-
+-const CARE_SYSTEM: Record<string, CareSystem> = {
+-  "United States": "insured",
+-  India: "private",
+-  Brazil: "private",
+-  Mexico: "private",
+-  Nigeria: "private",
+-};
+-
+-export const careSystem = (country: string): CareSystem => CARE_SYSTEM[country] ?? "universal";
+-
+-/** Employed (or married to someone who is) in an insurance-based system. */
+-export function hasInsurance(p: PlayerState): boolean {
+-  const sys = careSystem(p.residence.country);
+-  if (sys === "universal") return true;
+-  if (p.pension > 0 && p.age >= 65) return true;
+-  if (p.currentJob && !p.currentJob.partTime) return true;
+-  const partner = getPartner(p);
+-  return !!partner && partner.partnerStatus === "married" && partner.incomeTier >= 2;
+-}
+-
+-/** Multiplier on medical prices. */
+-export function medicalCostFactor(p: PlayerState): number {
+-  const sys = careSystem(p.residence.country);
+-  if (sys === "universal") return 0.15;
+-  if (sys === "insured") return hasInsurance(p) ? 0.3 : 1.8;
+-  return 1;
+-}
+-
+-export const medicalPrice = (p: PlayerState, base: number) => Math.max(5, Math.round(base * medicalCostFactor(p)));
+-
+-/** Yearly cost of living with chronic or terminal conditions (drugs, appointments, home care). */
++/** Yearly cost of living with chronic or terminal conditions: the treatment plan you chose, or else drugs, appointments and home care. */
+ export function illnessCosts(p: PlayerState): number {
+   let base = 0;
++  let plans = 0;
+   for (const d of p.diseases) {
++    const plan = activePlan(d);
++    if (plan) {
++      plans += planYearlyCost(p, plan);
++      continue;
++    }
+     if (d.severity === "chronic" && d.id !== "early_cancer") base += 700;
+     else if (d.severity === "chronic") base += 4_000;
+     else if (d.severity === "fatal") base += 9_000;
+   }
+-  return Math.round(base * medicalCostFactor(p));
++  return Math.round(base * medicalCostFactor(p)) + plans;
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -130,6 +105,8 @@ export function riskMultiplier(p: PlayerState, diseaseId: string): number {
+     m *= (p.effort === "grind" ? 1.35 : p.effort === "coast" ? 0.85 : 1) * (1.4 - p.talents.resilience / 125);
+     m *= p.habits.exercise === 2 ? 0.8 : p.habits.exercise === 0 ? 1.2 : 1;
+     m *= 1 + p.vices.drugs / 80;
++    // Scars from school: years of being picked on make a lasting mark, and so does being cut off from other people.
++    m *= 1 + (p.school?.bullied ?? 0) / 160 + (p.school?.honors?.includes("scarred") ? 0.25 : 0);
+   }
+   if (diseaseId === "broken_bone") m *= (p.habits.exercise === 2 ? 1.3 : 1) * (1 + (p.talents.injuryProne - 50) / 60);
+   return m;
+diff --git a/src/engine/legacy.ts b/src/engine/legacy.ts
+index e0348c6..bf36ba5 100644
+--- a/src/engine/legacy.ts
++++ b/src/engine/legacy.ts
+@@ -206,6 +206,9 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
+     politics: { popularity: 30, yearsInOffice: 0, party: null },
+     economy: { ...old.economy },
+     residence: { ...old.residence },
++    // The world carries on around the next generation; a child born abroad is a citizen of where they were born, too.
++    world: structuredClone(old.world),
++    immigration: { ...fresh.immigration, citizenship: [...new Set([old.birthCountry, old.residence.country, ...old.immigration.citizenship])] },
+     investments: Object.fromEntries(
+       Object.entries(old.investments).map(([k, h]) => [k, { value: Math.round(h.value * 0.9), basis: Math.round(h.basis * 0.9) }]),
+     ),
+diff --git a/src/engine/mortality.ts b/src/engine/mortality.ts
+index 68bc82b..fd3c189 100644
+--- a/src/engine/mortality.ts
++++ b/src/engine/mortality.ts
+@@ -1,9 +1,10 @@
+ import type { PlayerState } from "@/types/game.types";
+ import type { Rng } from "@/lib/rng";
+ import { addLog, MAX_AGE } from "./state";
++import { causeOfDeath } from "./demography";
+ 
+-/** Yearly probability of death given age and health (0-100). */
+-export function deathChance(age: number, health: number): number {
++/** Yearly probability of death given age and health (0-100). `mult` carries country, era and world conditions (see demography.ts). */
++export function deathChance(age: number, health: number, mult = 1): number {
+   const base =
+     age < 1 ? 0.004
+     : age < 15 ? 0.0003
+@@ -16,10 +17,11 @@ export function deathChance(age: number, health: number): number {
+     : age < 100 ? 0.16
+     : 0.3;
+   const factor = health < 50 ? 1 + (50 - health) / 25 : health > 80 ? 0.8 : 1;
+-  return Math.min(0.95, base * factor);
++  return Math.min(0.95, base * factor * mult);
+ }
+ 
+-export function naturalCause(age: number, rng: Rng): string {
++export function naturalCause(age: number, rng: Rng, p?: PlayerState): string {
++  if (p) return causeOfDeath(p, age, rng);
+   if (age >= 80) return rng.pick(["old age", "heart failure in your sleep", "a peaceful passing at home"]);
+   if (age >= 60) return rng.pick(["a heart attack", "a stroke", "pneumonia", "complications from old age"]);
+   if (age >= 18) return rng.pick(["a sudden heart attack", "a freak accident", "an undiagnosed illness", "a car accident"]);
+diff --git a/src/engine/save.ts b/src/engine/save.ts
+index 1358544..5497a1e 100644
+--- a/src/engine/save.ts
++++ b/src/engine/save.ts
+@@ -5,6 +5,9 @@ import { upgradeBusiness } from "./business";
+ import { hydrateCrimeLife } from "./justiceState";
+ import { hydrateCreative } from "./creativeState";
+ import { hydrateCourt } from "./courtState";
++import { hydrateWorld } from "./worldEvents";
++import { hydrateSchool } from "./school";
++import { hydrateImmigration } from "./visa";
+ 
+ const KEY = "lifeline-save-v1";
+ const PREV_KEY = "lifeline-save-prev";
+@@ -89,6 +92,9 @@ export function hydrate(p: PlayerState): PlayerState {
+     residence: p.residence ?? { country: p.birthCountry, city: p.birthCity, rentTier: 1 },
+     investments: p.investments ?? {},
+     vices: p.vices ?? { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
++    world: hydrateWorld(p.world),
++    school: hydrateSchool(p.school),
++    immigration: hydrateImmigration(p.immigration, p),
+     probation: p.probation ?? null,
+     ...hydrateCrimeLife(p),
+     pregnancy: p.pregnancy ?? null,
+diff --git a/src/engine/school.ts b/src/engine/school.ts
+new file mode 100644
+index 0000000..b9d5fd0
+--- /dev/null
++++ b/src/engine/school.ts
+@@ -0,0 +1,369 @@
++/**
++ * School life: a thirteen-year thread rather than a pile of one-off events. Every year you get a report
++ * card; friendships form and fade, bullying can start, drag on and be dealt with, clubs build skills and
++ * confidence, exam pressure builds. How you come out of school (popular or outcast, bullied or bully,
++ * star pupil or truant, scarred or toughened) is remembered by the flags that follow you into adult life.
++ */
++import type { ActionResult, PlayerState, SchoolState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp } from "@/lib/format";
++import { profileOf } from "@/data/countryProfiles";
++import { addLog, changeStat, clone, livingRelatives } from "./state";
++import { addRelative, firstName } from "./social";
++import { addDisease } from "./events";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
++  ({ kind: "info" as const, title, body, tone });
++
++export const freshSchool = (): SchoolState => ({ social: 50, bullied: 0, teacher: 50, stress: 15, club: null, clubYears: 0, tier: "state", tutor: false, truancy: 0, reports: [], honors: [] });
++
++export function hydrateSchool(raw: Partial<SchoolState> | undefined): SchoolState {
++  const f = freshSchool();
++  return {
++    ...f,
++    ...(raw ?? {}),
++    reports: Array.isArray(raw?.reports) ? raw.reports.slice(-6) : [],
++    honors: Array.isArray(raw?.honors) ? raw.honors : [],
++  };
++}
++
++export const inSchoolYears = (p: PlayerState) => p.age >= 5 && p.age < 18;
++
++// ---------------------------------------------------------------------------
++// Clubs
++// ---------------------------------------------------------------------------
++
++export interface ClubDef {
++  id: string;
++  label: string;
++  emoji: string;
++  blurb: string;
++  minAge: number;
++  /** What a year in the club gives. */
++  gain: string;
++}
++
++export const CLUBS: ClubDef[] = [
++  { id: "sport", label: "School Sports Team", emoji: "⚽", blurb: "Training twice a week and matches on Saturdays.", minAge: 8, gain: "Fitness, athletics and a team to belong to." },
++  { id: "music", label: "Band & Choir", emoji: "🎺", blurb: "Rehearsals, recitals and the winter concert.", minAge: 7, gain: "Musical skill and confidence on stage." },
++  { id: "drama", label: "Drama Club", emoji: "🎭", blurb: "Auditions, rehearsals and the end-of-year play.", minAge: 8, gain: "Stage presence and an outgoing circle of friends." },
++  { id: "science", label: "Science & Coding Club", emoji: "🔬", blurb: "Experiments, robots and late-night debugging.", minAge: 9, gain: "Smarts and a loyal nerdy crowd." },
++  { id: "debate", label: "Debate Society", emoji: "🗣️", blurb: "Arguing both sides until you win.", minAge: 12, gain: "Charisma, composure and sharper thinking." },
++  { id: "art", label: "Art Club", emoji: "🎨", blurb: "Sketchbooks, clay and a gallery wall.", minAge: 7, gain: "Creativity and calm." },
++  { id: "service", label: "Volunteers' Club", emoji: "🤝", blurb: "Food drives, litter picks and visiting care homes.", minAge: 10, gain: "Kindness, karma and good references." },
++];
++export const CLUB_BY_ID = Object.fromEntries(CLUBS.map((c) => [c.id, c]));
++
++export function joinClub(p0: PlayerState, clubId: string): ActionResult {
++  const p = clone(p0);
++  const club = CLUB_BY_ID[clubId];
++  if (!club || !inSchoolYears(p)) return { player: p0 };
++  if (p.age < club.minAge) return { player: p0, notices: [info("Too Young", `${club.label} takes members from age ${club.minAge}.`)] };
++  if (p.school.club === clubId) return { player: p0 };
++  if ((p.annual.club ?? 0) >= 1) return { player: p0, notices: [info("Make Up Your Mind", "You've already changed clubs this year.")] };
++  p.annual.club = 1;
++  const had = p.school.club ? CLUB_BY_ID[p.school.club]?.label : null;
++  p.school.club = clubId;
++  p.school.clubYears = 0;
++  p.school.stress = clamp(p.school.stress + 3);
++  const body = `${had ? `You left ${had} and joined` : "You joined"} ${club.label}. ${club.gain}`;
++  addLog(p, body);
++  return { player: p, notices: [info("New Club", body, "good")] };
++}
++
++export function leaveClub(p0: PlayerState): ActionResult {
++  const p = clone(p0);
++  if (!p.school.club) return { player: p0 };
++  const label = CLUB_BY_ID[p.school.club]?.label ?? "your club";
++  p.school.club = null;
++  p.school.clubYears = 0;
++  p.school.stress = clamp(p.school.stress - 3);
++  const body = `You dropped out of ${label} to free up time.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Quit the Club", body)] };
++}
++
++// ---------------------------------------------------------------------------
++// Getting through the hard parts
++// ---------------------------------------------------------------------------
++
++export type SchoolAction = "teacher" | "parents" | "stand_up" | "change_school" | "counsellor" | "tutor";
++
++export const SCHOOL_ACTIONS: Record<SchoolAction, { label: string; emoji: string; blurb: string; when: (p: PlayerState) => boolean }> = {
++  teacher: { label: "Tell a teacher", emoji: "🧑‍🏫", blurb: "Report the bullying. Works if the teacher takes you seriously.", when: (p) => p.school.bullied > 0 },
++  parents: { label: "Tell your parents", emoji: "👪", blurb: "Your family steps in, and may move you if it does not stop.", when: (p) => p.school.bullied > 0 && livingRelatives(p, "Parent").length > 0 },
++  stand_up: { label: "Stand up to them", emoji: "✊", blurb: "Risky. Courage helps; it can also go badly.", when: (p) => p.school.bullied > 0 && p.age >= 8 },
++  change_school: { label: "Change school", emoji: "🚌", blurb: "A fresh start somewhere new. You lose your friends, and you are the new kid again.", when: (p) => p.school.bullied >= 40 || p.school.social < 25 },
++  counsellor: { label: "See the school counsellor", emoji: "🛋️", blurb: "Someone to talk to about stress, bullying or home. Not available everywhere.", when: (p) => p.school.stress >= 45 || p.school.bullied >= 30 },
++  tutor: { label: "Get a tutor", emoji: "📚", blurb: "Extra lessons to lift your grades. Costs your family, and adds a little pressure.", when: (p) => !p.school.tutor },
++};
++
++const parentTier = (p: PlayerState) => Math.max(0, ...livingRelatives(p, "Parent").map((r) => r.incomeTier));
++
++export function schoolAction(p0: PlayerState, action: SchoolAction, rng: Rng): ActionResult {
++  const p = clone(p0);
++  if (!inSchoolYears(p) || !SCHOOL_ACTIONS[action].when(p)) return { player: p0 };
++  const key = `school:${action}`;
++  if ((p.annual[key] ?? 0) >= 1) return { player: p0, notices: [info("Not Again", "You've already done that this year.")] };
++  p.annual[key] = 1;
++  const s = p.school;
++  const parent = livingRelatives(p, "Parent")[0];
++  if (action === "teacher") {
++    if (rng.chance(clamp(0.3 + s.teacher / 150, 0.2, 0.85))) {
++      s.bullied = clamp(s.bullied - rng.int(25, 45));
++      s.teacher = clamp(s.teacher + 4);
++      const body = "Your teacher took it seriously. The bullies were spoken to, and things have eased.";
++      addLog(p, body);
++      return { player: p, notices: [info("Someone Listened", body, "good")] };
++    }
++    s.social = clamp(s.social - 4);
++    s.bullied = clamp(s.bullied + 5);
++    const body = "Nothing much happened, except that you were seen as a snitch.";
++    addLog(p, body);
++    return { player: p, notices: [info("Brushed Off", body, "bad")] };
++  }
++  if (action === "parents") {
++    if (parent) parent.relationshipBar = clamp(parent.relationshipBar + 6);
++    s.bullied = clamp(s.bullied - rng.int(15, 30));
++    changeStat(p, "happiness", 3);
++    const body = `${parent ? firstName(parent) : "Your family"} went into school the next morning. Things are calmer, and you are not carrying it alone.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Family Steps In", body, "good")] };
++  }
++  if (action === "stand_up") {
++    if (rng.chance(clamp(0.3 + (p.talents.courage - 50) / 150 + (p.talents.athletic - 50) / 300, 0.15, 0.8))) {
++      s.bullied = clamp(s.bullied - rng.int(30, 50));
++      s.social = clamp(s.social + 8);
++      changeStat(p, "happiness", 5);
++      const body = "You looked them in the eye and said enough. The shaking only started afterwards. They left you alone.";
++      addLog(p, body);
++      return { player: p, notices: [info("Enough", body, "good")] };
++    }
++    changeStat(p, "health", -4);
++    s.bullied = clamp(s.bullied + 8);
++    s.truancy += rng.chance(0.3) ? 1 : 0;
++    const body = "It went badly. You came home bruised, and it only made them worse.";
++    addLog(p, body);
++    return { player: p, notices: [info("It Went Badly", body, "bad")] };
++  }
++  if (action === "change_school") {
++    if (parentTier(p) < 2 && profileOf(p.residence.country).careQuality < 70) return { player: p0, notices: [info("No Choice", "Your family cannot afford a move or a new school.", "bad")] };
++    s.bullied = 0;
++    s.social = 40;
++    s.teacher = 45;
++    s.club = null;
++    s.clubYears = 0;
++    s.tier = parentTier(p) >= 4 ? "private" : "state";
++    for (const r of p.relatives) if (r.alive && r.relation === "Friend") r.relationshipBar = clamp(r.relationshipBar - 25);
++    changeStat(p, "happiness", -2);
++    const body = `You started at a new ${s.tier} school. You knew nobody, but nobody knew you, either.`;
++    addLog(p, body);
++    return { player: p, notices: [info("A Fresh Start", body, "neutral")] };
++  }
++  if (action === "counsellor") {
++    if (profileOf(p.residence.country).careQuality < 45) return { player: p0, notices: [info("Not Available", "Your school has no counsellor.")] };
++    s.stress = clamp(s.stress - 22);
++    changeStat(p, "happiness", 4);
++    s.bullied = clamp(s.bullied - 8);
++    const body = "An hour a week with someone who actually listens. It helps more than you expected.";
++    addLog(p, body);
++    return { player: p, notices: [info("Someone to Talk To", body, "good")] };
++  }
++  s.tutor = true;
++  s.stress = clamp(s.stress + 4);
++  const body = "A tutor now comes round twice a week. Your grades should pick up.";
++  addLog(p, body);
++  return { player: p, notices: [info("Tutor Arranged", body, "good")] };
++}
++
++// ---------------------------------------------------------------------------
++// Report cards
++// ---------------------------------------------------------------------------
++
++export function gradeLetter(g: number): string {
++  return g >= 92 ? "A+" : g >= 85 ? "A" : g >= 78 ? "B+" : g >= 70 ? "B" : g >= 60 ? "C" : g >= 50 ? "D" : "F";
++}
++const GRADE_ORDER = ["F", "D", "C", "B", "B+", "A", "A+"];
++
++function reportNote(p: PlayerState, g: number): string {
++  const s = p.school;
++  const club = s.club ? CLUB_BY_ID[s.club]?.label.toLowerCase() : null;
++  if (s.truancy >= 2 && s.stress < 70 && g < 65) return "Too many missed lessons. Attendance is the first thing to fix.";
++  if (s.bullied >= 50) return "Seems withdrawn this year. We are keeping an eye on how things are going at break times.";
++  if (s.stress >= 75) return "Works hard but looks exhausted. Needs to be reminded that rest matters too.";
++  if (g >= 92) return s.teacher >= 60 ? "Exceptional. A pleasure to teach, and should be stretched." : "Outstanding results. Could take more part in class.";
++  if (g >= 85) return club ? `Excellent work, and a real asset to ${club}.` : "Excellent work, consistently well prepared.";
++  if (g >= 70) return s.social >= 65 ? "Good results and well liked. Could push harder." : "Solid work. Capable of more if more effort goes in.";
++  if (g >= 60) return "Adequate, though easily distracted. Focus will pay off.";
++  if (g >= 50) return "Struggling. Extra support and homework habits are needed.";
++  return "Serious concerns. At risk of being held back without a real change.";
++}
++
++// ---------------------------------------------------------------------------
++// The school year
++// ---------------------------------------------------------------------------
++
++const CULTURE_PRESSURE: Record<string, number> = { "South Korea": 18, Japan: 12, India: 10, France: 4 };
++
++export function processSchoolYear(p: PlayerState, rng: Rng, notices: Notices) {
++  if (p.isInPrison) return;
++  const s = p.school;
++  if (p.age === 18 && !p.flags.includes("school_done")) {
++    finishSchool(p, notices);
++    return;
++  }
++  if (!inSchoolYears(p) || p.education.stage === "None" || p.education.stage === "University") return;
++  const friends = livingRelatives(p, "Friend");
++  const prof = profileOf(p.residence.country);
++
++  if (p.age === 5) s.tier = parentTier(p) >= 4 && rng.chance(0.6) ? "private" : "state";
++
++  // Standing among classmates.
++  const target = 45 + (p.talents.charisma - 50) * 0.35 + (p.looks - 50) * 0.2 + Math.min(4, friends.length) * 3 + (s.club ? 6 : 0) - s.bullied * 0.3 + (p.fame > 10 ? 8 : 0);
++  s.social = clamp(Math.round(s.social + (target - s.social) * 0.35 + rng.int(-4, 4)));
++
++  // Friendships form and fade.
++  if (p.age >= 6 && s.social >= 40 && friends.length < 5 && rng.chance(0.3 + (s.social - 40) / 150 + (s.club ? 0.12 : 0))) {
++    const friend = addRelative(p, { relation: "Friend", ageOffset: [-1, 1] }, rng);
++    const where = s.club ? `in ${CLUB_BY_ID[s.club]?.label}` : "in class";
++    addLog(p, `You became friends with ${friend.name} ${where}.`);
++  } else if (friends.length > 0 && s.social < 30 && rng.chance(0.25)) {
++    const lost = rng.pick(friends);
++    lost.relationshipBar = clamp(lost.relationshipBar - 18);
++  }
++
++  // Bullying: it starts, it drags on, it ends.
++  if (s.bullied === 0 && p.age >= 7) {
++    const risk = 0.04 + Math.max(0, 50 - s.social) / 280 + (p.looks < 30 ? 0.04 : 0) + (p.flags.includes("new_kid") ? 0.08 : 0) + (p.talents.courage < 30 ? 0.03 : 0);
++    if (rng.chance(risk)) {
++      s.bullied = 25 + rng.int(0, 20);
++      const body = "A group in your year has started picking on you. Open Activities → School to decide what to do about it.";
++      addLog(p, "Some kids at school started picking on you.");
++      notices.push(info("Trouble at School", body, "bad"));
++    }
++  } else if (s.bullied > 0) {
++    s.bullied = clamp(s.bullied + rng.int(-8, 9) - (s.teacher >= 65 ? 4 : 0) + (s.social < 30 ? 3 : 0));
++    if (s.bullied <= 5) {
++      s.bullied = 0;
++      addLog(p, "The bullying finally stopped. Things at school feel lighter.");
++    }
++  }
++  if (s.bullied >= 40) {
++    changeStat(p, "happiness", -3);
++    changeStat(p, "health", -1);
++    s.stress = clamp(s.stress + 6);
++    if (s.bullied >= 60 && rng.chance(0.2)) s.truancy += 1;
++    if (!s.honors.includes("bullied") && s.bullied >= 40) s.honors.push("bullied");
++    if (s.bullied >= 70 && !s.honors.includes("scarred") && rng.chance(0.4)) s.honors.push("scarred");
++  }
++
++  // Teachers.
++  const teacherTarget = 35 + (p.education.grades - 50) * 0.4 + (p.effort === "grind" ? 10 : p.effort === "coast" ? -8 : 0) - s.truancy * 6;
++  s.teacher = clamp(Math.round(s.teacher + (teacherTarget - s.teacher) * 0.3 + rng.int(-3, 3)));
++
++  // Pressure.
++  const stressTarget = 15 + (p.effort === "grind" ? 20 : p.effort === "coast" ? -8 : 0) + (p.age >= 15 ? 10 : 0) + (CULTURE_PRESSURE[p.residence.country] ?? 0) + s.bullied * 0.3 + (s.tutor ? 5 : 0) - (s.club ? 5 : 0) - (p.talents.resilience - 50) * 0.2;
++  s.stress = clamp(Math.round(s.stress + (stressTarget - s.stress) * 0.4));
++  if (s.stress >= 78 && rng.chance(0.2)) {
++    changeStat(p, "happiness", -4);
++    const burnt = "The pressure of exams and expectations got on top of you this year.";
++    addLog(p, burnt);
++    if (rng.chance(0.15) && p.age >= 12 && addDisease(p, "anxiety", rng)) notices.push(info("Exam Anxiety", "The stress tipped into something more. You were diagnosed with an anxiety disorder.", "bad"));
++  }
++
++  // Clubs.
++  if (s.club) {
++    s.clubYears += 1;
++    const sk = p.skills;
++    if (s.club === "sport") {
++      sk.athletics = clamp(sk.athletics + 3);
++      changeStat(p, "health", 1);
++    } else if (s.club === "music") sk.music = clamp(sk.music + 3);
++    else if (s.club === "drama") {
++      sk.acting = clamp(sk.acting + 3);
++      sk.charisma = clamp(sk.charisma + 1);
++    } else if (s.club === "science") changeStat(p, "smarts", 2);
++    else if (s.club === "debate") {
++      sk.charisma = clamp(sk.charisma + 2);
++      changeStat(p, "smarts", 1);
++    } else if (s.club === "art") changeStat(p, "happiness", 1);
++    else if (s.club === "service") changeStat(p, "karma", 3);
++    if (s.clubYears === 3) {
++      const club = CLUB_BY_ID[s.club];
++      s.honors.push(`club:${s.club}`);
++      const body = `After three years in ${club.label.toLowerCase()}, your teachers and teammates see you as one of its stars.`;
++      addLog(p, body);
++      notices.push(info(`${club.emoji} Club Star`, body, "good"));
++    }
++    if (p.age >= 15 && s.clubYears >= 2) {
++      const dream = s.club === "sport" ? "athlete_dream" : s.club === "music" ? "music_dream" : s.club === "drama" ? "acting_dream" : null;
++      if (dream && !p.flags.includes(dream)) p.flags.push(dream);
++    }
++  }
++
++  // Grades answer to all of this.
++  let nudge = (s.tier === "private" ? 2 : 0) + (s.tutor ? 4 : 0) + (prof.careQuality - 60) / 25 - s.truancy * 2 - (s.bullied >= 50 ? 4 : 0) - (s.stress >= 80 ? 3 : 0) - (s.club && p.effort !== "grind" ? 1 : 0) + (s.teacher - 50) / 25;
++  nudge = Math.round(nudge);
++  p.education.grades = clamp(p.education.grades + nudge);
++  s.tutor = false;
++
++  // Report card.
++  if (p.age >= 6) {
++    const g = p.education.grades;
++    const letter = gradeLetter(g);
++    const note = reportNote(p, g);
++    const last = s.reports[s.reports.length - 1];
++    s.reports.push({ age: p.age, grade: letter, note });
++    s.reports = s.reports.slice(-6);
++    addLog(p, `📝 Report card: ${letter}. "${note}"`);
++    const parents = livingRelatives(p, "Parent");
++    const jump = last ? GRADE_ORDER.indexOf(letter) - GRADE_ORDER.indexOf(last.grade) : 0;
++    if (g >= 85) for (const r of parents) r.relationshipBar = clamp(r.relationshipBar + 2);
++    else if (g < 55) for (const r of parents) r.relationshipBar = clamp(r.relationshipBar - 3);
++    if (letter === "F" || letter === "A+" || Math.abs(jump) >= 2) {
++      notices.push(info(letter === "A+" ? "Top of the Class" : letter === "F" ? "A Failing Report" : jump > 0 ? "Report Card: Big Improvement" : "Report Card: A Slide", `Your report: ${letter}. "${note}"`, letter === "A+" || jump > 0 ? "good" : "bad"));
++    }
++    if (letter === "A+" && !s.honors.includes("star")) s.honors.push("star");
++  }
++  if (s.truancy > 0 && p.age % 3 === 0) s.truancy -= 1;
++}
++
++/** At eighteen the school years are over, and what they made of you is remembered. */
++function finishSchool(p: PlayerState, notices: Notices) {
++  const s = p.school;
++  p.flags.push("school_done");
++  const tags: string[] = [];
++  const mark = (flag: string, line: string) => {
++    if (!p.flags.includes(flag)) p.flags.push(flag);
++    tags.push(line);
++  };
++  if (s.social >= 68) {
++    mark("school_popular", "popular");
++    p.skills.charisma = clamp(p.skills.charisma + 4);
++  } else if (s.social < 32) mark("school_outcast", "a loner");
++  if (s.honors.includes("bullied")) {
++    mark("school_bullied", s.honors.includes("scarred") ? "bullied, and it left scars" : "bullied");
++    if (!s.honors.includes("scarred")) changeStat(p, "happiness", 0);
++  }
++  if (s.honors.includes("star") || p.education.grades >= 88) mark("school_star", "a star pupil");
++  if (s.truancy >= 3 || p.education.grades < 45) mark("school_rough", "a troubled student");
++  const club = s.honors.find((h) => h.startsWith("club:"));
++  if (club) mark(`school_${club.slice(5)}_star`, CLUB_BY_ID[club.slice(5)]?.label.toLowerCase() ?? "a club star");
++  if (tags.length > 0) {
++    const body = `Looking back at school, you were ${tags.join(", ")}. It shaped who walks out of the gates today.`;
++    addLog(p, body);
++    notices.push(info("The School Years", body, "neutral"));
++  }
++}
++
++/** Summary line of how school is going, for the Dashboard. */
++export function schoolStanding(p: PlayerState): { grade: string; social: string; teacher: string; mood: string } {
++  const s = p.school;
++  return {
++    grade: gradeLetter(p.education.grades),
++    social: s.social >= 70 ? "Popular" : s.social >= 50 ? "Well liked" : s.social >= 32 ? "Keeps to a few friends" : "Isolated",
++    teacher: s.teacher >= 70 ? "Teacher's favourite" : s.teacher >= 45 ? "Fine with teachers" : "On the teachers' radar",
++    mood: s.bullied >= 40 ? "Being bullied" : s.stress >= 70 ? "Under heavy pressure" : s.stress >= 45 ? "Feeling the pressure" : "Coping fine",
++  };
++}
+diff --git a/src/engine/state.ts b/src/engine/state.ts
+index 4081df3..b8ce22e 100644
+--- a/src/engine/state.ts
++++ b/src/engine/state.ts
+@@ -16,6 +16,9 @@ import { newAthleteState } from "./athleteState";
+ import { newCourt, realmNamesFor } from "./courtState";
+ import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
+ import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
++import { freshWorld } from "./worldEvents";
++import { freshSchool } from "./school";
++import { freshImmigration } from "./visa";
+ 
+ export const MAX_AGE = 120;
+ 
+@@ -370,6 +373,9 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
+     residence: { country: country.name, city: "", rentTier: 1 },
+     investments: {},
+     vices: { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
++    world: freshWorld(),
++    school: freshSchool(),
++    immigration: freshImmigration(country.name),
+     probation: null,
+     pregnancy: null,
+     blackjack: null,
+diff --git a/src/engine/treatment.ts b/src/engine/treatment.ts
+new file mode 100644
+index 0000000..e19ac08
+--- /dev/null
++++ b/src/engine/treatment.ts
+@@ -0,0 +1,303 @@
++/**
++ * Long-term treatment of chronic and terminal conditions. A diagnosis is no longer a one-visit lottery:
++ * you choose a plan (medication, lifestyle change, therapy, surgery, chemotherapy, palliative care...),
++ * pay for it every year, and live with what it does. Plans that are dropped or become unaffordable let the
++ * condition run unchecked. What care costs and how well it works depends on the country you live in.
++ */
++import type { ActionResult, Disease, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { DISEASE_BY_ID } from "@/data/diseases";
++import { profileOf } from "@/data/countryProfiles";
++import { addLog, changeStat, clone, livingRelatives } from "./state";
++import { killPlayer } from "./mortality";
++import { careSystem, medicalPrice } from "./careCosts";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "surgery" = "neutral") =>
++  ({ kind: "info" as const, title, body, tone });
++
++export interface PlanDef {
++  id: string;
++  label: string;
++  emoji: string;
++  blurb: string;
++  /** Yearly cost before the country's care factor. */
++  cost: number;
++  /** One-off cost (operations). */
++  upfront?: number;
++  /** Multiplier on the condition's yearly toll while followed (lower is better). */
++  dampen: number;
++  /** Yearly chance the condition clears (remission or cure). */
++  remission?: number;
++  /** Yearly body and mood cost of the treatment itself. */
++  sideHealth?: number;
++  sideHappy?: number;
++  /** Chance each year that a terminal countdown does not advance. */
++  slows?: number;
++  /** An operation: chance of success and the cost of failure. */
++  surgery?: { success: number; risk: number };
++  /** Comfort over cure: a gentle end among family. */
++  palliative?: boolean;
++  /** Why you can't choose this right now (or null). */
++  blocker?: (p: PlayerState) => string | null;
++}
++
++const MENTAL = new Set(["anxiety", "depression", "ptsd"]);
++const PALLIATIVE: PlanDef = { id: "palliative", label: "Palliative Care", emoji: "🕊️", blurb: "Comfort and dignity over cure: pain control, home visits, time with the people you love. It does not fight the illness.", cost: 9_000, dampen: 0.4, palliative: true, sideHappy: 1 };
++const MEDS: PlanDef = { id: "meds", label: "Daily Medication", emoji: "💊", blurb: "A regular prescription and check-ups. Keeps symptoms down but does not cure.", cost: 900, dampen: 0.4 };
++const SPECIALIST: PlanDef = { id: "specialist", label: "Specialist Programme", emoji: "🩻", blurb: "A consultant, scans and a tailored regimen. Expensive; the best control short of surgery.", cost: 4_000, dampen: 0.25, remission: 0.03 };
++const lifestyleBlock = (p: PlayerState) => (p.habits.exercise >= 1 && p.habits.diet >= 1 ? null : "This only works if you also keep up exercise and a balanced diet (Habits, below).");
++
++const PLANS: Record<string, PlanDef[]> = {
++  mental: [
++    { id: "therapy", label: "Talk Therapy", emoji: "🛋️", blurb: "Regular sessions. Slow, honest work that can lift the condition for good.", cost: 2_400, dampen: 0.55, remission: 0.1, sideHappy: 1 },
++    { id: "meds", label: "Medication", emoji: "💊", blurb: "Prescribed daily. Steadies the worst of it; rarely a cure on its own.", cost: 700, dampen: 0.5, remission: 0.04 },
++    { id: "therapy_meds", label: "Therapy + Medication", emoji: "🧠", blurb: "The gold standard: sessions and prescription together.", cost: 3_000, dampen: 0.3, remission: 0.14, sideHappy: 1 },
++  ],
++  chronic: [
++    MEDS,
++    { id: "lifestyle", label: "Lifestyle Programme", emoji: "🥗", blurb: "Supervised diet and exercise. Cheap and good for you; can send some conditions into remission.", cost: 500, dampen: 0.65, remission: 0.07, blocker: lifestyleBlock },
++    SPECIALIST,
++  ],
++  bypass: [{ id: "bypass", label: "Bypass Surgery", emoji: "🫀", blurb: "Open-heart surgery to restore blood flow. Major, risky, and often transformative.", cost: 0, upfront: 60_000, dampen: 1, surgery: { success: 0.82, risk: 0.04 } }],
++  joint: [{ id: "joint", label: "Joint Replacement", emoji: "🦴", blurb: "Swap the worn joint for a new one. Painful recovery, lasting relief.", cost: 0, upfront: 20_000, dampen: 1, surgery: { success: 0.9, risk: 0.03 } }],
++  tb: [{ id: "antibiotics", label: "Six-Month Antibiotic Course", emoji: "💊", blurb: "The standard regimen. Cures most cases if you finish it.", cost: 2_500, dampen: 0.4, remission: 0.55 }, SPECIALIST],
++  hiv: [{ id: "arv", label: "Antiretroviral Therapy", emoji: "💊", blurb: "Daily pills that hold the virus down so far that life is close to normal. Needs steady access to care.", cost: 12_000, dampen: 0.15 }],
++  herpes: [{ id: "antivirals", label: "Antivirals", emoji: "💊", blurb: "Keeps outbreaks rare.", cost: 800, dampen: 0.4 }],
++  cancer: [
++    { id: "chemo", label: "Aggressive Treatment", emoji: "☢️", blurb: "Surgery, chemotherapy and radiation. Harsh on the body, and the best chance of beating it.", cost: 45_000, dampen: 0.9, remission: 0.28, sideHealth: -3, slows: 0.5 },
++    { id: "trial", label: "Clinical Trial", emoji: "🧪", blurb: "An experimental therapy. Free of charge, uncertain, occasionally miraculous.", cost: 6_000, dampen: 0.9, remission: 0.12, sideHealth: -1, slows: 0.2 },
++    PALLIATIVE,
++  ],
++  earlycancer: [
++    { id: "cancer_surgery", label: "Surgery", emoji: "🔪", blurb: "Remove it while it is small. High odds of a clean result.", cost: 0, upfront: 20_000, dampen: 1, surgery: { success: 0.84, risk: 0.02 } },
++    { id: "radiation", label: "Radiation Course", emoji: "☢️", blurb: "Targeted radiation over several months.", cost: 12_000, dampen: 0.7, remission: 0.5, sideHealth: -1 },
++  ],
++  liver: [
++    { id: "hepatology", label: "Hepatology Programme", emoji: "🩺", blurb: "Specialist care to slow the damage. It only works if you have stopped drinking.", cost: 4_000, dampen: 0.6, slows: 0.4, blocker: (p) => (p.vices.alcohol > 15 ? "The clinic will not take you while you are still drinking heavily. Try rehab or quit first." : null) },
++    { id: "liver_transplant", label: "Liver Transplant", emoji: "🫘", blurb: "A new liver, if you are fit enough to survive the operation.", cost: 0, upfront: 140_000, dampen: 1, surgery: { success: 0.72, risk: 0.12 }, blocker: (p) => (p.age > 70 ? "You are too old to be put on the transplant list." : p.vices.alcohol > 15 ? "Transplant teams demand you stop drinking first." : null) },
++    PALLIATIVE,
++  ],
++  kidney: [
++    { id: "dialysis", label: "Dialysis", emoji: "🩸", blurb: "Three sessions a week keep you alive. Exhausting, costly, and it holds the countdown back.", cost: 30_000, dampen: 0.7, slows: 1, sideHealth: -1 },
++    { id: "kidney_transplant", label: "Kidney Transplant", emoji: "🫘", blurb: "A donor kidney. Long waits where care is thin.", cost: 0, upfront: 110_000, dampen: 1, surgery: { success: 0.78, risk: 0.07 }, blocker: (p) => (p.age > 72 ? "You are too old to be put on the transplant list." : null) },
++    PALLIATIVE,
++  ],
++  stroke: [{ id: "stroke_rehab", label: "Stroke Rehabilitation", emoji: "🦽", blurb: "Intensive physiotherapy and secondary prevention.", cost: 8_000, dampen: 0.5, slows: 0.5 }, PALLIATIVE],
++  alz: [{ id: "memory", label: "Dementia Medication & Memory Care", emoji: "🧩", blurb: "Slows the decline a little and keeps you steadier at home.", cost: 6_000, dampen: 0.8, slows: 0.35, sideHappy: 1 }, PALLIATIVE],
++};
++
++/** The plans that make sense for this condition. Mild illnesses have none (a doctor's visit sorts them out). */
++export function plansFor(d: Disease): PlanDef[] {
++  if (d.severity === "mild") return [];
++  if (MENTAL.has(d.id)) return PLANS.mental;
++  switch (d.id) {
++    case "heart_disease": return [...PLANS.chronic, ...PLANS.bypass];
++    case "arthritis": return [...PLANS.chronic, ...PLANS.joint];
++    case "tuberculosis": return PLANS.tb;
++    case "hiv": return PLANS.hiv;
++    case "herpes": return PLANS.herpes;
++    case "cancer": return PLANS.cancer;
++    case "early_cancer": return PLANS.earlycancer;
++    case "liver_disease": return PLANS.liver;
++    case "kidney_failure": return PLANS.kidney;
++    case "stroke": return PLANS.stroke;
++    case "alzheimers": return PLANS.alz;
++    default: return d.severity === "fatal" ? [SPECIALIST, PALLIATIVE] : PLANS.chronic;
++  }
++}
++
++export const planById = (d: Disease, id: string | undefined): PlanDef | undefined => (id ? plansFor(d).find((x) => x.id === id) : undefined);
++export const activePlan = (d: Disease): PlanDef | undefined => (d.plan && !d.lapsed ? planById(d, d.plan) : undefined);
++
++/** How well treatment works here: thin health systems get weaker results. */
++export const careEffectiveness = (p: PlayerState): number => clamp(0.35 + (profileOf(p.residence.country).careQuality / 100) * 0.9, 0.4, 1.1);
++
++/** What the plan costs you each year where you live. */
++export const planYearlyCost = (p: PlayerState, plan: PlanDef) => (plan.cost > 0 ? medicalPrice(p, plan.cost) : 0);
++export const planUpfrontCost = (p: PlayerState, plan: PlanDef) => (plan.upfront ? medicalPrice(p, plan.upfront) : 0);
++
++/** Can the system be leaned on to finance life-saving care? Only where you would otherwise go without. */
++const canFinance = (p: PlayerState, d: Disease) => d.severity === "fatal" && careSystem(p.residence.country) !== "universal";
++const MEDICAL_DEBT_CEILING = 250_000;
++
++export function planBlocker(p: PlayerState, d: Disease, plan: PlanDef): string | null {
++  if (p.age < 18) return "Your parents manage your care until you are 18.";
++  const b = plan.blocker?.(p);
++  if (b) return b;
++  const price = Math.max(planUpfrontCost(p, plan), planYearlyCost(p, plan));
++  if (p.bankBalance < price) {
++    if (canFinance(p, d) && p.outstandingLoans < MEDICAL_DEBT_CEILING) return null;
++    return `You need ${money(price)}.`;
++  }
++  return null;
++}
++
++/** The yearly multiplier on a condition's toll from its treatment (or the lack of it). */
++export function diseaseToll(p: PlayerState, d: Disease): number {
++  if (p.age < 18 && d.severity !== "mild") return profileOf(p.residence.country).careQuality >= 50 ? 0.7 : 1;
++  const plan = activePlan(d);
++  if (plan) return plan.dampen;
++  return d.lapsed ? 1.25 : 1;
++}
++
++/** Yearly spend on treatment plans (replaces the flat cost of monitoring for conditions you treat). */
++export function plansCost(p: PlayerState): number {
++  let total = 0;
++  for (const d of p.diseases) {
++    const plan = activePlan(d);
++    if (plan) total += planYearlyCost(p, plan);
++  }
++  return total;
++}
++
++function payUpfront(p: PlayerState, d: Disease, price: number): boolean {
++  if (p.bankBalance >= price) {
++    p.bankBalance -= price;
++    return true;
++  }
++  if (!canFinance(p, d)) return false;
++  const debt = price - p.bankBalance;
++  p.bankBalance = 0;
++  p.outstandingLoans += debt;
++  p.creditScore -= 25;
++  addLog(p, `You financed the bill with medical debt of ${money(debt)}.`);
++  return true;
++}
++
++export function startTreatment(p0: PlayerState, diseaseId: string, planId: string, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const d = p.diseases.find((x) => x.id === diseaseId);
++  if (!d) return { player: p0 };
++  const plan = planById(d, planId);
++  if (!plan) return { player: p0 };
++  const block = planBlocker(p, d, plan);
++  if (block) return { player: p0, notices: [info("Not Possible", block, "bad")] };
++  if (d.plan === plan.id && !d.lapsed) return { player: p0 };
++  if (plan.surgery) {
++    if ((p.annual.surgeryTx ?? 0) >= 1) return { player: p0, notices: [info("Recovering", "Your body needs a year between major operations.")] };
++    const price = planUpfrontCost(p, plan);
++    if (!payUpfront(p, d, price)) return { player: p0, notices: [info("Can't Afford It", `${plan.label} costs ${money(price)}.`, "bad")] };
++    p.annual.surgeryTx = 1;
++    const ageDrag = Math.max(0, (p.age - 60) / 100);
++    const success = clamp((plan.surgery.success - ageDrag + (p.health - 50) / 400) * careEffectiveness(p), 0.2, 0.97);
++    const died = p.age >= 50 && rng.chance(plan.surgery.risk * (1.4 - careEffectiveness(p) / 2) * (p.health < 35 ? 2 : 1));
++    if (died) {
++      addLog(p, `You did not wake up from ${plan.label.toLowerCase()}. The surgeons did everything they could.`);
++      killPlayer(p, `complications of ${plan.label.toLowerCase()}`);
++      return { player: p, notices: [info("Surgery Failed", `You did not survive ${plan.label.toLowerCase()}. The family was at your bedside for hours beforehand.`, "bad")] };
++    }
++    if (rng.chance(success)) {
++      p.diseases = p.diseases.filter((x) => x.id !== d.id);
++      changeStat(p, "health", 6);
++      changeStat(p, "happiness", 6);
++      const body = `${plan.label} went well. ${d.name} is behind you. Recovery takes months, but you can feel the difference.`;
++      addLog(p, body);
++      if (d.id === "early_cancer" || d.id === "cancer") markSurvivor(p);
++      return { player: p, notices: [info("Operation Successful", body, "surgery")] };
++    }
++    changeStat(p, "health", -8);
++    changeStat(p, "happiness", -5);
++    const body = `${plan.label} did not fully work. You are weaker for it and ${d.name} remains.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Operation Unsuccessful", body, "bad")] };
++  }
++  d.plan = plan.id;
++  d.planSince = p.year;
++  d.lapsed = false;
++  d.treatedYears = 0;
++  const price = planYearlyCost(p, plan);
++  const body = `You started ${plan.label.toLowerCase()} for ${d.name}${price > 0 ? ` at about ${money(price)} a year` : ""}. ${plan.palliative ? "The focus is now on comfort and time with your family." : "It will be reviewed every year."}`;
++  addLog(p, body);
++  return { player: p, notices: [info("Treatment Plan", body, "good")] };
++}
++
++export function stopTreatment(p0: PlayerState, diseaseId: string): ActionResult {
++  const p = clone(p0);
++  const d = p.diseases.find((x) => x.id === diseaseId);
++  if (!d || !d.plan) return { player: p0 };
++  const body = `You stopped treatment for ${d.name}. Without it, the condition will take its full toll.`;
++  d.plan = undefined;
++  d.planSince = undefined;
++  d.lapsed = false;
++  d.treatedYears = 0;
++  addLog(p, body);
++  return { player: p, notices: [info("Treatment Stopped", body, "bad")] };
++}
++
++/** A cancer survivor: it can come back. */
++function markSurvivor(p: PlayerState) {
++  p.flags = p.flags.filter((f) => !f.startsWith("cancer_survivor:"));
++  p.flags.push(`cancer_survivor:${p.year}`);
++}
++
++export const isCancerSurvivor = (p: PlayerState) => p.flags.some((f) => f.startsWith("cancer_survivor:"));
++
++/** Runs once a year during Age Up, after finances have charged the plan fees. */
++export function processTreatment(p: PlayerState, rng: Rng, notices: Notices, addDisease: (p: PlayerState, id: string, rng: Rng) => boolean) {
++  // Survivors: a few years of risk of recurrence.
++  const sv = p.flags.find((f) => f.startsWith("cancer_survivor:"));
++  if (sv) {
++    const since = Number(sv.split(":")[1]);
++    if (p.year - since > 8) p.flags = p.flags.filter((f) => f !== sv);
++    else if (!p.diseases.some((d) => d.id === "cancer" || d.id === "early_cancer") && rng.chance(0.035)) {
++      p.flags = p.flags.filter((f) => f !== sv);
++      if (addDisease(p, "cancer", rng)) notices.push(info("It's Back", "A routine scan showed the cancer has returned.", "bad"));
++    }
++  }
++  const eff = careEffectiveness(p);
++  // Couldn't pay this year's fees? Care lapses, except where life depends on it and debt can cover it.
++  const broke = p.bankBalance < 0;
++  for (const d of [...p.diseases]) {
++    const plan = activePlan(d);
++    if (!plan) continue;
++    if (broke && !canFinance(p, d)) {
++      const cost = planYearlyCost(p, plan);
++      p.bankBalance += cost;
++      d.lapsed = true;
++      d.treatedYears = 0;
++      const body = `You could no longer afford ${plan.label.toLowerCase()} for ${d.name}. Without it, the condition runs unchecked.`;
++      addLog(p, body);
++      notices.push(info("Treatment Lapsed", body, "bad"));
++      continue;
++    }
++    d.treatedYears = (d.treatedYears ?? 0) + 1;
++    if (plan.sideHealth) changeStat(p, "health", plan.sideHealth);
++    if (plan.sideHappy) changeStat(p, "happiness", plan.sideHappy);
++    if (plan.remission && !d.incurable) {
++      // Lifestyle programmes only reverse the conditions lifestyle causes, and persistence helps.
++      const reversible = plan.id !== "lifestyle" || ["diabetes", "hypertension"].includes(d.id);
++      const chance = reversible ? clamp(plan.remission * eff * (1 + Math.min(3, d.treatedYears) * 0.15) * (p.age > 75 ? 0.7 : 1), 0, 0.85) : 0;
++      if (chance > 0 && rng.chance(chance)) {
++        p.diseases = p.diseases.filter((x) => x.id !== d.id);
++        changeStat(p, "happiness", 6);
++        changeStat(p, "health", 3);
++        const body = d.severity === "fatal" ? `Scans show ${d.name} in remission. After everything, you have been given time back.` : `After a year of ${plan.label.toLowerCase()}, ${d.name} has gone into remission.`;
++        addLog(p, body);
++        notices.push(info(d.severity === "fatal" ? "Remission!" : "Much Better", body, "good"));
++        if (d.id === "cancer" || d.id === "early_cancer") markSurvivor(p);
++      }
++    }
++  }
++}
++
++/** Does the fatal countdown pause this year? (Called from the yearly disease loop.) */
++export function slowsCountdown(d: Disease, rng: Rng): boolean {
++  const plan = activePlan(d);
++  return !!plan?.slows && rng.chance(plan.slows);
++}
++
++/** Cause-of-death wording that reflects how the end came. */
++export function deathPhrase(p: PlayerState, d: Disease): string {
++  const plan = activePlan(d);
++  const base = d.name.toLowerCase();
++  if (plan?.palliative) return `${base}, peacefully under palliative care${livingRelatives(p).some((r) => r.relation !== "Pet") ? ", with family at your side" : ""}`;
++  return base;
++}
++
++/** Palliative care eases the end for the people around you too. */
++export function palliativeFarewell(p: PlayerState, d: Disease) {
++  if (!activePlan(d)?.palliative) return;
++  for (const r of livingRelatives(p)) if (r.relation === "Child" || r.relation === "Partner" || r.relation === "Sibling") r.relationshipBar = clamp(r.relationshipBar + 8);
++}
+diff --git a/src/engine/visa.ts b/src/engine/visa.ts
+new file mode 100644
+index 0000000..809f237
+--- /dev/null
++++ b/src/engine/visa.ts
+@@ -0,0 +1,304 @@
++/**
++ * Immigration: you can't simply live anywhere. Moving abroad means a route (a skilled-worker visa, study,
++ * a spouse's sponsorship, an investor visa, asylum from a country in crisis, or going without papers),
++ * with odds that depend on where you are going and who you are. Temporary status has strings attached
++ * (a job, a course, a marriage), permits expire, language takes years to learn, and papers can lead to
++ * permanent residence and citizenship, or to deportation.
++ */
++import type { ActionResult, ImmigrationState, PlayerState, VisaStatus } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { COUNTRY_BY_NAME } from "@/data/countries";
++import { profileOf } from "@/data/countryProfiles";
++import { addLog, changeStat, getPartner, hasDegree, isRoyal } from "./state";
++import { inCrisis, worldHiring } from "./worldEvents";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
++  ({ kind: "info" as const, title, body, tone });
++
++export const freshImmigration = (country: string): ImmigrationState => ({ citizenship: [country], status: "citizen", yearsLeft: 0, residenceYears: 0, fluency: 100, refused: 0, idle: 0 });
++
++export function hydrateImmigration(raw: Partial<ImmigrationState> | undefined, p: Pick<PlayerState, "birthCountry">): ImmigrationState {
++  const f = freshImmigration(p.birthCountry);
++  if (!raw) return f;
++  return { ...f, ...raw, citizenship: Array.isArray(raw.citizenship) && raw.citizenship.length ? raw.citizenship : f.citizenship };
++}
++
++export const isCitizen = (p: PlayerState) => p.immigration.citizenship.includes(p.residence.country);
++
++export const STATUS_LABEL: Record<VisaStatus, string> = {
++  citizen: "Citizen",
++  permanent: "Permanent resident",
++  work: "Work visa",
++  student: "Student visa",
++  family: "Family visa",
++  asylum: "Asylum seeker / refugee",
++  overstay: "Undocumented",
++};
++
++/** Fluency a person arrives with: native speakers of the language keep it; everyone else starts near zero. */
++function arrivalFluency(p: PlayerState, dest: string): number {
++  const lang = profileOf(dest).language;
++  return p.immigration.citizenship.some((c) => profileOf(c).language === lang) ? 95 : p.flags.includes("bilingual") ? 40 : 6;
++}
++
++/** A hiring-odds adjustment from the world economy and from your status and language. Plugs into job applications. */
++export function jobMarketShift(p: PlayerState): number {
++  const im = p.immigration;
++  let shift = worldHiring(p);
++  if (im && !isCitizen(p)) {
++    if (im.fluency < 40) shift -= 0.15 * (1 - im.fluency / 40);
++    if (im.status === "overstay") shift -= 0.5;
++  }
++  return shift;
++}
++
++// ---------------------------------------------------------------------------
++// Routes
++// ---------------------------------------------------------------------------
++
++export type RouteId = "work" | "student" | "family" | "investor" | "asylum" | "undocumented";
++export const ROUTE_IDS: RouteId[] = ["work", "student", "family", "investor", "asylum", "undocumented"];
++
++export interface RouteInfo {
++  id: RouteId;
++  label: string;
++  emoji: string;
++  blurb: string;
++  /** Application fees (on top of the cost of moving). */
++  fee: number;
++  /** Chance of approval (1 = certain). */
++  chance: number;
++  /** Reason it is not available to you now. */
++  blocker: string | null;
++}
++
++const HIGHER_ED = new Set(["University", "MedicalSchool", "LawSchool", "Masters"]);
++const careerExperience = (p: PlayerState) => Object.values(p.careerYears).reduce((a, b) => a + b, 0);
++
++export function routeOptions(p: PlayerState, dest: string): RouteInfo[] {
++  const E = profileOf(dest).entry;
++  const same = profileOf(dest).language === profileOf(p.residence.country).language;
++  const educated = hasDegree(p, "bachelor") || hasDegree(p, "masters") || hasDegree(p, "md") || hasDegree(p, "jd");
++  const exp = careerExperience(p);
++  const refusedPenalty = Math.min(0.15, p.immigration.refused * 0.03);
++  const partner = getPartner(p);
++  const crisis = inCrisis(p.world, p.residence.country, p.year);
++  const crisisSeverity = Math.max(0, ...p.world.events.filter((e) => e.country === p.residence.country && ["war", "unrest"].includes(e.id)).map((e) => e.severity));
++  return [
++    {
++      id: "work", label: "Skilled-worker visa", emoji: "💼", fee: 3_000,
++      blurb: "A four-year permit tied to having a job there. Your current employer can transfer you; otherwise you must find work within a year.",
++      chance: clamp(0.82 - E / 170 + (p.smarts - 50) / 300 + (educated ? 0.12 : 0) + Math.min(0.12, exp * 0.02) + (same ? 0.06 : 0) - refusedPenalty, 0.08, 0.92),
++      blocker: p.age < 20 || p.age > 58 ? "Work visas favour applicants aged 20 to 58." : educated || exp >= 3 ? null : "You need a degree or three years of work experience.",
++    },
++    {
++      id: "student", label: "Student visa", emoji: "🎓", fee: 2_500,
++      blurb: "Study there for up to four years. You may work part-time; when the course ends you have a year to find a job or leave.",
++      chance: clamp(0.86 - E / 200 + (p.smarts - 50) / 300 - refusedPenalty, 0.15, 0.95),
++      blocker: p.age < 17 || p.age > 35 ? "Student visas are for ages 17 to 35." : p.bankBalance < 15_000 ? "You must show $15,000 in savings." : !HIGHER_ED.has(p.education.stage) && !(p.education.stage === "None" && p.age <= 25) ? "You need to be in higher education, or fresh from school." : null,
++    },
++    {
++      id: "family", label: "Marry-in / family visa", emoji: "💍", fee: 2_000,
++      blurb: "Move on your spouse's sponsorship. Three years later you may settle permanently, if the marriage lasts.",
++      chance: clamp(0.9 - E / 300 - refusedPenalty, 0.5, 0.92),
++      blocker: partner?.partnerStatus === "married" ? null : "You need to be married to sponsor a move together.",
++    },
++    {
++      id: "investor", label: "Investor visa", emoji: "🏦", fee: 250_000,
++      blurb: "Invest $250,000 in the country and receive permanent residence at once. The money is not coming back.",
++      chance: 0.95,
++      blocker: p.bankBalance < 300_000 ? "You need $300,000 ($250,000 is invested, the rest covers fees and the move)." : null,
++    },
++    {
++      id: "asylum", label: "Claim asylum", emoji: "🕊️", fee: 500,
++      blurb: "Flee a country in crisis. You may work while your claim is heard; if it succeeds you can stay. Going home ends your protection.",
++      chance: clamp(0.78 - E / 160 + crisisSeverity * 0.04 - refusedPenalty, 0.2, 0.85),
++      blocker: crisis ? null : "You can only claim asylum from a country in crisis (war, a political emergency or a pandemic).",
++    },
++    {
++      id: "undocumented", label: "Go without papers", emoji: "🌑", fee: 6_000,
++      blurb: "Pay smugglers or overstay a tourist visa. You cannot work legally, you get no healthcare cover, and every year there is a risk of being deported.",
++      chance: 0.82,
++      blocker: null,
++    },
++  ];
++}
++
++export function routeFor(p: PlayerState, dest: string, id: RouteId): RouteInfo | undefined {
++  return routeOptions(p, dest).find((r) => r.id === id);
++}
++
++/** Whether you may move to `dest` without a route (you are a citizen there, or it is within your own country). */
++export const needsRoute = (p: PlayerState, dest: string) => dest !== p.residence.country && !p.immigration.citizenship.includes(dest);
++
++// ---------------------------------------------------------------------------
++// Arriving, staying, leaving
++// ---------------------------------------------------------------------------
++
++const PERMIT_YEARS: Record<RouteId, number> = { work: 4, student: 4, family: 3, investor: 0, asylum: 5, undocumented: 0 };
++const STATUS_OF: Record<RouteId, VisaStatus> = { work: "work", student: "student", family: "family", investor: "permanent", asylum: "asylum", undocumented: "overstay" };
++
++/** Record your new status after a move (or an emigration event). `route` null means you moved as a citizen. */
++export function settle(p: PlayerState, dest: string, route: RouteId | null) {
++  const prev = p.immigration;
++  p.immigration = {
++    ...prev,
++    status: route ? STATUS_OF[route] : "citizen",
++    yearsLeft: route ? PERMIT_YEARS[route] : 0,
++    residenceYears: 0,
++    fluency: route === null && prev.citizenship.includes(dest) && dest === p.birthCountry ? 100 : arrivalFluency(p, dest),
++    idle: 0,
++  };
++}
++
++/** Sent back to where you hold citizenship. */
++export function deport(p: PlayerState, reason: string, notices: Notices, seize = 0) {
++  const home = p.immigration.citizenship[0] ?? p.birthCountry;
++  const c = COUNTRY_BY_NAME[home] ?? COUNTRY_BY_NAME[p.birthCountry];
++  const from = p.residence.country;
++  p.residence = { ...p.residence, country: c.name, city: c.cities[0] };
++  p.immigration = { ...p.immigration, status: "citizen", yearsLeft: 0, residenceYears: 0, fluency: 100, idle: 0 };
++  p.currentJob = null;
++  p.annualSalary = 0;
++  if (seize > 0) p.bankBalance = Math.round(p.bankBalance * (1 - seize));
++  changeStat(p, "happiness", -9);
++  const body = `${reason} You had to leave ${from} and went back to ${c.name}.`;
++  addLog(p, body);
++  notices.push(info("Sent Home", body, "bad"));
++}
++
++export function naturaliseBlocker(p: PlayerState): string | null {
++  const im = p.immigration;
++  if (isCitizen(p)) return "You are already a citizen here.";
++  if (im.status !== "permanent") return "Only permanent residents can apply for citizenship.";
++  if (im.residenceYears < 6) return `You need ${6 - im.residenceYears} more year${6 - im.residenceYears === 1 ? "" : "s"} of residence.`;
++  if (im.fluency < 40) return "You must pass a language test: your fluency is not yet good enough.";
++  if (p.criminalRecord.length > 1 && !p.justice.expunged) return "Your criminal record counts against you.";
++  if (p.bankBalance < 1_500) return `The application costs ${money(1_500)}.`;
++  return null;
++}
++
++export function naturalise(p0: PlayerState, rng: Rng): ActionResult {
++  const block = naturaliseBlocker(p0);
++  if (block) return { player: p0, notices: [info("Not Yet", block)] };
++  const p = structuredClone(p0);
++  p.bankBalance -= 1_500;
++  if (!rng.chance(0.92)) {
++    const body = "Your application was delayed pending more paperwork. You can try again next year.";
++    p.annual.naturalise = 1;
++    addLog(p, body);
++    return { player: p, notices: [info("Delayed", body, "neutral")] };
++  }
++  p.immigration.citizenship = [...p.immigration.citizenship, p.residence.country];
++  p.immigration.status = "citizen";
++  p.immigration.yearsLeft = 0;
++  changeStat(p, "happiness", 10);
++  const body = `After ${p.immigration.residenceYears} years, you swore the oath and became a citizen of ${p.residence.country}. You now hold ${p.immigration.citizenship.length} passports.`;
++  addLog(p, body);
++  return { player: p, notices: [info("New Citizen!", body, "good")] };
++}
++
++/** Yearly: permits tick down, language grows, homesickness bites, and status is reviewed. */
++export function processImmigration(p: PlayerState, rng: Rng, notices: Notices) {
++  const im = p.immigration;
++  if (isCitizen(p)) {
++    im.status = "citizen";
++    im.yearsLeft = 0;
++    im.residenceYears += 1;
++    im.fluency = Math.max(im.fluency, arrivalFluency(p, p.residence.country) >= 90 ? 95 : im.fluency);
++    return;
++  }
++  im.residenceYears += 1;
++  // Language comes with time, faster when young and for quick learners.
++  if (im.fluency < 100) im.fluency = clamp(Math.round(im.fluency + 8 + (p.talents.learner - 50) / 10 + (p.age < 25 ? 6 : 0) + (isRoyal(p) ? 0 : 0)));
++  // Homesickness and isolation fade as you settle and learn the language.
++  if (im.fluency < 30) changeStat(p, "happiness", im.residenceYears <= 2 ? -3 : -2);
++  else if (im.residenceYears <= 1) changeStat(p, "happiness", -1);
++
++  const jobless = !p.currentJob && !p.business && !p.music.signed;
++  if (im.status === "work") {
++    im.idle = jobless ? im.idle + 1 : 0;
++    im.yearsLeft -= 1;
++    if (im.idle >= 2) return deport(p, "Your work visa was cancelled after two years without a job.", notices);
++    if (im.yearsLeft <= 0) {
++      if (im.residenceYears >= 5 && !jobless && rng.chance(0.9)) {
++        im.status = "permanent";
++        const body = `After ${im.residenceYears} years of work, ${p.residence.country} granted you permanent residence.`;
++        addLog(p, body);
++        notices.push(info("Permanent Resident", body, "good"));
++      } else if (!jobless && rng.chance(0.85)) {
++        im.yearsLeft = 4;
++        addLog(p, "Your work visa was renewed for four more years.");
++      } else return deport(p, "Your work visa expired and was not renewed.", notices);
++    } else if (im.idle === 1) {
++      const body = "Your work visa depends on having a job. You have a year to find one, or you will be asked to leave.";
++      addLog(p, body);
++      notices.push(info("Visa at Risk", body, "bad"));
++    }
++  } else if (im.status === "student") {
++    const finished = !HIGHER_ED.has(p.education.stage);
++    im.idle = finished && jobless ? im.idle + 1 : 0;
++    im.yearsLeft -= 1;
++    if (finished && im.yearsLeft > 1) im.yearsLeft = 1;
++    if (im.yearsLeft <= 0 || im.idle >= 2) {
++      if (!jobless && rng.chance(0.7)) {
++        im.status = "work";
++        im.yearsLeft = 4;
++        im.idle = 0;
++        const body = "Your studies are done and your employer sponsored you: your student visa became a work visa.";
++        addLog(p, body);
++        notices.push(info("Staying On", body, "good"));
++      } else return deport(p, "Your student visa ended and you had no job or course to keep you there.", notices);
++    }
++  } else if (im.status === "family") {
++    const married = getPartner(p)?.partnerStatus === "married";
++    im.yearsLeft -= 1;
++    if (!married && im.yearsLeft > 1) im.yearsLeft = 1;
++    if (im.yearsLeft <= 0) {
++      if (married) {
++        im.status = "permanent";
++        const body = "Three years into your marriage, immigration signed off: you are now a permanent resident.";
++        addLog(p, body);
++        notices.push(info("Settled", body, "good"));
++      } else return deport(p, "Your marriage ended, and so did the visa that depended on it.", notices);
++    }
++  } else if (im.status === "asylum") {
++    im.yearsLeft -= 1;
++    if (im.yearsLeft <= 0) {
++      im.status = "permanent";
++      const body = "Five years on, your refugee status was converted into permanent residence. You are safe here for good.";
++      addLog(p, body);
++      notices.push(info("Safe at Last", body, "good"));
++    }
++  } else if (im.status === "overstay") {
++    const caught = 0.12 + Math.min(0.2, im.residenceYears * 0.03);
++    if (rng.chance(caught)) return deport(p, "Immigration officers found you during a raid and deported you, seizing part of your savings.", notices, 0.4);
++    if (rng.chance(0.05)) {
++      im.status = "permanent";
++      const body = "A new amnesty regularised people in your position. You have papers at last.";
++      addLog(p, body);
++      notices.push(info("Amnesty", body, "good"));
++    } else if (rng.chance(0.3)) {
++      p.currentJob = null;
++      p.annualSalary = 0;
++      addLog(p, "Without papers, you were let go as soon as an employer checked.");
++    }
++    changeStat(p, "happiness", -1);
++  }
++}
++
++/** Short lines for the UI: what your status means right now. */
++export function statusLines(p: PlayerState): string[] {
++  const im = p.immigration;
++  const out: string[] = [];
++  if (isCitizen(p)) return out;
++  out.push(`${STATUS_LABEL[im.status]}${im.yearsLeft > 0 ? `, ${im.yearsLeft} year${im.yearsLeft === 1 ? "" : "s"} left on the permit` : ""}`);
++  if (im.status === "work") out.push(im.idle > 0 ? "No job: your visa is at risk" : "Tied to your job");
++  if (im.status === "student") out.push("Tied to your studies");
++  if (im.status === "family") out.push("Tied to your marriage");
++  if (im.status === "overstay") out.push("No legal work, no healthcare cover, risk of deportation");
++  out.push(`${profileOf(p.residence.country).language} fluency ${im.fluency}%`);
++  return out;
++}
+diff --git a/src/engine/world.ts b/src/engine/world.ts
+index b5e68ca..886d8f6 100644
+--- a/src/engine/world.ts
++++ b/src/engine/world.ts
+@@ -5,8 +5,11 @@ import type { ActionResult, Climate, PlayerState } from "@/types/game.types";
+ import type { Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+ import { COUNTRY_BY_NAME, getCountry } from "@/data/countries";
++import { profileOf } from "@/data/countryProfiles";
+ import { addLog, changeStat, clone, isRoyal } from "./state";
+ import { relocationBlocker } from "./justice";
++import { forcedClimate, worldMarketShift } from "./worldEvents";
++import { needsRoute, routeFor, settle, type RouteId } from "./visa";
+ 
+ type Notices = NonNullable<ActionResult["notices"]>;
+ 
+@@ -33,6 +36,16 @@ const HEADLINES: Record<Climate, string[]> = {
+ };
+ 
+ export function advanceClimate(p: PlayerState, rng: Rng, notices: Notices) {
++  // A war, pandemic or crisis where you live overrides the ordinary cycle.
++  const forced = forcedClimate(p);
++  if (forced && p.economy.climate !== forced) {
++    p.economy = { climate: forced, yearsLeft: 1 };
++    return;
++  }
++  if (forced) {
++    p.economy.yearsLeft = Math.max(1, p.economy.yearsLeft);
++    return;
++  }
+   p.economy.yearsLeft -= 1;
+   if (p.economy.yearsLeft > 0) return;
+   const next = rng.weighted<Climate>(["boom", "normal", "recession"], (c) => (c === "normal" ? 0.56 : 0.22))!;
+@@ -95,7 +108,7 @@ export function processInvestments(p: PlayerState, rng: Rng, notices: Notices) {
+   const before = portfolioValue(p);
+   if (before <= 0) return;
+   for (const [id, h] of Object.entries(p.investments)) {
+-    h.value = Math.max(0, Math.round(h.value * (1 + yearReturn(id, p.economy.climate, rng) + (p.talents.moneySense - 50) / 1000)));
++    h.value = Math.max(0, Math.round(h.value * (1 + yearReturn(id, p.economy.climate, rng) + (p.talents.moneySense - 50) / 1000 + (id === "bonds" ? 0 : worldMarketShift(p)))));
+     if (h.value === 0 && h.basis === 0) delete p.investments[id];
+   }
+   const after = portfolioValue(p);
+@@ -228,7 +241,7 @@ export function setRentTier(p0: PlayerState, tier: number): ActionResult {
+ export const RELOCATE_DOMESTIC = 2_500;
+ export const RELOCATE_ABROAD = 9_000;
+ 
+-export function relocate(p0: PlayerState, country: string, rng: Rng): ActionResult {
++export function relocate(p0: PlayerState, country: string, rng: Rng, route?: RouteId): ActionResult {
+   const p = clone(p0);
+   const dest = COUNTRY_BY_NAME[country];
+   if (!dest) return { player: p0 };
+@@ -238,26 +251,48 @@ export function relocate(p0: PlayerState, country: string, rng: Rng): ActionResu
+   const restricted = relocationBlocker(p, dest.name);
+   if (restricted) return { player: p0, notices: [info("Can't Move", restricted, "bad")] };
+   const abroad = dest.name !== p.residence.country;
+-  const cost = abroad ? RELOCATE_ABROAD : RELOCATE_DOMESTIC;
+-  if (p.bankBalance < cost) return { player: p0, notices: [info("Insufficient Funds", `Moving costs ${money(cost)}.`, "bad")] };
++  // Abroad, you need papers: citizens move freely, everyone else picks a route.
++  const needs = abroad && needsRoute(p, dest.name);
++  const info0 = needs && route ? routeFor(p, dest.name, route) : undefined;
++  if (needs && !info0) return { player: p0, notices: [info("You Need a Visa", `${dest.name} will not let you in without papers. Choose a route (work, study, family, investment, asylum) on the relocation screen.`, "bad")] };
++  if (info0?.blocker) return { player: p0, notices: [info("Not Eligible", info0.blocker, "bad")] };
++  const moveCost = route === "asylum" ? 2_000 : abroad ? RELOCATE_ABROAD : RELOCATE_DOMESTIC;
++  const fees = info0 ? info0.fee : 0;
++  if (p.bankBalance < moveCost + fees) return { player: p0, notices: [info("Insufficient Funds", `Moving${info0 ? ` and the ${info0.label.toLowerCase()}` : ""} costs ${money(moveCost + fees)}.`, "bad")] };
+   if ((p.annual.relocate ?? 0) >= 1) return { player: p0, notices: [info("Boxes Everywhere", "You've already moved this year.")] };
+   p.annual.relocate = 1;
+-  p.bankBalance -= cost;
++  p.bankBalance -= moveCost + fees;
++  const refused = info0 && info0.id !== "investor" && !rng.chance(info0.chance);
++  if (refused && info0) {
++    p.immigration.refused += 1;
++    const body = info0.id === "undocumented" ? "The crossing failed. You lost the smugglers' fee and had to turn back." : `Your ${info0.label.toLowerCase()} application was refused. The fees are gone, and each refusal makes the next application harder.`;
++    addLog(p, body);
++    changeStat(p, "happiness", -5);
++    return { player: p, notices: [info("Application Refused", body, "bad")] };
++  }
++  const keepJob = route === "work" && !!p.currentJob && !["athlete", "mafia", "spy"].includes(p.currentJob.lineId);
++  const oldCountry = p.residence.country;
+   const city = rng.pick(dest.cities.filter((c) => c !== p.residence.city).concat(dest.cities[0]));
+   p.residence = { ...p.residence, country: dest.name, city };
++  if (abroad) settle(p, dest.name, needs ? (route ?? null) : null);
++  if (abroad) p.economy = { climate: rng.pick(["normal", "normal", "boom", "recession"] as const), yearsLeft: rng.int(1, 3) };
+   for (const r of p.relatives) {
+     if (!r.alive || r.partnerStatus === "ex") continue;
+     if (r.relation === "Partner") continue;
+     r.relationshipBar = clamp(r.relationshipBar - (abroad ? 18 : 8));
+   }
+-  if (p.currentJob) {
++  if (p.currentJob && !keepJob) {
+     p.currentJob = null;
+     p.annualSalary = 0;
+   }
++  if (abroad && p.flags.includes("emigrant") === false && dest.name !== p.birthCountry) p.flags.push("emigrant");
++  if (dest.name === p.birthCountry) p.flags = p.flags.filter((f) => f !== "emigrant");
+   const swing = rng.int(abroad ? -6 : -3, abroad ? 12 : 8);
+   changeStat(p, "happiness", swing);
++  const status = p.immigration.status;
++  const how = !abroad ? "" : !needs ? ` You are a citizen there, so no papers were needed.` : ` You arrived on ${status === "permanent" ? "permanent residence" : status === "overstay" ? "no papers at all" : `a ${status === "asylum" ? "refugee" : status} permit`}.`;
+   const body = abroad
+-    ? `You emigrated to ${city}, ${dest.name}. New tax rules, new language, new life. You had to leave your job behind.`
++    ? `You emigrated from ${oldCountry} to ${city}, ${dest.name}. New tax rules, new language${profileOf(dest.name).language === profileOf(oldCountry).language ? "" : ` (${profileOf(dest.name).language}, which you barely speak)`}, new life.${how}${keepJob ? " Your employer transferred you, so you kept your job." : " You had to leave your job behind."}`
+     : `You moved to ${city}. A fresh start in a familiar country. You left your job behind.`;
+   addLog(p, body);
+   return { player: p, notices: [info(abroad ? "New Country!" : "New City!", body, swing >= 0 ? "good" : "neutral")] };
+diff --git a/src/engine/worldEvents.ts b/src/engine/worldEvents.ts
+new file mode 100644
+index 0000000..cc74aaa
+--- /dev/null
++++ b/src/engine/worldEvents.ts
+@@ -0,0 +1,185 @@
++/**
++ * The world around you: pandemics, wars, recessions, inflation shocks, technology shifts, policy changes
++ * and natural disasters. They are simulated for every country each year; what is under way where you live
++ * (and, more faintly, in neighbouring countries) changes prices, jobs, healthcare, safety and mood.
++ */
++import type { ActionResult, Climate, PlayerState, WorldEventState, WorldState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp } from "@/lib/format";
++import { COUNTRY_PROFILES, profileOf } from "@/data/countryProfiles";
++import { WORLD_EVENTS, WORLD_EVENT_BY_ID, exposureOf, type WorldEffects, type WorldEventDef } from "@/data/worldEvents";
++import { addLog, changeStat } from "./state";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++
++export const freshWorld = (): WorldState => ({ events: [], prices: 1, lastStart: {}, chronicle: [] });
++
++export function hydrateWorld(raw: Partial<WorldState> | undefined): WorldState {
++  return {
++    events: Array.isArray(raw?.events) ? raw.events.filter((e) => e && WORLD_EVENT_BY_ID[e.id]) : [],
++    prices: typeof raw?.prices === "number" && Number.isFinite(raw.prices) ? raw.prices : 1,
++    lastStart: raw?.lastStart ?? {},
++    chronicle: Array.isArray(raw?.chronicle) ? raw.chronicle.slice(-20) : [],
++  };
++}
++
++// ---------------------------------------------------------------------------
++// Effects as felt in one country
++// ---------------------------------------------------------------------------
++
++/** How hard a severity level lands: 1 is a scare, 3 is a catastrophe. */
++const SEV_SCALE = [0, 0.6, 1, 1.5];
++
++export interface ActiveEffect {
++  state: WorldEventState;
++  def: WorldEventDef;
++  /** "home" = it struck your country, "world" = everywhere, "region" = a neighbour's trouble spilling over. */
++  reach: "home" | "world" | "region";
++  yearsLeft: number;
++}
++
++/** Everything under way that touches `country` right now. */
++export function activeEvents(world: WorldState, country: string, year: number): ActiveEffect[] {
++  const region = profileOf(country).region;
++  const out: ActiveEffect[] = [];
++  for (const st of world.events) {
++    const def = WORLD_EVENT_BY_ID[st.id];
++    if (!def || st.endYear < year) continue;
++    const yearsLeft = Math.max(1, st.endYear - year + 1);
++    if (def.scope === "global") out.push({ state: st, def, reach: "world", yearsLeft });
++    else if (st.country === country) out.push({ state: st, def, reach: "home", yearsLeft });
++    else if (def.spill && profileOf(st.country).region === region) out.push({ state: st, def, reach: "region", yearsLeft });
++  }
++  return out;
++}
++
++const NEUTRAL_FX = { prices: 0, layoff: 0, hiring: 0, infection: 1, mortality: 1, youngMortality: 1, care: 1, happiness: 0, market: 0, housing: 0, tax: 1 };
++export type Aggregate = typeof NEUTRAL_FX & { climate: Climate | null };
++
++function effectOf(a: ActiveEffect): WorldEffects {
++  return a.reach === "region" ? (a.def.spill ?? {}) : a.def.fx;
++}
++
++/** All the active effects on a country, severity-scaled and combined. */
++export function worldFxFor(world: WorldState, country: string, year: number): Aggregate {
++  const agg: Aggregate = { ...NEUTRAL_FX, climate: null };
++  const quality = profileOf(country).careQuality;
++  for (const a of activeEvents(world, country, year)) {
++    const fx = effectOf(a);
++    const sev = SEV_SCALE[a.state.severity] ?? 1;
++    // Global events do not hit every country alike: a pandemic is far deadlier where care is thin, a financial crisis where economies swing.
++    const exposure = a.reach === "world" ? clamp(exposureOf(a.def, country), 0.3, 1.6) : 1;
++    const add = (key: "prices" | "layoff" | "hiring" | "happiness" | "market" | "housing") => {
++      if (fx[key]) agg[key] += fx[key]! * sev * exposure;
++    };
++    (["prices", "layoff", "hiring", "happiness", "market", "housing"] as const).forEach(add);
++    const mult = (key: "infection" | "mortality" | "youngMortality" | "care" | "tax", scale = 1) => {
++      if (fx[key]) agg[key] *= 1 + (fx[key]! - 1) * sev * scale;
++    };
++    const lethality = a.def.kind === "pandemic" ? clamp(1.8 - quality / 60, 0.4, 1.4) : 1;
++    mult("mortality", lethality);
++    mult("youngMortality");
++    mult("infection");
++    mult("care");
++    mult("tax");
++    if (fx.climate && a.reach !== "region" && (fx.climate === "recession" || !agg.climate)) agg.climate = fx.climate;
++  }
++  return agg;
++}
++
++export const worldFx = (p: PlayerState): Aggregate => worldFxFor(p.world, p.residence.country, p.year);
++
++export const worldLayoff = (p: PlayerState) => worldFx(p).layoff;
++export const worldHiring = (p: PlayerState) => worldFx(p).hiring;
++export const worldCareFactor = (p: PlayerState) => worldFx(p).care;
++export const worldTaxFactor = (p: PlayerState) => worldFx(p).tax;
++export const worldMarketShift = (p: PlayerState) => worldFx(p).market;
++export const worldHousingShift = (p: PlayerState) => worldFx(p).housing;
++export const forcedClimate = (p: PlayerState) => worldFx(p).climate;
++/** Multiplier on cost of living: pressure from inflation shocks that wages haven't caught up with. */
++export const worldPriceLevel = (p: PlayerState) => clamp(p.world.prices, 0.9, 2.5);
++
++/** Multiplier on your yearly death risk from what is going on around you (wars hit the young hardest). */
++export function worldMortality(p: PlayerState, age = p.age): number {
++  const f = worldFx(p);
++  return f.mortality * (age >= 15 && age <= 40 ? f.youngMortality : 1);
++}
++
++export const worldInfection = (p: PlayerState) => worldFx(p).infection;
++
++export function isAtWar(p: PlayerState, country = p.residence.country): boolean {
++  return activeEvents(p.world, country, p.year).some((a) => a.def.kind === "war" && a.reach === "home");
++}
++
++/** Does anything serious (war, pandemic, crisis) afflict this country right now? */
++export function inCrisis(world: WorldState, country: string, year: number): boolean {
++  return activeEvents(world, country, year).some((a) => a.reach !== "region" && ["war", "unrest", "pandemic"].includes(a.def.kind) && a.state.severity >= 2);
++}
++
++// ---------------------------------------------------------------------------
++// The yearly turn of the world
++// ---------------------------------------------------------------------------
++
++const lastKey = (def: WorldEventDef, country: string) => (def.scope === "global" ? def.id : `${def.id}:${country}`);
++
++function start(w: WorldState, def: WorldEventDef, country: string, year: number, rng: Rng) {
++  const severity = rng.weighted([1, 2, 3], (s) => (s === 1 ? 0.45 : s === 2 ? 0.38 : 0.17)) ?? 2;
++  const [lo, hi] = def.duration;
++  const len = Math.max(1, rng.int(lo, hi) + (severity >= 3 && hi > 1 ? 1 : 0));
++  w.events.push({ id: def.id, country: def.scope === "global" ? "*" : country, startYear: year, endYear: year + len - 1, severity });
++  w.lastStart[lastKey(def, country)] = year;
++  return w.events[w.events.length - 1];
++}
++
++function relevantToPlayer(p: PlayerState, def: WorldEventDef, st: WorldEventState): boolean {
++  if (def.scope === "global") return true;
++  return st.country === p.residence.country || st.country === p.birthCountry;
++}
++
++export function advanceWorld(p: PlayerState, rng: Rng, notices: Notices) {
++  const w = p.world;
++  // Expire what has run its course, and tell the player when something they lived through ends.
++  const ended = w.events.filter((e) => e.endYear < p.year);
++  w.events = w.events.filter((e) => e.endYear >= p.year);
++  for (const e of ended) {
++    const def = WORLD_EVENT_BY_ID[e.id];
++    if (def && relevantToPlayer(p, def, e) && e.endYear - e.startYear >= 1 && ["pandemic", "war", "recession", "inflation"].includes(def.kind)) {
++      const text = def.kind === "war" ? `The fighting in ${e.country} has ended. A fragile peace holds.` : def.kind === "pandemic" ? "The pandemic is finally receding. Life is edging back to normal." : `The ${def.name.toLowerCase()} is easing.`;
++      addLog(p, `📰 ${text}`);
++      w.chronicle.push({ year: p.year, text });
++    }
++  }
++  // Inflation: shocks lift the price level; afterwards wages catch up and the excess fades.
++  const fx = worldFx(p);
++  w.prices = 1 + (w.prices - 1) * 0.78 + fx.prices;
++  if (fx.happiness) changeStat(p, "happiness", Math.round(fx.happiness));
++
++  // New events across the world.
++  for (const def of WORLD_EVENTS) {
++    const targets = def.scope === "global" ? ["*"] : Object.keys(COUNTRY_PROFILES);
++    for (const c of targets) {
++      const key = lastKey(def, c);
++      if (w.lastStart[key] !== undefined && p.year - w.lastStart[key] < def.gap) continue;
++      if (def.scope === "country" && w.events.some((e) => e.id === def.id && e.country === c)) continue;
++      if (def.scope === "global" && w.events.some((e) => e.id === def.id)) continue;
++      const exp = def.scope === "global" ? 1 : exposureOf(def, c);
++      if (exp <= 0 || !rng.chance(def.rate * exp)) continue;
++      const st = start(w, def, c, p.year, rng);
++      if (!relevantToPlayer(p, def, st)) continue;
++      const line = def.headline(c === "*" ? p.residence.country : c, st.severity);
++      w.chronicle.push({ year: p.year, text: line });
++      addLog(p, `📰 ${line}`);
++      const home = def.scope === "global" || c === p.residence.country;
++      notices.push({ kind: "info", title: `${def.emoji} ${def.name}`, body: `${line}${home ? ` ${def.gist}` : " You hear about it from afar."}`, tone: ["tech", "policy"].includes(def.kind) && (def.fx.hiring ?? 0) >= 0 ? "neutral" : "bad" });
++      if (def.prompt && home && p.age >= 14 && !p.queuedEvents.includes(def.prompt)) p.queuedEvents.push(def.prompt);
++    }
++  }
++  w.chronicle = w.chronicle.slice(-20);
++}
++
++/** Short human text of what a country is going through, for the relocation screen. */
++export function countryNews(world: WorldState, country: string, year: number): string[] {
++  return activeEvents(world, country, year)
++    .filter((a) => a.reach !== "region" || a.def.kind === "war")
++    .map((a) => `${a.def.emoji} ${a.reach === "region" ? `${a.state.country}'s ${a.def.name.toLowerCase()} next door` : a.def.name}`);
++}
+diff --git a/src/types/game.types.ts b/src/types/game.types.ts
+index d07187b..da3224a 100644
+--- a/src/types/game.types.ts
++++ b/src/types/game.types.ts
+@@ -17,6 +17,14 @@ export interface Disease {
+   healthImpact: number;
+   /** Fatal diseases carry a countdown to death. */
+   yearsLeft?: number;
++  /** Chosen long-term treatment plan (see engine/treatment.ts). Unset means monitoring only. */
++  plan?: string;
++  /** Calendar year the current plan began. */
++  planSince?: number;
++  /** The plan lapsed (unaffordable or abandoned): the condition runs unchecked. */
++  lapsed?: boolean;
++  /** Years this condition has been under treatment without a break (drives adherence and remission). */
++  treatedYears?: number;
+ }
+ 
+ export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend" | "Grandparent" | "Grandchild" | "Nephew" | "Pet" | "Lover";
+@@ -510,6 +518,73 @@ export interface Residence {
+   rentTier: number;
+ }
+ 
++// ---------------------------------------------------------------------------
++// The wider world, school life and immigration (see engine/worldEvents.ts, school.ts, visa.ts)
++// ---------------------------------------------------------------------------
++
++/** A running world event: a pandemic, war, recession, policy change... `country` is where it started ("*" = everywhere). */
++export interface WorldEventState {
++  id: string;
++  country: string;
++  startYear: number;
++  endYear: number;
++  /** 1 mild, 2 serious, 3 severe. */
++  severity: number;
++}
++
++export interface WorldState {
++  /** Everything currently under way, in every country. */
++  events: WorldEventState[];
++  /** Excess cost-of-living pressure (1 = normal): rises with inflation shocks, then fades as wages catch up. */
++  prices: number;
++  /** Calendar year each kind of event last began, to space them out. */
++  lastStart: Record<string, number>;
++  /** Headlines that touched your countries, newest last. */
++  chronicle: Array<{ year: number; text: string }>;
++}
++
++export interface SchoolState {
++  /** 0-100: how well you fit in with classmates. */
++  social: number;
++  /** 0-100: how much you are being picked on right now. */
++  bullied: number;
++  /** 0-100: how you get on with teachers. */
++  teacher: number;
++  /** 0-100: exam and performance pressure. */
++  stress: number;
++  /** Extracurricular you stick with, if any. */
++  club: string | null;
++  clubYears: number;
++  /** Where you go to school. */
++  tier: "state" | "private";
++  /** A tutor is helping this year. */
++  tutor: boolean;
++  /** School years you skipped a lot of lessons. */
++  truancy: number;
++  /** Report cards: newest last (max 6). */
++  reports: Array<{ age: number; grade: string; note: string }>;
++  /** Highlights and scars that carry into adult life. */
++  honors: string[];
++}
++
++export type VisaStatus = "citizen" | "permanent" | "work" | "student" | "family" | "asylum" | "overstay";
++
++export interface ImmigrationState {
++  /** Countries you hold citizenship in (your birth country to begin with). */
++  citizenship: string[];
++  status: VisaStatus;
++  /** Years left on a temporary permit (0 for citizen and permanent). */
++  yearsLeft: number;
++  /** Consecutive years living in the current country. */
++  residenceYears: number;
++  /** 0-100 fluency in the language of the country you live in. */
++  fluency: number;
++  /** Visa applications refused. */
++  refused: number;
++  /** Years in a row on a work or student permit without the job or course it depends on. */
++  idle: number;
++}
++
+ export interface Holding {
+   value: number;
+   basis: number;
+@@ -1266,6 +1341,12 @@ export interface PlayerState {
+   residence: Residence;
+   investments: Record<string, Holding>;
+   vices: Vices;
++  /** Pandemics, wars, recessions and policy shifts around you. */
++  world: WorldState;
++  /** Report cards, friendships, bullying and clubs through your school years. */
++  school: SchoolState;
++  /** Your right to live and work where you are. */
++  immigration: ImmigrationState;
+ 
+   // Justice
+   probation: Probation | null;

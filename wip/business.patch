@@ -1,0 +1,2019 @@
+diff --git a/src/engine/__tests__/business.test.ts b/src/engine/__tests__/business.test.ts
+index 3640c4b..c1fe584 100644
+--- a/src/engine/__tests__/business.test.ts
++++ b/src/engine/__tests__/business.test.ts
+@@ -295,7 +295,10 @@ describe("financing", () => {
+     expect(b.cash).toBeGreaterThan(base.business!.cash);
+     expect(b.rounds).toBe(1);
+     const quote = saleQuote(diluted!, b);
+-    expect(quote.gross).toBe(Math.round(quote.equity * 0.8));
++    // A venture investor's 1x preference is paid first, so a weak exit leaves the founder with less than 80%.
++    expect(quote.gross).toBeLessThanOrEqual(Math.round(quote.equity * 0.8));
++    expect(b.investors).toHaveLength(1);
++    expect(b.investors[0].share).toBeCloseTo(0.2, 3);
+     expect(fundingTerms(diluted!, b, 0.2).preMoney).toBeGreaterThan(0);
+   });
+ 
+diff --git a/src/engine/__tests__/zz_scratch_bot.test.ts b/src/engine/__tests__/zz_scratch_bot.test.ts
+new file mode 100644
+index 0000000..ccac558
+--- /dev/null
++++ b/src/engine/__tests__/zz_scratch_bot.test.ts
+@@ -0,0 +1,99 @@
++import { NEUTRAL } from "./helpers/neutral";
++import { it } from "vitest";
++import fs from "node:fs";
++import { makeRng, type Rng } from "@/lib/rng";
++import { createNewPlayer, netWorth } from "../state";
++import { ageUp, finalize } from "../ageUp";
++import { resolveEvent } from "../events";
++import {
++  BUSINESS_TYPES, startBusiness, hireStaff, hireManager, expandBusiness, takeBusinessLoan, loanLimit, sellBusiness, runMarketing,
++  recommendedStaff, setPayout, renovateBusiness,
++} from "../paths";
++import type { Notice, PlayerState } from "@/types/game.types";
++
++const OUT = "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/bot.json";
++
++type Strat = "bootstrap" | "leveraged" | "manager" | "serial" | "struggle" | "seller" | "default";
++function adult(seed: number, cash: number) {
++  const rng = makeRng(seed);
++  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
++  p.age = 28; p.birthYear = p.year - 28;
++  p.education = { stage: "None", yearsLeft: 0, major: null, grades: 60, studyEffort: 0, degrees: ["highschool"] };
++  p.smarts = 70; p.health = 90;
++  p.skills.charisma = 40; p.skills.athletics = 40;
++  p.bankBalance = cash; p.economy = { climate: "normal", yearsLeft: 3 };
++  return { rng, p };
++}
++// eslint-disable-next-line @typescript-eslint/no-explicit-any
++function act(p: PlayerState, rng: Rng, fn: (p: PlayerState, r: Rng) => any): PlayerState {
++  const res = fn(p, rng);
++  if (res.player !== p) finalize(res.player, []);
++  return res.player;
++}
++function pick(rng: Rng, cash: number) {
++  const afford = BUSINESS_TYPES.filter(k => k.cost <= cash * 0.9 && k.minSmarts <= 70 && (!k.skill || k.skill.min <= 40));
++  if (!afford.length) return null;
++  return rng.pick(afford);
++}
++
++// eslint-disable-next-line @typescript-eslint/no-explicit-any
++function playLife(seed: number, strat: Strat, cash: number): any {
++  const { rng, p: p0 } = adult(seed, cash);
++  let p = p0;
++  const kind = pick(rng, cash);
++  if (!kind) return null;
++  p = act(p, rng, (pl, r) => startBusiness(pl, kind.id, "Bot Co", r));
++  if (!p.business) return null;
++  const startNW = netWorth(p);
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const rec: any = { seed, strat, kind: kind.id, cash, years: 0, outcome: "alive", draws: [] as number[], logs: [] as string[], peakValue: 0 };
++  let businesses = 1;
++  for (let y = 0; y < 25 && p.alive; y++) {
++    const before = p.bankBalance;
++    if (p.business) {
++      const b = p.business;
++      const lim = () => loanLimit(p, p.business!);
++      const staffTarget = () => recommendedStaff(p, p.business!);
++      const manageStaff = () => { let g = 0; while (p.business && p.business.staff < staffTarget() && g++ < 20) { const q = act(p, rng, (pl) => hireStaff(pl)); if (q === p) break; p = q; } };
++      if (strat === "bootstrap") { manageStaff(); p = act(p, rng, (pl) => runMarketing(pl)); if (p.business && p.business.cash > 150_000 && p.business.facility < 70) p = act(p, rng, (pl)=>renovateBusiness(pl)); }
++      if (strat === "leveraged") {
++        manageStaff(); p = act(p, rng, (pl) => runMarketing(pl));
++        if (p.business && lim() > 20000) { p = act(p, rng, (pl) => takeBusinessLoan(pl, lim())); }
++        if (p.business && p.business.history.length >= 1 && p.business.lastProfit > 0) p = act(p, rng, (pl) => expandBusiness(pl));
++        if (p.business) p = act(p, rng, (pl) => setPayout(pl, "reinvest"));
++      }
++      if (strat === "manager") {
++        if (!b.manager && y >= 1) p = act(p, rng, (pl, r) => hireManager(pl, r, "star"));
++        manageStaff(); p = act(p, rng, (pl) => runMarketing(pl)); p = { ...p, effort: "coast" };
++      }
++      if (strat === "serial") { manageStaff(); p = act(p, rng, (pl) => runMarketing(pl)); if (y >= 4 && p.business) { p = act(p, rng, (pl, r) => sellBusiness(pl, r)); businesses++; if (!p.business) { const k2 = pick(rng, p.bankBalance); if (k2) p = act(p, rng, (pl, r) => startBusiness(pl, k2.id, "Next Co", r)); } } }
++      if (strat === "struggle") { p = { ...p, effort: "coast" }; if (b.staff < 1) p = act(p, rng, (pl) => hireStaff(pl)); }
++      if (strat === "seller") { manageStaff(); p = act(p, rng, (pl) => runMarketing(pl)); if (y === 6) { p = act(p, rng, (pl, r) => sellBusiness(pl, r)); } }
++      if (strat === "default") { manageStaff(); }
++    }
++    const res = ageUp(p, rng);
++    p = res.player;
++    for (const n of (res.notices ?? []) as Notice[]) {
++      if (n.kind === "event" && p.alive) { const nn = n; p = act(p, rng, (pl, r) => resolveEvent(pl, nn.event, r.int(0, nn.event.options.length - 1), r)); }
++    }
++    rec.draws.push(p.bankBalance - before);
++    rec.years = y + 1;
++    if (p.business) rec.peakValue = Math.max(rec.peakValue, p.business.value);
++    if (!p.business && p.flags.some(f => f.startsWith("biz_cooloff"))) { rec.outcome = "bankrupt@" + (y + 1); break; }
++    if (!p.business && strat !== "serial") { rec.outcome = "exited@" + (y+1); break; }
++  }
++  rec.endNW = netWorth(p); rec.startNW = startNW; rec.businesses = businesses;
++  rec.final = p.business ? { value: p.business.value, rev: p.business.revenue, profit: p.business.lastProfit, cash: p.business.cash, debt: p.business.debt, locs: p.business.locations, staff: p.business.staff, rep: p.business.reputation } : null;
++  return rec;
++}
++
++it("scratch bot", () => {
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const out: any[] = [];
++  const strats: Strat[] = ["bootstrap", "leveraged", "manager", "serial", "struggle", "seller", "default"];
++  for (const strat of strats) for (let s = 1; s <= 120; s++) {
++    const cash = [60_000, 150_000, 400_000, 1_500_000][s % 4];
++    try { const r = playLife(s * 7919 + strats.indexOf(strat), strat, cash); if (r) out.push(r); } catch (e) { out.push({ strat, seed: s, crash: String((e as Error).stack) }); }
++  }
++  fs.writeFileSync(OUT, JSON.stringify(out));
++});
+diff --git a/src/engine/__tests__/zz_scratch_econ.test.ts b/src/engine/__tests__/zz_scratch_econ.test.ts
+new file mode 100644
+index 0000000..f6c77db
+--- /dev/null
++++ b/src/engine/__tests__/zz_scratch_econ.test.ts
+@@ -0,0 +1,31 @@
++import { NEUTRAL } from "./helpers/neutral";
++import { it } from "vitest";
++import { makeRng } from "@/lib/rng";
++import { createNewPlayer } from "../state";
++import { BUSINESS_TYPES, recommendedStaff } from "../paths";
++import { newBusiness, stepYear, NO_SHOCKS, capacityOf } from "../businessModel";
++
++it("econ table", () => {
++  const rng = makeRng(1);
++  const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
++  p.smarts = 70; p.age = 35; p.effort = "steady";
++  p.economy = { climate: "normal", yearsLeft: 3 };
++  const lines: string[] = [];
++  for (const k of BUSINESS_TYPES) {
++    const row: string[] = [k.id.padEnd(13)];
++    for (const mode of ["L1-owner", "L2-owner", "L3-owner", "L2-mgr", "L3-mgr","L4-mgr"]) {
++      const b = newBusiness(k, "x", 2026, makeRng(2));
++      b.fit = 1; b.customers = 55; b.reputation = 55; b.quality = 55; b.marketing = 1.2; b.facility = 75; b.morale = 65; b.training = 40;
++      const pp = { ...p, effort: "steady" as const }; b.locations = Math.min(k.maxLocations, Number(mode[1]));
++      if (mode.endsWith("mgr")) b.manager = { name: "m", skill: 65, wage: Math.round(k.mgrWage*1.25), hired: 2026 };
++      
++      let best = -1e12, bs = 0;
++      for (let n = 0; n <= k.maxStaff*b.locations; n++) { const s = stepYear(pp, { ...b, staff: n }, NO_SHOCKS); if (s.pnl.operating > best) { best = s.pnl.operating; bs = n; } }
++      const s = stepYear(pp, { ...b, staff: bs }, NO_SHOCKS);
++      row.push(`${mode}: op ${Math.round(best / 1000)}k rev ${Math.round(s.pnl.revenue / 1000)}k staff ${bs} cap ${capacityOf(pp, { ...b, staff: bs }).toFixed(2)}`);
++    }
++    lines.push(row.join(" | "));
++    lines.push(`   cost ${k.cost} recommended ${recommendedStaff(p, newBusiness(k, "x", 2026, makeRng(2)))}`);
++  }
++  console.log(lines.join("\n"));
++});
+diff --git a/src/engine/__tests__/zz_scratch_fr.test.ts b/src/engine/__tests__/zz_scratch_fr.test.ts
+new file mode 100644
+index 0000000..cd634e9
+--- /dev/null
++++ b/src/engine/__tests__/zz_scratch_fr.test.ts
+@@ -0,0 +1,54 @@
++import { NEUTRAL } from "./helpers/neutral";
++import { it } from "vitest";
++import { makeRng, type Rng } from "@/lib/rng";
++import { createNewPlayer, netWorth } from "../state";
++import { ageUp, finalize } from "../ageUp";
++import { resolveEvent } from "../events";
++import { startBusiness, hireStaff, runMarketing, recommendedStaff } from "../paths";
++import type { Notice, PlayerState } from "@/types/game.types";
++
++// eslint-disable-next-line @typescript-eslint/no-explicit-any
++function act(p: PlayerState, rng: Rng, fn: (p: PlayerState, r: Rng) => any): PlayerState {
++  const res = fn(p, rng);
++  if (res.player !== p) finalize(res.player, []);
++  return res.player;
++}
++
++function life(seed: number, kind: string, franchise: boolean) {
++  const rng = makeRng(seed);
++  let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
++  p.age = 28; p.birthYear = p.year - 28;
++  p.education = { stage: "None", yearsLeft: 0, major: null, grades: 60, studyEffort: 0, degrees: ["highschool"] };
++  p.smarts = 70; p.health = 90; p.bankBalance = 1_000_000; p.economy = { climate: "normal", yearsLeft: 3 };
++  p = act(p, rng, (pl, r) => startBusiness(pl, kind, "T", r, { franchise }));
++  if (!p.business) throw new Error("no biz");
++  const start = netWorth(p);
++  let profits = 0, yrs = 0, bankrupt = false;
++  for (let y = 0; y < 10; y++) {
++    let g = 0;
++    while (p.business && p.business.staff < recommendedStaff(p, p.business) && g++ < 20) { const q = act(p, rng, (pl) => hireStaff(pl)); if (q === p) break; p = q; }
++    p = act(p, rng, (pl) => runMarketing(pl));
++    const res = ageUp(p, rng);
++    p = res.player;
++    for (const n of (res.notices ?? []) as Notice[]) if (n.kind === "event" && p.alive) { const nn = n; p = act(p, rng, (pl, r) => resolveEvent(pl, nn.event, r.int(0, nn.event.options.length - 1), r)); }
++    p = { ...p, pendingTrial: null };
++    if (!p.business) { bankrupt = p.flags.some((f) => f.startsWith("biz_cooloff")); break; }
++    profits += p.business.lastProfit; yrs++;
++  }
++  return { bankrupt, avgProfit: yrs ? profits / yrs : 0, gain: netWorth(p) - start };
++}
++
++it("franchise vs independent", () => {
++  const out: string[] = [];
++  for (const kind of ["foodtruck", "boutique", "barcafe", "restaurant", "gym"]) {
++    for (const fr of [false, true]) {
++      const rs = [];
++      for (let s = 1; s <= 120; s++) rs.push(life(s * 13 + 5, kind, fr));
++      const bk = rs.filter((r) => r.bankrupt).length;
++      const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
++      const g = rs.map((r) => r.gain).sort((a, b) => a - b);
++      out.push(`${kind.padEnd(10)} ${fr ? "FRANCH" : "indep "} bankrupt ${bk}/120 avgProfit ${Math.round(mean(rs.map((r) => r.avgProfit)) / 1000)}k  gain p10 ${Math.round(g[12] / 1000)}k med ${Math.round(g[60] / 1000)}k p90 ${Math.round(g[108] / 1000)}k`);
++    }
++  }
++  console.log(out.join("\n"));
++});
+diff --git a/src/engine/__tests__/zz_scratch_save.test.ts b/src/engine/__tests__/zz_scratch_save.test.ts
+new file mode 100644
+index 0000000..e6f353f
+--- /dev/null
++++ b/src/engine/__tests__/zz_scratch_save.test.ts
+@@ -0,0 +1,23 @@
++import { NEUTRAL } from "./helpers/neutral";
++import { it } from "vitest";
++import fs from "node:fs";
++import { makeRng } from "@/lib/rng";
++import { createNewPlayer } from "../state";
++import { ageUp, finalize } from "../ageUp";
++import { startBusiness, hireStaff } from "../paths";
++import type { SaveData } from "../save";
++
++const DIR = "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/";
++it("saves", () => {
++  const rng = makeRng(77);
++  let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
++  p.age = 30; p.birthYear = p.year - 30;
++  p.education = { stage: "None", yearsLeft: 0, major: null, grades: 60, studyEffort: 0, degrees: ["highschool"] };
++  p.smarts = 70; p.health = 90; p.bankBalance = 800_000; p.economy = { climate: "normal", yearsLeft: 3 };
++  fs.writeFileSync(DIR + "save_none.json", JSON.stringify({ v: 1, player: p, rngState: 123 } satisfies SaveData));
++  p = startBusiness(p, "restaurant", "Chez Test", rng).player;
++  finalize(p, []);
++  for (let i = 0; i < 2; i++) { p = hireStaff(p).player; }
++  for (let i = 0; i < 3; i++) { p = { ...ageUp(p, rng).player, queuedEvents: [] }; if (p.business) p = hireStaff(p).player; }
++  fs.writeFileSync(DIR + "save_biz.json", JSON.stringify({ v: 1, player: p, rngState: 456 } satisfies SaveData));
++});
+diff --git a/src/engine/__tests__/zz_scratch_story.test.ts b/src/engine/__tests__/zz_scratch_story.test.ts
+new file mode 100644
+index 0000000..61c5e73
+--- /dev/null
++++ b/src/engine/__tests__/zz_scratch_story.test.ts
+@@ -0,0 +1,58 @@
++import { NEUTRAL } from "./helpers/neutral";
++import { it } from "vitest";
++import fs from "node:fs";
++import { makeRng, type Rng } from "@/lib/rng";
++import { createNewPlayer } from "../state";
++import { ageUp, finalize } from "../ageUp";
++import { resolveEvent } from "../events";
++import { startBusiness, hireStaff, recommendedStaff, runMarketing } from "../paths";
++import type { Notice, PlayerState } from "@/types/game.types";
++
++const OUT = "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/story.txt";
++// eslint-disable-next-line @typescript-eslint/no-explicit-any
++function act(p: PlayerState, rng: Rng, fn: (p: PlayerState, r: Rng) => any): PlayerState {
++  const res = fn(p, rng);
++  if (res.player !== p) finalize(res.player, []);
++  return res.player;
++}
++it("story", () => {
++  const lines: string[] = [];
++  const evCount: Record<string, number> = {};
++  const noticeTitles: Record<string, number> = {};
++  let lives = 0;
++  for (const kindId of ["restaurant", "gym", "onlinestore", "construction"]) {
++    for (let s = 1; s <= 60; s++) {
++      const rng = makeRng(s * 31 + kindId.length);
++      let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
++      p.age = 28; p.birthYear = p.year - 28;
++      p.education = { stage: "None", yearsLeft: 0, major: null, grades: 60, studyEffort: 0, degrees: ["highschool"] };
++      p.smarts = 70; p.health = 90; p.bankBalance = 1_500_000; p.economy = { climate: "normal", yearsLeft: 3 };
++      p = act(p, rng, (pl, r) => startBusiness(pl, kindId, "Story Co", r));
++      lives++;
++      const verbose = s === 3;
++      for (let y = 0; y < 15 && p.alive && p.business; y++) {
++        let g = 0;
++        while (p.business && p.business.staff < recommendedStaff(p, p.business) && g++ < 20) { const q = act(p, rng, (pl) => hireStaff(pl)); if (q === p) break; p = q; }
++        p = act(p, rng, (pl) => runMarketing(pl));
++        const res = ageUp(p, rng);
++        p = res.player;
++        for (const n of (res.notices ?? []) as Notice[]) {
++          if (n.kind === "event") {
++            evCount[n.event.id] = (evCount[n.event.id] ?? 0) + 1;
++            if (n.event.id.startsWith("biz_") && verbose) lines.push(`  [event ${p.year}] ${n.event.id}`);
++            if (p.alive) { const nn = n; p = act(p, rng, (pl, r) => resolveEvent(pl, nn.event, r.int(0, nn.event.options.length - 1), r)); }
++          } else if (n.kind === "info") {
++            noticeTitles[n.title] = (noticeTitles[n.title] ?? 0) + 1;
++            if (verbose && /Business|Market|Cash|Overdraft|Covenant|Loan|Manager|Incident|Franchise|Black|Bankrupt|Crunch/.test(n.title)) lines.push(`  [${p.year}] ${n.title}: ${n.body}`);
++          }
++        }
++        if (verbose && p.business) lines.push(`${p.year} biz rev=${p.business.revenue} profit=${p.business.lastProfit} cash=${Math.round(p.business.cash)} rep=${Math.round(p.business.reputation)} cust=${Math.round(p.business.customers)} comp=${Math.round(p.business.competition)} morale=${Math.round(p.business.morale)} staff=${p.business.staff}`);
++      }
++      if (verbose) lines.push(`--- end ${kindId} alive=${p.alive} biz=${!!p.business}`);
++    }
++  }
++  lines.push("EVENTS PER LIFE: " + JSON.stringify(Object.fromEntries(Object.entries(evCount).filter(([k]) => k.startsWith("biz_")).map(([k, v]) => [k, +(v / lives).toFixed(2)]))));
++  lines.push("NON-BIZ events while owning (top): " + JSON.stringify(Object.entries(evCount).filter(([k]) => !k.startsWith("biz_")).sort((a, b) => b[1] - a[1]).slice(0, 15)));
++  lines.push("NOTICES: " + JSON.stringify(noticeTitles));
++  fs.writeFileSync(OUT, lines.join("\n"));
++});
+diff --git a/src/engine/business.ts b/src/engine/business.ts
+index f436e3f..30fc890 100644
+--- a/src/engine/business.ts
++++ b/src/engine/business.ts
+@@ -10,7 +10,7 @@
+  * company level (15%) and draws are then taxed as personal income. Exit proceeds above the owner's invested capital
+  * are taxed at a capital-gains-like rate (see `exitTax`).
+  */
+-import type { ActionResult, Business, BusinessPayout, PlayerState } from "@/types/game.types";
++import type { ActionResult, Business, BusinessPayout, InvestorKind, PlayerState, RivalKind } from "@/types/game.types";
+ import { hashString, makeRng, type Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+ import { BUSINESS_BY_ID, BUSINESS_TYPES, type BusinessType } from "@/data/businessTypes";
+@@ -31,6 +31,9 @@ import {
+   loanLimit,
+   loanRateFor,
+   newBusiness,
++  newFranchise,
++  franchiseTerms,
++  ownerProceeds,
+   revenueGrowth,
+   saleQuote,
+   stakeValue,
+@@ -44,11 +47,21 @@ export type { BusinessType };
+ export {
+   forecast, riskNotes, saleQuote, loanLimit, loanRateFor, kindOf, capacityOf, enterpriseValue, equityOf, stakeValue, liquidationValue,
+   normalizedEarnings, recommendedStaff, typicalOutlook, businessHealth, PRICE_LABELS, PAYOUT_LABELS, INSURANCE_LABELS, CORP_TAX, SALE_FEE, PAYOUT_SHARE, marketMood, exitTax,
++  franchiseTerms, ownerProceeds, keyOf, rivalPull, shiftEffect, teamWages, FRANCHISE_BRANDS,
+ } from "./businessModel";
+ 
+-type Notices = NonNullable<ActionResult["notices"]>;
+-type Tone = "good" | "bad" | "neutral" | "jackpot";
+-const info = (title: string, body: string, tone: Tone = "neutral") => ({ kind: "info" as const, title, body, tone });
++import {
++  businessCosts, canSpend, done, fromWhere, info, open, poor, refresh, reserveOf, scale, spend, unchanged,
++  type Ctx, type Notices, type Tone,
++} from "./businessKit";
++export { businessCosts };
++import { buyOutRival, spawnRival, strongestRival, processMarket } from "./businessMarket";
++import { flightRisk } from "./businessPeople";
++import { makeInvestor, processBoard, processPassive, sellShares, takeBackShares } from "./businessBoard";
++import { processTeam } from "./businessPeople";
++export * from "./businessPeople";
++export * from "./businessMarket";
++export * from "./businessBoard";
+ 
+ // ---------------------------------------------------------------------------
+ // Constants kept for older callers
+@@ -67,99 +80,11 @@ export const maxStaff = (locations: number, kindId?: string) => {
+ /** Years after a bankruptcy during which you can't found another company. */
+ export const COOLOFF_YEARS = 4;
+ 
+-// ---------------------------------------------------------------------------
+-// Helpers
+-// ---------------------------------------------------------------------------
+-
+-const unitCost = (k: BusinessType, b: Business) => k.cost * b.locations;
+-const reserveOf = (b: Business) => {
+-  const k = kindOf(b);
+-  return 0.25 * (k.fixed * b.locations + b.staff * k.wage + (b.manager?.wage ?? 0));
+-};
+-const scale = (b: Business) => {
+-  const k = kindOf(b);
+-  return Math.max(k.baseRev * b.locations * 0.4, b.revenue);
+-};
+-
+-function refresh(b: Business) {
+-  b.value = stakeValue(b);
+-  b.reputation = Math.round(clamp(b.reputation) * 10) / 10;
+-}
+-
+-/**
+- * Pay for a decision. Company cash is used while it stays above a small reserve, otherwise the owner's savings,
+- * otherwise whatever company cash is left. Capital items paid from savings raise the owner's cost basis.
+- */
+-function spend(p: PlayerState, b: Business, amount: number, capital: boolean): "company" | "savings" | null {
+-  amount = Math.round(amount);
+-  let src: "company" | "savings" | null = null;
+-  if (b.cash - amount >= reserveOf(b)) {
+-    b.cash -= amount;
+-    src = "company";
+-  } else if (p.bankBalance >= amount) {
+-    p.bankBalance -= amount;
+-    if (capital) b.basis += amount;
+-    src = "savings";
+-  } else if (b.cash >= amount) {
+-    b.cash -= amount;
+-    src = "company";
+-  }
+-  if (src && !capital) b.ytdSpend += amount;
+-  return src;
+-}
+-
+-const canSpend = (p: PlayerState, b: Business, amount: number) => b.cash >= amount || p.bankBalance >= amount;
+-const fromWhere = (src: "company" | "savings") => (src === "company" ? "from company cash" : "from your savings");
+-
+-interface Ctx {
+-  p: PlayerState;
+-  b: Business;
+-  k: BusinessType;
+-}
+-
+-/** Common preamble for actions on an existing business. */
+-function open(p0: PlayerState): Ctx | null {
+-  if (!p0.business) return null;
+-  const p = clone(p0);
+-  const b = ensureBusiness(p.business!);
+-  return { p, b, k: kindOf(b) };
+-}
+-
+-const unchanged = (p0: PlayerState, title: string, body: string, tone: Tone = "neutral"): ActionResult => ({ player: p0, notices: [info(title, body, tone)] });
+-const poor = (p0: PlayerState, what: string, cost: number): ActionResult => unchanged(p0, "Insufficient Funds", `${what} costs ${money(cost)}. Neither your savings nor the company's cash can cover it.`, "bad");
+-
+-function done(c: Ctx, title: string, body: string, tone: Tone = "good"): ActionResult {
+-  refresh(c.b);
+-  addLog(c.p, body);
+-  return { player: c.p, notices: [info(title, body, tone)] };
+-}
+-
+-/** Costs shown in the UI and charged by actions. */
+-export function businessCosts(b: Business) {
+-  const k = kindOf(b);
+-  return {
+-    hire: Math.max(1_500, Math.round(k.wage * 0.1)),
+-    severance: Math.round(k.wage * 0.25),
+-    train: 3_000 + 1_500 * b.staff,
+-    marketing: Math.max(4_000, Math.round(0.04 * scale(b))),
+-    audit: Math.max(3_000, Math.round(0.008 * k.baseRev * b.locations)),
+-    renovate: Math.round(0.12 * unitCost(k, b)),
+-    upgrade: Math.round(0.1 * unitCost(k, b) * (1 + 0.25 * b.upgrades)),
+-    diversify: Math.max(Math.round(0.09 * k.cost), Math.round(0.05 * scale(b))) * (1 + b.diversified),
+-    pivot: Math.round(0.15 * k.cost),
+-    acquire: Math.max(40_000, Math.round(0.5 * scale(b))),
+-    expand: Math.round(k.cost * 0.9 * (1 + 0.15 * (b.locations - 1))),
+-    managerFee: { solid: Math.round(k.mgrWage * 0.2), star: Math.round(k.mgrWage * 1.5 * 0.2) },
+-    managerWage: { solid: k.mgrWage, star: Math.round(k.mgrWage * 1.5) },
+-    managerSeverance: Math.round((b.manager?.wage ?? 0) * 0.5),
+-  };
+-}
+-
+ // ---------------------------------------------------------------------------
+ // Founding
+ // ---------------------------------------------------------------------------
+ 
+-export function startBusiness(p0: PlayerState, kindId: string, name: string, rng?: Rng): ActionResult {
++export function startBusiness(p0: PlayerState, kindId: string, name: string, rng?: Rng, opts: { franchise?: boolean } = {}): ActionResult {
+   const p = clone(p0);
+   const kind = BUSINESS_BY_ID[kindId];
+   if (!kind) return { player: p0 };
+@@ -171,17 +96,24 @@ export function startBusiness(p0: PlayerState, kindId: string, name: string, rng
+   if (blocked) return { player: p0, notices: [info("Can't Start a Business", blocked, "bad")] };
+   if (p.smarts < kind.minSmarts) return { player: p0, notices: [info("Not Ready", `Running a ${kind.name.toLowerCase()} needs ${kind.minSmarts}+ Smarts.`, "bad")] };
+   if (kind.skill && p.skills[kind.skill.key] < kind.skill.min) return { player: p0, notices: [info("Not Ready", `A ${kind.name.toLowerCase()} needs ${kind.skill.min}+ ${kind.skill.label}.`, "bad")] };
+-  if (p.bankBalance < kind.cost) return { player: p0, notices: [info("Insufficient Funds", `You need ${money(kind.cost)} in cash to open a ${kind.name.toLowerCase()}.`, "bad")] };
++  const terms = opts.franchise ? franchiseTerms(kind) : null;
++  if (opts.franchise && !terms) return { player: p0, notices: [info("No Franchise Offer", `Nobody franchises ${kind.name.toLowerCase()}s: you'll have to build the concept yourself.`, "bad")] };
++  const total = kind.cost + (terms?.fee ?? 0);
++  if (p.bankBalance < total) return { player: p0, notices: [info("Insufficient Funds", `You need ${money(total)} in cash to ${terms ? "buy into" : "open"} a ${kind.name.toLowerCase()}.`, "bad")] };
+   const r = rng ?? makeRng(hashString(`${p.firstName}${p.lastName}${p.year}${kindId}${name}`));
+-  p.bankBalance -= kind.cost;
+-  const label = name.trim() || `${p.lastName} ${kind.name}`;
+-  p.business = newBusiness(kind, label, p.year, r);
++  p.bankBalance -= total;
++  const fr = terms ? newFranchise(kind, "", p.year, r) : null;
++  const label = name.trim() || (fr ? `${fr.franchisor!.brand} ${p.lastName}` : `${p.lastName} ${kind.name}`);
++  if (fr) fr.name = label;
++  p.business = fr ?? newBusiness(kind, label, p.year, r);
+   // Natural business sense improves (or hurts) how well the idea suits its market.
+   p.business.fit = Math.max(0.2, Math.min(2.4, p.business.fit * (1 + (p.talents.business - 50) / 220)));
+   p.business.value = stakeValue(p.business);
+   setFlag(p, "business_owner");
+   changeStat(p, "happiness", 8);
+-  const body = `You opened "${label}" with ${money(kind.cost)} of your own capital (${money(p.business.cash)} working cash, the rest premises and equipment). Now you need staff, customers and a bit of luck.`;
++  const body = terms
++    ? `You bought a ${fr!.franchisor!.brand} franchise: ${money(terms.fee)} to the franchisor plus ${money(kind.cost)} to fit out your unit (${money(p.business.cash)} working cash). You'll pay ${((terms.royalty + terms.adFund) * 100).toFixed(1)}% of revenue in royalties and brand fund, and head office sets the menu and the prices. In return you get a known name, a proven playbook and a running start.`
++    : `You opened "${label}" with ${money(kind.cost)} of your own capital (${money(p.business.cash)} working cash, the rest premises and equipment). Now you need staff, customers and a bit of luck.`;
+   addLog(p, body);
+   return { player: p, notices: [info("Business Launched", body, "good")] };
+ }
+@@ -297,6 +229,7 @@ export function runMarketing(p0: PlayerState): ActionResult {
+ export function setPrice(p0: PlayerState, level: number): ActionResult {
+   const c = open(p0);
+   if (!c || level === c.b.price || level < 0 || level > 2) return { player: p0 };
++  if (c.b.franchisor) return unchanged(p0, "Prices Set by Head Office", `${c.b.franchisor.brand} sets the prices. Your franchise agreement doesn't let you change them.`);
+   if ((c.p.annual.bizprice ?? 0) >= 1) return unchanged(p0, "Prices Just Changed", "Changing prices more than once a year confuses customers.");
+   c.p.annual.bizprice = 1;
+   c.b.price = level;
+@@ -368,6 +301,7 @@ export function upgradeProduct(p0: PlayerState): ActionResult {
+ export function diversifyBusiness(p0: PlayerState): ActionResult {
+   const c = open(p0);
+   if (!c) return { player: p0 };
++  if (c.b.franchisor) return unchanged(p0, "Menu Locked", `${c.b.franchisor.brand} decides what you sell. A franchisee can't add product lines.`);
+   if (c.b.diversified >= 2) return unchanged(p0, "Diversified Enough", "You already run several product lines.");
+   const cost = businessCosts(c.b).diversify;
+   if (!canSpend(c.p, c.b, cost)) return poor(p0, "A new product line", cost);
+@@ -381,6 +315,7 @@ export function diversifyBusiness(p0: PlayerState): ActionResult {
+ export function pivotBusiness(p0: PlayerState, rng: Rng): ActionResult {
+   const c = open(p0);
+   if (!c) return { player: p0 };
++  if (c.b.franchisor) return unchanged(p0, "Tied to the Brand", `You can't pivot a ${c.b.franchisor.brand} franchise. To change the concept you would have to leave the franchise first.`);
+   const { b, k } = c;
+   if (c.p.year - b.lastPivot < 3) return unchanged(p0, "Too Soon", "Customers need time to understand what you've become. Wait a few years between pivots.");
+   const cost = businessCosts(b).pivot;
+@@ -402,6 +337,8 @@ export function acquireCompetitor(p0: PlayerState, rng: Rng): ActionResult {
+   const c = open(p0);
+   if (!c) return { player: p0 };
+   const { b } = c;
++  const target = strongestRival(b);
++  if (target) return buyOutRival(p0, rng, target.id);
+   if (b.competition < 25) return unchanged(p0, "No Targets", "There are no rivals left worth buying.");
+   if ((c.p.annual.bizacquire ?? 0) >= 1) return unchanged(p0, "Already Dealing", "One acquisition per year.");
+   const cost = businessCosts(b).acquire;
+@@ -453,20 +390,29 @@ export function investInBusiness(p0: PlayerState, amount: number): ActionResult
+   return done(c, "Capital Injected", `You put ${money(amount)} of your own money into ${c.b.name}'s bank account. It extends the runway but is not guaranteed to come back: only profits and an eventual sale return it.`);
+ }
+ 
+-export function takeBusinessLoan(p0: PlayerState, amount: number): ActionResult {
++/** Share of an unpaid shortfall the owner is personally chased for, given how much of the debt they guaranteed. */
++export function personalShare(b: Business): number {
++  const frac = b.debt > 0 ? clamp(b.guaranteed / b.debt, 0, 1) : 0;
++  return 0.1 + 0.6 * frac;
++}
++
++export function takeBusinessLoan(p0: PlayerState, amount: number, guaranteed = true): ActionResult {
+   const c = open(p0);
+   amount = Math.round(amount);
+   if (!c) return { player: p0 };
+-  const limit = loanLimit(c.p, c.b);
++  // Without a personal guarantee the bank wants more comfort: it lends far less.
++  const limit = Math.floor((loanLimit(c.p, c.b) * (guaranteed ? 1 : 0.55)) / 1000) * 1000;
+   if (amount <= 0) return { player: p0 };
+   if (amount > limit) {
+     return unchanged(p0, "Loan Declined", limit > 0 ? `The bank will lend ${c.b.name} at most ${money(limit)} right now, based on its profits, collateral and your credit.` : `The bank won't lend to ${c.b.name} right now. Lenders want profits and collateral, and a track record.`, "bad");
+   }
+-  const rate = loanRateFor(c.p, c.b);
++  const rate = Math.max(0.045, loanRateFor(c.p, c.b) - (guaranteed ? 0.012 : 0));
+   c.b.loanRate = Math.round(((c.b.debt * c.b.loanRate + amount * rate) / (c.b.debt + amount)) * 1000) / 1000;
+   c.b.debt += amount;
+   c.b.cash += amount;
+-  return done(c, "Business Loan", `${c.b.name} borrowed ${money(amount)} at ${(rate * 100).toFixed(1)}%. Each year it must pay interest plus about 10% of the balance, and keep profit above its debt service or the bank may call the loan. You personally guarantee part of it.`);
++  if (guaranteed) c.b.guaranteed += amount;
++  c.p.annual.bizborrowed = 1;
++  return done(c, "Business Loan", `${c.b.name} borrowed ${money(amount)} at ${(rate * 100).toFixed(1)}%. Each year it must pay interest plus about 10% of the balance, and keep profit above its debt service or the bank may call the loan. ${guaranteed ? "You personally guaranteed it: the rate is lower, but if the company fails the bank comes after your own money." : "There is no personal guarantee, so the bank lent less and charged more, but your own money is safer if it fails."}`);
+ }
+ 
+ export function repayBusinessLoan(p0: PlayerState, amount: number): ActionResult {
+@@ -479,8 +425,13 @@ export function repayBusinessLoan(p0: PlayerState, amount: number): ActionResult
+   else if (c.b.cash >= pay) c.b.cash -= pay;
+   else return poor(p0, "That repayment", pay);
+   c.b.debt -= pay;
++  c.b.guaranteed = Math.min(c.b.guaranteed, c.b.debt);
+   if (c.b.debt === 0) c.b.covenantBreaches = 0;
+-  c.p.creditScore = clamp(c.p.creditScore + 3, 300, 850);
++  // Lenders reward a track record, not a same-year round trip: the bump needs a loan that has been carried.
++  if (!c.p.annual.bizborrowed && !c.p.annual.bizcredit) {
++    c.p.creditScore = clamp(c.p.creditScore + 3, 300, 850);
++    c.p.annual.bizcredit = 1;
++  }
+   return done(c, "Loan Repaid", `You repaid ${money(pay)} of ${c.b.name}'s debt. Outstanding: ${money(c.b.debt)}.`);
+ }
+ 
+@@ -529,12 +480,13 @@ export function raiseFunding(p0: PlayerState, rng: Rng, stake: number): ActionRe
+     return done(c, "Investors Passed", `You pitched ${t.vc ? "venture capitalists" : "angel investors"} for ${money(t.amount)} and they passed. Traction, reputation and the economy all matter.`, "bad");
+   }
+   b.cash += t.amount;
+-  b.ownerShare = Math.round(b.ownerShare * (1 - stake) * 1000) / 1000;
++  const inv = makeInvestor(t.vc ? "vc" : "angel", stake, t.amount, c.p.year, rng);
++  sellShares(b, inv);
+   b.rounds += 1;
+   return done(
+     c,
+     t.vc ? "Funding Round Closed" : "Angel Investment",
+-    `${t.vc ? "A venture fund" : "An angel investor"} put ${money(t.amount)} into ${b.name} for ${Math.round(stake * 100)}% at a ${money(t.preMoney)} pre-money valuation. You now own ${(b.ownerShare * 100).toFixed(0)}%. Investors share every payout and any exit, and their cash is the company's, not yours.`,
++    `${inv.name}${t.vc ? " (a venture fund)" : ""} put ${money(t.amount)} into ${b.name} for ${Math.round(stake * 100)}% at a ${money(t.preMoney)} pre-money valuation. You now own ${(b.ownerShare * 100).toFixed(0)}%. They share every payout and any exit${t.vc ? ", get their money back first on a weak sale," : ""} and expect ${inv.agenda === "growth" ? "fast growth" : inv.agenda === "profit" ? "steady profit" : "an exit within a few years"}. Their cash is the company's, not yours.`,
+     "jackpot",
+   );
+ }
+@@ -543,6 +495,7 @@ export function sellFranchise(p0: PlayerState, rng: Rng): ActionResult {
+   const c = open(p0);
+   if (!c) return { player: p0 };
+   const { b, k } = c;
++  if (b.franchisor) return unchanged(p0, "Not Yours to Franchise", `The ${b.franchisor.brand} brand belongs to the franchisor, so you can't sell units under it.`);
+   if (!k.franchise) return unchanged(p0, "Not Franchisable", `${k.name}s depend too much on the owner to franchise.`);
+   const years = b.history.length;
+   if (b.reputation < 60 || years < 2 || b.profitableYears < 2) return unchanged(p0, "Not Ready", "Franchisees pay for a proven brand: 60+ reputation and at least two profitable years.", "bad");
+@@ -615,6 +568,23 @@ export function takePublic(p0: PlayerState, rng: Rng): ActionResult {
+   return finishSale(c, q, "IPO!", `${c.b.name} went public.`, 0.4);
+ }
+ 
++/** Leave the franchise and carry on as an independent. Costs a termination payment and much of the brand's goodwill. */
++export function breakAway(p0: PlayerState): ActionResult {
++  const c = open(p0);
++  if (!c?.b.franchisor) return { player: p0 };
++  const { p, b } = c;
++  const brand = b.franchisor!.brand;
++  const fee = Math.round(0.1 * Math.max(b.revenue, scale(b)));
++  if (!spend(p, b, fee, false)) b.cash -= fee;
++  b.franchisor = null;
++  b.reputation = Math.round(b.reputation * 0.8);
++  b.customers = Math.round(b.customers * 0.8);
++  b.compliance = clamp(b.compliance - 15);
++  b.morale = clamp(b.morale - 4);
++  b.name = `${p.lastName} ${kindOf(b).name}`;
++  return done(c, "Independent Again", `You left ${brand} and relaunched as ${b.name}, paying ${money(fee)} to end the agreement. No more royalties, but the brand's customers and supply deals stay behind. You can set your own prices and menu now.`, "neutral");
++}
++
+ export function handToManager(p0: PlayerState): ActionResult {
+   const c = open(p0);
+   if (!c?.b.manager) return unchanged(p0, "No Successor", "Hire a general manager first, then you can sell the business to them.");
+@@ -640,12 +610,12 @@ export function closeBusiness(p0: PlayerState): ActionResult {
+   const left = proceeds - b.debt;
+   let body: string;
+   if (left >= 0) {
+-    const gross = Math.round(left * b.ownerShare);
++    const gross = ownerProceeds(b, left);
+     const tax = exitTax(p.residence.country, gross - b.basis);
+     p.bankBalance += gross - tax;
+     body = `You wound ${b.name} down. Assets fetched ${money(liquidationValue(b) * 0.9)} at liquidation prices; after paying staff and creditors you kept ${money(gross - tax)}.`;
+   } else {
+-    const personal = settleDebtShortfall(p, -left, 0.4);
++    const personal = settleDebtShortfall(p, -left, personalShare(b));
+     p.creditScore = clamp(p.creditScore - 35, 300, 850);
+     body = `You wound ${b.name} down, but the assets didn't cover its debts. The bank is chasing you personally for ${money(personal)}.`;
+   }
+@@ -663,11 +633,12 @@ export function bankruptcyOf(p: PlayerState, reason: string): Notices {
+   let personal = 0;
+   let extra = "";
+   if (shortfall > 0) {
+-    personal = settleDebtShortfall(p, shortfall, 0.4);
++    personal = settleDebtShortfall(p, shortfall, personalShare(b));
+     extra = ` Creditors recovered what they could; you were personally liable for ${money(personal)} through guarantees.`;
+   } else if (shortfall < 0) {
+-    p.bankBalance += Math.round(-shortfall * b.ownerShare);
+-    extra = ` A small surplus of ${money(Math.round(-shortfall * b.ownerShare))} came back to you.`;
++    const back = ownerProceeds(b, -shortfall);
++    p.bankBalance += back;
++    extra = ` A small surplus of ${money(back)} came back to you.`;
+   }
+   const body = `${b.name} went bankrupt (${reason}).${extra} Your credit is wrecked and you cannot found another company until ${p.year + COOLOFF_YEARS}.`;
+   removeBusiness(p);
+@@ -720,13 +691,21 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
+   // businesses ride these out better.
+   const shake = clamp(0.06 + 0.002 * (b.competition - 50) - 0.0008 * (b.reputation - 50) - 0.02 * b.diversified, 0.015, 0.14);
+   if (rng.chance(shake)) {
+-    const loss = rng.int(8, 20);
++    const named = b.rivals.length < 3 && rng.chance(0.6) ? spawnRival(b, p.year, rng) : null;
++    const loss = named ? rng.int(5, 12) : rng.int(8, 20);
+     b.customers = clamp(b.customers - loss);
+-    b.competition = clamp(b.competition + 8, 5, 95);
+-    const cause = rng.pick(["A big-chain competitor opened a block away", "Roadworks cut off your street for months", "A scare in the local press hurt your whole sector", "A trendy rival poached your regulars"]);
+-    const body = `${cause}. ${b.name} lost customers it will have to win back.`;
+-    addLog(p, body);
+-    notices.push(info("Market Shake-out", body, "bad"));
++    b.competition = clamp(b.competition + (named ? 3 : 8), 5, 95);
++    if (named) {
++      const how = { discounter: "slashing prices on everything you sell", premium: "with a glossy, expensive pitch to your best customers", chain: "backed by a national marketing budget", upstart: "with a hungry team and a lot of buzz" }[named.kind];
++      const body = `${named.name} opened nearby, ${how}. ${b.name} lost customers, and you can fight them, buy them out or out-serve them. See the Market tab.`;
++      addLog(p, body);
++      notices.push(info("New Rival", body, "bad"));
++    } else {
++      const cause = rng.pick(["Roadworks cut off your street for months", "A scare in the local press hurt your whole sector", "A trendy pop-up poached your regulars", "A supplier's recall dented trust across your sector"]);
++      const body = `${cause}. ${b.name} lost customers it will have to win back.`;
++      addLog(p, body);
++      notices.push(info("Market Shake-out", body, "bad"));
++    }
+   }
+   if (b.manager) {
+     if (b.manager.skill < 85) b.manager.skill += rng.int(0, 3);
+@@ -745,7 +724,10 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
+       notices.push(info("Franchise Scandal", body, "bad"));
+     }
+   }
+-  b.compliance = clamp(b.compliance - 8);
++  const ops = b.team.find((t) => t.role === "ops");
++  b.compliance = clamp(b.compliance - (8 - (ops ? ops.skill / 25 : 0)));
++  processMarket(p, b, rng, notices);
++  processPassive(p, b, rng, notices);
+ 
+   if (sh.incident > 0) {
+     const body = `${b.name} suffered an incident (fire, theft, a lawsuit or an accident) costing ${money(pnl.incidentNet)} after insurance.`;
+@@ -762,6 +744,7 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
+   b.ytdSpend = 0;
+   b.cash += pnl.operating - interest - tax - principal;
+   b.debt -= principal;
++  b.guaranteed = Math.min(b.guaranteed, b.debt);
+   b.revenue = pnl.revenue + pnl.royalties;
+   b.lastProfit = pretax;
+   if (pretax > 0) {
+@@ -852,6 +835,9 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
+   b.cash -= pool;
+   const draw = Math.round(pool * b.ownerShare);
+ 
++  processTeam(p, b, rng, notices, pretax);
++  processBoard(p, b, notices, pretax);
++
+   // --- records ---
+   b.history.push({ year: p.year, revenue: b.revenue, profit: pretax, cash: Math.round(b.cash), reputation: Math.round(b.reputation) });
+   if (b.history.length > 12) b.history.shift();
+@@ -888,21 +874,26 @@ export interface BusinessInheritance {
+  * discount. Adult heirs inherit it running, with its debts, under a caretaker manager if it had none, after estate
+  * taxes and some loss of the founder's reputation.
+  */
+-export function inheritBusiness(old: PlayerState, heirAge: number, rng: Rng): BusinessInheritance {
++export function inheritBusiness(old: PlayerState, heirAge: number, rng: Rng, living = false): BusinessInheritance {
+   if (!old.business) return { business: null, cash: 0, note: null };
+   const b = ensureBusiness(clone(old.business));
+   const k = kindOf(b);
+   const stake = stakeValue(b);
+   if (heirAge < 18) {
+-    const cash = Math.round(stake * 0.78);
+-    return { business: null, cash, note: `Trustees sold your parent's business, ${b.name}, and you received ${money(cash)} from the estate.` };
++    const cash = Math.round(stake * (living ? 0.92 : 0.78));
++    return { business: null, cash, note: living ? `Your parent's business, ${b.name}, was sold on your behalf while you are too young to run it, and you received ${money(cash)}.` : `Trustees sold your parent's business, ${b.name}, and you received ${money(cash)} from the estate.` };
+   }
+-  const estateTax = Math.round(Math.max(0, equityOf(b)) * 0.1);
++  // A founder who steps aside alive pays no estate tax and leaves the customers and the track record largely intact.
++  const estateTax = living ? 0 : Math.round(Math.max(0, equityOf(b)) * 0.1);
+   b.cash = Math.max(0, b.cash - estateTax);
++  b.ousted = false;
++  b.boardHeat = Math.min(b.boardHeat, 30);
+   if (!b.manager) b.manager = { name: `${rng.pick(["Pat", "Lee", "Chris", "Jamie"])} ${rng.pick(["Moreno", "Walsh", "Iyer", "Kowalski"])}`, skill: 45, wage: k.mgrWage, hired: old.deathYear ?? old.year };
+-  b.reputation = Math.round(b.reputation * 0.85);
+-  b.customers = Math.round(b.customers * 0.92);
+-  b.morale = clamp(b.morale - 10);
++  b.reputation = Math.round(b.reputation * (living ? 0.95 : 0.85));
++  b.customers = Math.round(b.customers * (living ? 0.97 : 0.92));
++  b.morale = clamp(b.morale - (living ? 3 : 10));
++  // Key people stay unsure of the new boss.
++  for (const t of b.team) t.loyalty = Math.min(t.loyalty, living ? 70 : 55);
+   b.neglect = 0;
+   b.covenantBreaches = 0;
+   b.basis = Math.max(0, equityOf(b));
+@@ -911,11 +902,11 @@ export function inheritBusiness(old: PlayerState, heirAge: number, rng: Rng): Bu
+   b.boost = 0;
+   b.ytdSpend = 0;
+   // The founder is gone: buyers and customers trust the track record less, so past results are written down.
+-  b.history = b.history.slice(-3).map((r) => ({ ...r, revenue: Math.round(r.revenue * 0.9), profit: Math.round(r.profit * 0.7) }));
+-  b.revenue = Math.round(b.revenue * 0.9);
++  b.history = b.history.slice(-3).map((r) => ({ ...r, revenue: Math.round(r.revenue * (living ? 0.97 : 0.9)), profit: Math.round(r.profit * (living ? 0.9 : 0.7)) }));
++  b.revenue = Math.round(b.revenue * (living ? 0.97 : 0.9));
+   b.value = stakeValue(b);
+   const debtNote = b.debt > 0 ? ` It still owes ${money(b.debt)} to the bank.` : "";
+-  return { business: b, cash: 0, note: `You inherited the family business, ${b.name}, worth about ${money(b.value)}. A caretaker manager is keeping it running.${debtNote}` };
++  return { business: b, cash: 0, note: `You ${living ? "took over" : "inherited"} the family business, ${b.name}, worth about ${money(b.value)}. A caretaker manager is keeping it running.${debtNote}` };
+ }
+ 
+ /** Upgrade a business from an older save (adds fields, refreshes the valuation). */
+@@ -946,6 +937,12 @@ export interface BizDelta {
+   cashPctRevenue?: number;
+   staff?: number;
+   fit?: number;
++  /** Investor patience (positive = angrier, negative = calmer). */
++  heat?: number;
++  /** A named rival opens up (the kind, or true for a random one). */
++  rival?: RivalKind | true;
++  /** Loyalty of the key employee most at risk of leaving. */
++  keyLoyalty?: number;
+ }
+ 
+ /** Apply a change to the owned business from an event. Returns a short sentence describing money moved. */
+@@ -963,6 +960,12 @@ export function bizApply(p: PlayerState, d: BizDelta): string | undefined {
+   if (d.marketing) b.marketing = Math.max(0, b.marketing + d.marketing);
+   if (d.fit) b.fit = clamp(b.fit + d.fit, 0.3, 1.8);
+   if (d.staff) b.staff = Math.max(0, b.staff + d.staff);
++  if (d.heat) b.boardHeat = clamp(b.boardHeat + d.heat);
++  if (d.keyLoyalty) {
++    const t = flightRisk(b);
++    if (t) t.loyalty = clamp(t.loyalty + d.keyLoyalty);
++  }
++  if (d.rival) spawnRival(b, p.year, makeRng(hashString(`${p.id}${p.year}rival${b.rivals.length}`)), d.rival === true ? undefined : d.rival);
+   let cash = d.cash ?? 0;
+   if (d.cashPctRevenue) cash += Math.round(d.cashPctRevenue * Math.max(b.revenue, kindOf(b).baseRev * 0.25));
+   let note: string | undefined;
+@@ -1000,17 +1003,18 @@ export function bizSellInPlace(p: PlayerState, rng: Rng, mode: "acquired" | "ipo
+ }
+ 
+ /** Sell a minority stake to an investor. Returns a sentence describing the terms. */
+-export function bizSellStake(p: PlayerState, stake: number, discount = 1): string | undefined {
++export function bizSellStake(p: PlayerState, stake: number, discount = 1, rng?: Rng, kind: InvestorKind = "angel"): string | undefined {
+   const b = p.business;
+   if (!b) return undefined;
+   ensureBusiness(b);
+   if (b.ownerShare <= 0.25) return "Investors weren't interested in what was left of the company.";
+   const amount = Math.max(40_000, Math.round(((Math.max(0, equityOf(b)) * stake) / (1 - stake)) * discount / 1000) * 1000);
+   b.cash += amount;
+-  b.ownerShare = Math.round(b.ownerShare * (1 - stake) * 1000) / 1000;
++  const inv = makeInvestor(kind, stake, amount, p.year, rng ?? makeRng(hashString(`${p.id}${p.year}stake${b.rounds}`)));
++  sellShares(b, inv);
+   b.rounds += 1;
+   refresh(b);
+-  return `The investor put ${money(amount)} into the company for ${Math.round(stake * 100)}%. You now own ${(b.ownerShare * 100).toFixed(0)}%.`;
++  return `${inv.name} put ${money(amount)} into the company for ${Math.round(stake * 100)}%. You now own ${(b.ownerShare * 100).toFixed(0)}%.`;
+ }
+ 
+ /** Buy back some of an investor's shares at a 10% premium to fair value. */
+@@ -1028,7 +1032,7 @@ export function bizBuyShares(p: PlayerState, frac: number): string | undefined {
+   } else {
+     return "You couldn't raise the money to buy them out.";
+   }
+-  b.ownerShare = Math.round((b.ownerShare + add) * 1000) / 1000;
++  takeBackShares(b, add);
+   refresh(b);
+   return `You bought back ${(add * 100).toFixed(0)}% of the company for ${money(price)}. You now own ${(b.ownerShare * 100).toFixed(0)}%.`;
+ }
+diff --git a/src/engine/businessBoard.ts b/src/engine/businessBoard.ts
+new file mode 100644
+index 0000000..57a56e4
+--- /dev/null
++++ b/src/engine/businessBoard.ts
+@@ -0,0 +1,228 @@
++/**
++ * Ownership and control. Outside investors are people with agendas (a VC wants growth then an exit, an angel wants
++ * profit), their patience runs down when the company disappoints them, and a hostile board can push the founder out.
++ * An ousted founder (or one who deliberately steps back to chair) keeps the shares but not the job: that is the one
++ * way to own a company without it being a full-time commitment.
++ *
++ * Invariant: the sum of `investors[].share` equals `1 - ownerShare` (see `ensureBusiness`).
++ */
++import type { ActionResult, Business, BusinessInvestor, InvestorAgenda, InvestorKind, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { addLog, changeStat } from "./state";
++import { canSpend, done, info, open, reserveOf, unchanged, type Notices } from "./businessKit";
++import { equityOf, exitTax, kindOf, revenueGrowth } from "./businessModel";
++import { isStudyingFullTime } from "./occupation";
++
++export const AGENDA_INFO: Record<InvestorAgenda, { label: string; blurb: string }> = {
++  growth: { label: "Wants growth", blurb: "Judged on revenue growth. Hates cash piling up and payouts to you." },
++  profit: { label: "Wants profit", blurb: "Judged on steady profit. Hates losses and money locked up unspent." },
++  exit: { label: "Wants an exit", blurb: "Wants a sale or a listing within a few years of putting money in." },
++};
++
++const FUNDS = ["Harbor Ventures", "Northlight Capital", "Redwood Partners", "Bluepeak Fund", "Ironbridge Capital", "Lantern Ventures", "Summit Row Partners"];
++const ANGELS = ["Margaret Hale", "Victor Osei", "Dana Whitfield", "Rohan Mehta", "Elise Moreau", "Tobias Grant", "Yuki Nakamura"];
++
++export function makeInvestor(kind: InvestorKind, share: number, invested: number, year: number, rng: Rng): BusinessInvestor {
++  const vc = kind === "vc";
++  return {
++    id: `inv-${year}-${rng.int(100, 999)}`,
++    name: rng.pick(vc ? FUNDS : ANGELS),
++    kind,
++    share: Math.round(share * 1000) / 1000,
++    agenda: vc ? (rng.chance(0.55) ? "growth" : "exit") : rng.chance(0.75) ? "profit" : "exit",
++    invested: Math.round(invested),
++    pref: vc,
++    since: year,
++  };
++}
++
++/** Record a sale of shares: the owner's share falls and the ledger gains the new holder. */
++export function sellShares(b: Business, inv: BusinessInvestor) {
++  b.ownerShare = Math.round(b.ownerShare * (1 - inv.share) * 1000) / 1000;
++  // Everyone already on the register is diluted along with the owner.
++  for (const o of b.investors) o.share = Math.round(o.share * (1 - inv.share) * 1000) / 1000;
++  b.investors.push(inv);
++  const gap = Math.round((1 - b.ownerShare - b.investors.reduce((s, i) => s + i.share, 0)) * 1000) / 1000;
++  if (gap !== 0) inv.share = Math.round((inv.share + gap) * 1000) / 1000;
++}
++
++const outsideShare = (b: Business) => b.investors.filter((i) => i.kind !== "staff").reduce((s, i) => s + i.share, 0);
++
++/** Which agenda is driving the unrest on the board. */
++export function dominantAgenda(b: Business): InvestorAgenda | null {
++  const tally: Record<InvestorAgenda, number> = { growth: 0, profit: 0, exit: 0 };
++  for (const i of b.investors) if (i.kind !== "staff") tally[i.agenda] += i.share;
++  const best = (Object.keys(tally) as InvestorAgenda[]).sort((a, c) => tally[c] - tally[a])[0];
++  return tally[best] > 0 ? best : null;
++}
++
++export const hostileBoard = (b: Business) => outsideShare(b) > 0.5;
++
++function unhappy(b: Business, i: BusinessInvestor, year: number, pretax: number): boolean {
++  const k = kindOf(b);
++  if (i.agenda === "growth") return revenueGrowth(b) < 0.05 || (b.payout !== "reinvest" && b.cash > k.fixed * b.locations);
++  if (i.agenda === "profit") return pretax < 0 || (b.payout === "reinvest" && b.cash > 1.5 * (k.fixed * b.locations + b.staff * k.wage));
++  return year - i.since >= 4;
++}
++
++/** Yearly: investor patience goes up or down with results measured against what each backer wants. */
++export function processBoard(p: PlayerState, b: Business, notices: Notices, pretax: number) {
++  const outside = outsideShare(b);
++  if (outside < 0.12) {
++    b.boardHeat = Math.max(0, b.boardHeat - 15);
++    return;
++  }
++  let bad = 0;
++  for (const i of b.investors) if (i.kind !== "staff" && unhappy(b, i, p.year, pretax)) bad += i.share;
++  const frac = bad / outside;
++  const weight = Math.min(1, outside / 0.4) * (b.ownerShare > 0.5 ? 0.7 : 1);
++  b.boardHeat = Math.round(clamp(b.boardHeat + weight * (frac * 30 - (1 - frac) * 12)));
++  if (b.boardHeat >= 55 && b.boardHeat - weight * (frac * 30) < 55) {
++    const body = `${b.name}'s investors are losing patience. Expect a tense board meeting soon.`;
++    addLog(p, body);
++    notices.push(info("Restless Board", body, "bad"));
++  }
++}
++
++export function boardNotes(b: Business): string[] {
++  const notes: string[] = [];
++  if (b.boardHeat >= 55 && outsideShare(b) >= 0.12) notes.push(`Investors are impatient (${Math.round(b.boardHeat)}/100). Results, a buy-out or a deal could settle them.`);
++  if (hostileBoard(b)) notes.push("Outside investors own most of the company. If they lose faith, they can vote you out.");
++  if (b.passive) notes.push(b.ousted ? "You were pushed out. You hold the shares but not the controls." : "You are chairing from the sidelines. Managers don't care about your money as much as you do.");
++  return notes;
++}
++
++// ---------------------------------------------------------------------------
++// Investor deals
++// ---------------------------------------------------------------------------
++
++export const investorBuyoutPrice = (b: Business, i: BusinessInvestor) => {
++  const fair = Math.max(0, equityOf(b)) * i.share * 1.1;
++  return Math.round(i.pref ? Math.max(fair, Math.min(i.invested, Math.max(0, equityOf(b)))) : fair);
++};
++
++/** Buy one investor out completely (fair value plus a 10% premium; a VC will not take less than their money back). */
++export function buyOutInvestor(p0: PlayerState, id: string): ActionResult {
++  const c = open(p0);
++  const inv = c?.b.investors.find((x) => x.id === id);
++  if (!c || !inv) return { player: p0 };
++  const { p, b } = c;
++  const price = investorBuyoutPrice(b, inv);
++  if (p.bankBalance >= price) {
++    p.bankBalance -= price;
++    b.basis += price;
++  } else if (b.cash - price >= reserveOf(b)) {
++    b.cash -= price;
++  } else return unchanged(p0, "Can't Afford It", `${inv.name} wants ${money(price)} for their ${(inv.share * 100).toFixed(0)}%. Your savings and the company's spare cash don't stretch that far.`, "bad");
++  b.ownerShare = Math.round((b.ownerShare + inv.share) * 1000) / 1000;
++  b.investors = b.investors.filter((x) => x.id !== id);
++  b.boardHeat = Math.max(0, b.boardHeat - 25);
++  return done(c, "Investor Bought Out", `You bought ${inv.name} out of ${b.name} for ${money(price)}. You now own ${(b.ownerShare * 100).toFixed(0)}%.`);
++}
++
++/** Take back `frac` of the company, starting with the biggest outside holder. Used by events. */
++export function takeBackShares(b: Business, frac: number) {
++  let left = Math.min(frac, 1 - b.ownerShare);
++  const order = [...b.investors].sort((x, y) => y.share - x.share);
++  for (const i of order) {
++    if (left <= 0) break;
++    const t = Math.min(i.share, left);
++    i.share = Math.round((i.share - t) * 1000) / 1000;
++    left -= t;
++  }
++  b.investors = b.investors.filter((i) => i.share > 0.0005);
++  b.ownerShare = Math.round((1 - b.investors.reduce((s, i) => s + i.share, 0)) * 1000) / 1000;
++}
++
++// ---------------------------------------------------------------------------
++// Dividends
++// ---------------------------------------------------------------------------
++
++/** Cash the company could hand out now without touching its safety reserve. */
++export const spareCash = (b: Business) => Math.max(0, Math.round(b.cash - reserveOf(b)));
++
++/** Pay shareholders a special dividend out of idle company cash. The owner's slice is taxed as a gain. */
++export function payDividend(p0: PlayerState, requested: number): ActionResult {
++  const c = open(p0);
++  if (!c) return { player: p0 };
++  const { p, b } = c;
++  const amount = Math.min(Math.round(requested), spareCash(b));
++  if (amount < 1_000) return unchanged(p0, "Nothing to Pay Out", "The company has no spare cash beyond the reserve it needs to stay safe.");
++  b.cash -= amount;
++  const mine = Math.round(amount * b.ownerShare);
++  const tax = exitTax(p.residence.country, mine);
++  p.bankBalance += mine - tax;
++  const others = amount - mine;
++  return done(c, "Dividend Paid", `${b.name} paid out ${money(amount)}. You received ${money(mine - tax)} after ${money(tax)} tax${others > 0 ? `; investors took ${money(others)}` : ""}. The company's reserve was left alone.`);
++}
++
++// ---------------------------------------------------------------------------
++// Control
++// ---------------------------------------------------------------------------
++
++export function caretakerCeo(b: Business, rng: Rng, year: number, skill: number) {
++  const k = kindOf(b);
++  const first = rng.pick(["Pat", "Lee", "Chris", "Jamie", "Avery", "Morgan"]);
++  const last = rng.pick(["Moreno", "Walsh", "Iyer", "Kowalski", "Sandoval", "Okoye"]);
++  return { name: `${first} ${last}`, skill, wage: Math.round(k.mgrWage * 1.2), hired: year };
++}
++
++export function stepBack(p0: PlayerState): ActionResult {
++  const c = open(p0);
++  if (!c) return { player: p0 };
++  const { p, b } = c;
++  if (b.passive) return unchanged(p0, "Already Chairing", "You already sit above the day-to-day.");
++  if (!b.manager) return unchanged(p0, "Nobody to Run It", "Hire a general manager first. Without someone in charge, stepping back is just walking away.");
++  b.passive = true;
++  b.neglect = 0;
++  return done(c, "Stepped Back", `You became chair of ${b.name} and left ${b.manager.name} in charge. You are no longer tied to the business full-time: you can take a job, study or start something else, while your shares keep paying out. Without your eyes on it, though, standards will drift and a manager watches the company's money less closely than you do.`);
++}
++
++export function takeBackControl(p0: PlayerState): ActionResult {
++  const c = open(p0);
++  if (!c) return { player: p0 };
++  const { p, b } = c;
++  if (!b.passive) return { player: p0 };
++  if (b.ousted) return unchanged(p0, "Locked Out", "The board pushed you out. You can't take the reins back, only sell your shares.", "bad");
++  if (p.currentJob) return unchanged(p0, "You Have a Job", `You can't run ${b.name} again while working as a ${p.currentJob.title}. Quit first.`, "bad");
++  if (isStudyingFullTime(p) && p.education.stage !== "HighSchool") return unchanged(p0, "Busy Studying", "You can't take the reins again while studying full time.", "bad");
++  b.passive = false;
++  return done(c, "Back in Charge", `You took the reins of ${b.name} again. ${b.manager ? `${b.manager.name} stays on as general manager.` : ""}`, "neutral");
++}
++
++/** The board removes the founder. The company carries on under a professional CEO. */
++export function oust(p: PlayerState, rng: Rng): string | undefined {
++  const b = p.business;
++  if (!b) return undefined;
++  b.passive = true;
++  b.ousted = true;
++  b.rescue = false;
++  b.neglect = 0;
++  b.boardHeat = 20;
++  if (!b.manager) b.manager = caretakerCeo(b, rng, p.year, 62);
++  changeStat(p, "happiness", -12);
++  return `The board voted you out of ${b.name}. ${b.manager.name} is the new CEO. You keep your ${(b.ownerShare * 100).toFixed(0)}% stake but not the controls, and you are free to do something else with your time.`;
++}
++
++/** Passive owners lose a little to drift and perks; an interim CEO appears when the manager leaves. */
++export function processPassive(p: PlayerState, b: Business, rng: Rng, notices: Notices) {
++  if (!b.passive) return;
++  const k = kindOf(b);
++  if (!b.manager) {
++    b.manager = caretakerCeo(b, rng, p.year, rng.int(42, 62));
++    const body = `${b.name}'s manager left, so the board appointed ${b.manager.name} as interim CEO at ${money(b.manager.wage)} a year.`;
++    addLog(p, body);
++    notices.push(info("Interim CEO", body, "neutral"));
++  }
++  if (rng.chance(0.07 * (1.3 - b.compliance / 100))) {
++    const loss = Math.round(0.035 * Math.max(b.revenue, k.baseRev * 0.3));
++    b.cash -= loss;
++    const body = `With nobody watching closely, ${b.name}'s management spent ${money(loss)} on perks and pet projects.`;
++    addLog(p, body);
++    notices.push(info("Executive Perks", body, "bad"));
++  }
++}
++
++/** For the UI: can you afford the dividend at all? */
++export const canPayDividend = (p: PlayerState, b: Business) => spareCash(b) >= 1_000 && canSpend(p, b, 0);
+diff --git a/src/engine/businessKit.ts b/src/engine/businessKit.ts
+new file mode 100644
+index 0000000..612f546
+--- /dev/null
++++ b/src/engine/businessKit.ts
+@@ -0,0 +1,98 @@
++/**
++ * Shared plumbing for business actions: opening a clone of the owner's company, paying for decisions from company cash
++ * or savings, and producing the notices the UI shows. `business.ts` and the depth modules (people, market, board)
++ * all build their actions on these.
++ */
++import type { ActionResult, Business, PlayerState } from "@/types/game.types";
++import { clamp, money } from "@/lib/format";
++import type { BusinessType } from "@/data/businessTypes";
++import { addLog, clone } from "./state";
++import { ensureBusiness, kindOf, stakeValue } from "./businessModel";
++
++export type Notices = NonNullable<ActionResult["notices"]>;
++export type Tone = "good" | "bad" | "neutral" | "jackpot";
++export const info = (title: string, body: string, tone: Tone = "neutral") => ({ kind: "info" as const, title, body, tone });
++
++export const unitCost = (k: BusinessType, b: Business) => k.cost * b.locations;
++export const reserveOf = (b: Business) => {
++  const k = kindOf(b);
++  return 0.25 * (k.fixed * b.locations + b.staff * k.wage + (b.manager?.wage ?? 0));
++};
++export const scale = (b: Business) => {
++  const k = kindOf(b);
++  return Math.max(k.baseRev * b.locations * 0.4, b.revenue);
++};
++
++export function refresh(b: Business) {
++  b.value = stakeValue(b);
++  b.reputation = Math.round(clamp(b.reputation) * 10) / 10;
++}
++
++/**
++ * Pay for a decision. Company cash is used while it stays above a small reserve, otherwise the owner's savings,
++ * otherwise whatever company cash is left. Capital items paid from savings raise the owner's cost basis.
++ */
++export function spend(p: PlayerState, b: Business, amount: number, capital: boolean): "company" | "savings" | null {
++  amount = Math.round(amount);
++  let src: "company" | "savings" | null = null;
++  if (b.cash - amount >= reserveOf(b)) {
++    b.cash -= amount;
++    src = "company";
++  } else if (p.bankBalance >= amount) {
++    p.bankBalance -= amount;
++    if (capital) b.basis += amount;
++    src = "savings";
++  } else if (b.cash >= amount) {
++    b.cash -= amount;
++    src = "company";
++  }
++  if (src && !capital) b.ytdSpend += amount;
++  return src;
++}
++
++export const canSpend = (p: PlayerState, b: Business, amount: number) => b.cash >= amount || p.bankBalance >= amount;
++export const fromWhere = (src: "company" | "savings") => (src === "company" ? "from company cash" : "from your savings");
++
++export interface Ctx {
++  p: PlayerState;
++  b: Business;
++  k: BusinessType;
++}
++
++/** Common preamble for actions on an existing business. */
++export function open(p0: PlayerState): Ctx | null {
++  if (!p0.business) return null;
++  const p = clone(p0);
++  const b = ensureBusiness(p.business!);
++  return { p, b, k: kindOf(b) };
++}
++
++export const unchanged = (p0: PlayerState, title: string, body: string, tone: Tone = "neutral"): ActionResult => ({ player: p0, notices: [info(title, body, tone)] });
++export const poor = (p0: PlayerState, what: string, cost: number): ActionResult => unchanged(p0, "Insufficient Funds", `${what} costs ${money(cost)}. Neither your savings nor the company's cash can cover it.`, "bad");
++
++export function done(c: Ctx, title: string, body: string, tone: Tone = "good"): ActionResult {
++  refresh(c.b);
++  addLog(c.p, body);
++  return { player: c.p, notices: [info(title, body, tone)] };
++}
++
++/** Costs shown in the UI and charged by actions. */
++export function businessCosts(b: Business) {
++  const k = kindOf(b);
++  return {
++    hire: Math.max(1_500, Math.round(k.wage * 0.1)),
++    severance: Math.round(k.wage * 0.25),
++    train: 3_000 + 1_500 * b.staff,
++    marketing: Math.max(4_000, Math.round(0.04 * scale(b))),
++    audit: Math.max(3_000, Math.round(0.008 * k.baseRev * b.locations)),
++    renovate: Math.round(0.12 * unitCost(k, b)),
++    upgrade: Math.round(0.1 * unitCost(k, b) * (1 + 0.25 * b.upgrades)),
++    diversify: Math.max(Math.round(0.09 * k.cost), Math.round(0.05 * scale(b))) * (1 + b.diversified),
++    pivot: Math.round(0.15 * k.cost),
++    acquire: Math.max(40_000, Math.round(0.5 * scale(b))),
++    expand: Math.round(k.cost * 0.9 * (1 + 0.15 * (b.locations - 1))) + (b.franchisor ? Math.round((k.franchise?.fee ?? 0) * 0.5) : 0),
++    managerFee: { solid: Math.round(k.mgrWage * 0.2), star: Math.round(k.mgrWage * 1.5 * 0.2) },
++    managerWage: { solid: k.mgrWage, star: Math.round(k.mgrWage * 1.5) },
++    managerSeverance: Math.round((b.manager?.wage ?? 0) * 0.5),
++  };
++}
+diff --git a/src/engine/businessMarket.ts b/src/engine/businessMarket.ts
+new file mode 100644
+index 0000000..252987f
+--- /dev/null
++++ b/src/engine/businessMarket.ts
+@@ -0,0 +1,215 @@
++/**
++ * The market around the company: named rivals that attack different weaknesses (and can be fought, bought out or
++ * outlasted), and multi-year industry shifts (a craze, a squeeze, a regulatory wave) the owner can lean into.
++ * The yearly effects of both are computed in businessModel.ts (`rivalPull`, `shiftEffect`) so forecasts see them too.
++ */
++import type { ActionResult, Business, BusinessRival, MarketShift, PlayerState, RivalKind } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { addLog } from "./state";
++import { businessCosts, canSpend, done, info, open, poor, scale, spend, unchanged, type Notices } from "./businessKit";
++
++export const MAX_RIVALS = 3;
++
++export const RIVAL_INFO: Record<RivalKind, { label: string; blurb: string }> = {
++  discounter: { label: "Discounter", blurb: "Undercuts everyone on price. Hurts mid-priced businesses most." },
++  premium: { label: "Premium name", blurb: "A polished, expensive brand. Hurts anyone whose quality is only so-so." },
++  chain: { label: "National chain", blurb: "Deep pockets and marketing. Hurts businesses without a strong reputation." },
++  upstart: { label: "Upstart", blurb: "Hungry and unpredictable. Can fade fast or take off." },
++};
++
++const PARTS: Record<RivalKind, [string[], string[]]> = {
++  discounter: [["Bargain", "Penny", "Dollar", "Budget", "Value", "Thrifty"], ["Hub", "Mart", "Express", "Direct", "Depot"]],
++  premium: [["Maison", "Atelier", "Gilded", "Velvet", "Prime", "Meridian"], ["& Sons", "House", "Collective", "Studio", "Reserve"]],
++  chain: [["Nationwide", "Unity", "Apex", "Omni", "Pinnacle", "Continental"], ["Group", "Brands", "Holdings", "& Co", "International"]],
++  upstart: [["Fresh", "Nova", "Spark", "Bright", "Wild", "Kindred"], ["Labs", "Collective", "Works", "Co", "Club"]],
++};
++
++export function makeRival(b: Business, kind: RivalKind, year: number, rng: Rng): BusinessRival {
++  const [a, z] = PARTS[kind];
++  const strength = Math.round(clamp(rng.int(22, 48) + (b.competition - 50) * 0.2, 12, 70));
++  return { id: `r${year}-${rng.int(100, 999)}`, name: `${rng.pick(a)} ${rng.pick(z)}`, kind, strength, since: year };
++}
++
++/** Which kind of rival tends to appear, given the weakness the market can see in you. */
++export function pickRivalKind(b: Business, rng: Rng): RivalKind {
++  const w: [RivalKind, number][] = [
++    ["discounter", b.price === 1 ? 3 : 1.5],
++    ["premium", b.quality < 55 ? 3 : 1],
++    ["chain", b.reputation < 50 ? 3 : 1],
++    ["upstart", 2],
++  ];
++  const total = w.reduce((s, [, x]) => s + x, 0);
++  let r = rng.next() * total;
++  for (const [k, x] of w) {
++    r -= x;
++    if (r <= 0) return k;
++  }
++  return "upstart";
++}
++
++/** Add a named rival if there is room. Returns it. */
++export function spawnRival(b: Business, year: number, rng: Rng, kind?: RivalKind): BusinessRival | null {
++  if (b.rivals.length >= MAX_RIVALS) return null;
++  const r = makeRival(b, kind ?? pickRivalKind(b, rng), year, rng);
++  b.rivals.push(r);
++  return r;
++}
++
++export const strongestRival = (b: Business): BusinessRival | null => (b.rivals.length ? [...b.rivals].sort((x, y) => y.strength - x.strength)[0] : null);
++
++export const priceWarCost = (b: Business) => Math.max(6_000, Math.round(0.035 * scale(b)));
++export const buyoutCost = (b: Business, r: BusinessRival) => Math.round(businessCosts(b).acquire * (0.55 + r.strength / 100));
++export const priceWarOdds = (b: Business, r: BusinessRival) => clamp(0.45 + (b.reputation - 50) / 200 + (b.quality - 50) / 300 + (b.cash > 2 * priceWarCost(b) ? 0.08 : -0.1) - r.strength / 250 + (r.kind === "chain" ? -0.1 : 0), 0.12, 0.8);
++
++export function priceWar(p0: PlayerState, rng: Rng, rivalId: string): ActionResult {
++  const c = open(p0);
++  const r = c?.b.rivals.find((x) => x.id === rivalId);
++  if (!c || !r) return { player: p0 };
++  const { p, b } = c;
++  if ((p.annual.bizwar ?? 0) >= 1) return unchanged(p0, "Already Fighting", "One price war a year is all your margins can take.");
++  const cost = priceWarCost(b);
++  if (!canSpend(p, b, cost)) return poor(p0, "A price war", cost);
++  spend(p, b, cost, false);
++  p.annual.bizwar = 1;
++  if (rng.chance(priceWarOdds(b, r))) {
++    r.strength = Math.max(0, r.strength - 26);
++    b.customers = clamp(b.customers + 3);
++    if (r.strength < 12) {
++      b.rivals = b.rivals.filter((x) => x.id !== r.id);
++      return done(c, "Rival Crushed", `You hit ${r.name} with promotions and loyalty deals (${money(cost)}). They couldn't match your staying power and closed up shop.`);
++    }
++    return done(c, "Price War Won", `You hit ${r.name} with promotions and loyalty deals (${money(cost)}). Their customers drifted back to you and they are weaker for it.`);
++  }
++  const extra = Math.round(0.02 * Math.max(b.revenue, scale(b)));
++  b.cash -= extra;
++  b.ytdSpend += extra;
++  r.strength = Math.min(95, r.strength + 6);
++  b.reputation = clamp(b.reputation - 1);
++  return done(c, "Price War Lost", `${r.name} matched every discount and kept going. The war cost you ${money(cost + extra)} and left them stronger.`, "bad");
++}
++
++export function buyOutRival(p0: PlayerState, rng: Rng, rivalId: string): ActionResult {
++  const c = open(p0);
++  const r = c?.b.rivals.find((x) => x.id === rivalId);
++  if (!c || !r) return { player: p0 };
++  const { p, b } = c;
++  if ((p.annual.bizacquire ?? 0) >= 1) return unchanged(p0, "Already Dealing", "One acquisition per year.");
++  const cost = buyoutCost(b, r);
++  if (!canSpend(p, b, cost)) return poor(p0, "Buying a rival", cost);
++  spend(p, b, cost, true);
++  p.annual.bizacquire = 1;
++  b.rivals = b.rivals.filter((x) => x.id !== r.id);
++  b.customers = clamp(b.customers + 6 + r.strength / 8);
++  b.competition = clamp(b.competition - 10, 5, 95);
++  b.assets += Math.round(cost * 0.3);
++  b.reputation = clamp(b.reputation - 1);
++  b.morale = clamp(b.morale - 6);
++  const clash = rng.chance(b.manager ? 0.2 : 0.35);
++  if (clash) {
++    b.morale = clamp(b.morale - 8);
++    b.staff = Math.max(0, b.staff - 1);
++  }
++  return done(c, "Rival Bought Out", `You bought ${r.name} for ${money(cost)} and absorbed their customers. ${clash ? "Integration was messy: a culture clash cost you morale and a key employee." : "Integration went smoothly, if tensely."}`, clash ? "neutral" : "good");
++}
++
++// ---------------------------------------------------------------------------
++// Industry shifts
++// ---------------------------------------------------------------------------
++
++interface ShiftDef {
++  id: string;
++  label: string;
++  blurb: string;
++  kinds: string[];
++  demand: number;
++  cost: number;
++}
++const ALL = ["foodtruck", "onlinestore", "boutique", "consultancy", "farm", "barcafe", "restaurant", "gym", "construction", "logistics", "nightclub", "startup"];
++const PHYSICAL = ["foodtruck", "boutique", "farm", "barcafe", "restaurant", "gym", "construction", "logistics", "nightclub"];
++
++export const SHIFTS: ShiftDef[] = [
++  { id: "foodie", label: "Foodie boom", blurb: "People are eating out, eating local and posting every plate.", kinds: ["foodtruck", "restaurant", "barcafe", "farm"], demand: 0.07, cost: 0 },
++  { id: "remote", label: "Remote-work wave", blurb: "Laptops everywhere: cafes, freelancers and online buyers are flush.", kinds: ["barcafe", "consultancy", "onlinestore", "startup"], demand: 0.07, cost: 0 },
++  { id: "wellness", label: "Wellness craze", blurb: "Everyone wants to be healthier, and willing to pay for it.", kinds: ["gym", "farm", "barcafe", "boutique"], demand: 0.08, cost: 0 },
++  { id: "ecom", label: "E-commerce surge", blurb: "Spending is moving online faster than anyone forecast.", kinds: ["onlinestore", "logistics", "startup"], demand: 0.09, cost: 0 },
++  { id: "building", label: "Building boom", blurb: "Cheap credit and new estates: order books are filling up.", kinds: ["construction", "logistics"], demand: 0.09, cost: 0.01 },
++  { id: "tourism", label: "Tourism rebound", blurb: "Visitors are flooding back into town.", kinds: ["restaurant", "barcafe", "nightclub", "boutique", "foodtruck"], demand: 0.07, cost: 0 },
++  { id: "nightlife", label: "Nightlife revival", blurb: "The city is going out again.", kinds: ["nightclub", "barcafe"], demand: 0.08, cost: 0 },
++  { id: "local", label: "Buy-local movement", blurb: "Shoppers are turning their back on faceless chains.", kinds: ["farm", "boutique", "foodtruck", "restaurant"], demand: 0.06, cost: 0 },
++  { id: "supply", label: "Supply-chain squeeze", blurb: "Shipments are late and suppliers are charging whatever they like.", kinds: PHYSICAL, demand: 0, cost: 0.06 },
++  { id: "inflation", label: "Input-cost inflation", blurb: "Everything you buy keeps getting more expensive.", kinds: ALL, demand: 0, cost: 0.045 },
++  { id: "tradedown", label: "Consumer trade-down", blurb: "Households are cutting back on anything that isn't essential.", kinds: ["boutique", "restaurant", "barcafe", "nightclub", "gym", "foodtruck"], demand: -0.07, cost: 0 },
++  { id: "platform", label: "Platform fee hikes", blurb: "The marketplaces you depend on have changed their terms again.", kinds: ["onlinestore", "startup"], demand: -0.03, cost: 0.04 },
++  { id: "crackdown", label: "Regulatory crackdown", blurb: "New licensing rules and a wave of inspections.", kinds: ["nightclub", "construction", "logistics", "farm", "barcafe"], demand: -0.03, cost: 0.03 },
++  { id: "format", label: "Flashy new format", blurb: "A trendy new concept is pulling the crowds away from the old guard.", kinds: ["gym", "restaurant", "foodtruck", "barcafe"], demand: -0.06, cost: 0 },
++  { id: "automation", label: "Automation wave", blurb: "Cheap software and AI are eating into what clients used to pay for.", kinds: ["consultancy", "startup", "onlinestore"], demand: -0.06, cost: 0 },
++  { id: "slump", label: "Housing slump", blurb: "Developers have stopped breaking ground.", kinds: ["construction"], demand: -0.1, cost: 0 },
++];
++
++export const shiftResponseCost = (b: Business) => Math.max(5_000, Math.round(0.03 * scale(b)));
++
++export function newShift(b: Business, rng: Rng): MarketShift | null {
++  const pool = SHIFTS.filter((s) => s.kinds.includes(b.kind));
++  if (pool.length === 0) return null;
++  const d = rng.pick(pool);
++  return { id: d.id, label: d.label, blurb: d.blurb, demand: d.demand, cost: d.cost, yearsLeft: rng.int(2, 5), responded: false };
++}
++
++export function respondToShift(p0: PlayerState): ActionResult {
++  const c = open(p0);
++  if (!c?.b.shift) return { player: p0 };
++  const { p, b } = c;
++  const s = b.shift!;
++  if (s.responded) return unchanged(p0, "Already Responded", `You have already reacted to the ${s.label.toLowerCase()}.`);
++  const cost = shiftResponseCost(b);
++  if (!canSpend(p, b, cost)) return poor(p0, "Your response", cost);
++  spend(p, b, cost, false);
++  s.responded = true;
++  const up = s.demand >= 0;
++  return done(c, up ? "Leaning In" : "Bracing", up
++    ? `You put ${money(cost)} behind the ${s.label.toLowerCase()}: extra stock, ads and staff hours. If it lasts, you'll capture far more of it than the competition.`
++    : `You spent ${money(cost)} renegotiating contracts, trimming waste and reassuring customers. The ${s.label.toLowerCase()} will hurt about half as much.`);
++}
++
++/** Yearly: rivals move, shifts end or begin. */
++export function processMarket(p: PlayerState, b: Business, rng: Rng, notices: Notices) {
++  const recession = p.economy.climate === "recession";
++  const keep: BusinessRival[] = [];
++  for (const r of b.rivals) {
++    r.strength = Math.round(clamp(r.strength + rng.int(-6, 8) + (b.reputation < 45 ? 2 : -1), 5, 95));
++    const pDie = clamp(0.06 + (recession ? 0.07 : 0) + (r.strength < 25 ? 0.08 : 0) - (r.strength > 70 ? 0.04 : 0), 0.02, 0.3);
++    if (rng.chance(pDie)) {
++      b.customers = clamp(b.customers + 3);
++      const body = `${r.name}, a rival that had been eating into your business, closed down. Some of its customers have found their way to you.`;
++      addLog(p, body);
++      notices.push(info("Rival Folded", body, "good"));
++    } else keep.push(r);
++  }
++  b.rivals = keep;
++
++  if (b.shift) {
++    b.shift.yearsLeft -= 1;
++    if (b.shift.yearsLeft <= 0) {
++      const body = `The ${b.shift.label.toLowerCase()} has run its course. ${b.shift.demand >= 0 ? "The tailwind is gone." : "The pressure is easing."}`;
++      addLog(p, body);
++      notices.push(info("Industry Shift Over", body, "neutral"));
++      b.shift = null;
++    }
++  } else if (rng.chance(0.13)) {
++    const s = newShift(b, rng);
++    if (s) {
++      b.shift = s;
++      const body = `${s.label}: ${s.blurb} It should last about ${s.yearsLeft} years. ${s.demand >= 0 ? "You can lean into it to capture more." : "You can brace for it to soften the blow."}`;
++      addLog(p, body);
++      notices.push(info("Industry Shift", body, s.demand >= 0 ? "good" : "bad"));
++    }
++  }
++}
++
++export function marketNotes(b: Business): string[] {
++  const notes: string[] = [];
++  for (const r of b.rivals) if (r.strength >= 55) notes.push(`${r.name} is a serious threat (strength ${r.strength}).`);
++  if (b.shift && !b.shift.responded) notes.push(`${b.shift.label} is under way and you haven't reacted to it.`);
++  return notes;
++}
+diff --git a/src/engine/businessModel.ts b/src/engine/businessModel.ts
+index f3a5287..521b44e 100644
+--- a/src/engine/businessModel.ts
++++ b/src/engine/businessModel.ts
+@@ -3,7 +3,7 @@
+  * `business.ts` owns the actions and the yearly transaction; this file answers "what would happen" so the same math
+  * drives the real year, the dashboard's projected ranges and the valuation.
+  */
+-import type { Business, BusinessPayout, PlayerState } from "@/types/game.types";
++import type { Business, BusinessInvestor, BusinessPayout, KeyPerson, KeyRole, PlayerState } from "@/types/game.types";
+ import { makeRng, type Rng } from "@/lib/rng";
+ import { clamp } from "@/lib/format";
+ import { incomeTaxFor } from "@/data/countries";
+@@ -42,9 +42,49 @@ export function newBusiness(kind: BusinessType, name: string, year: number, rng:
+     fit: drawFit(kind, rng), marketing: 1.2, insurance: 0, compliance: 35, payout: "balanced", revenue: 0,
+     competition: clamp(kind.competition + rng.int(-10, 10), 5, 95), diversified: 0, franchises: 0, rounds: 0, neglect: 0,
+     covenantBreaches: 0, rescue: true, ytdSpend: 0, lastPivot: -99, profitableYears: 0, history: [],
++    team: [], rivals: [], shift: null, investors: [], boardHeat: 0, passive: false, ousted: false, franchisor: null, guaranteed: 0,
+   };
+ }
+ 
++// ---------------------------------------------------------------------------
++// Buying into a franchise
++// ---------------------------------------------------------------------------
++
++export const FRANCHISE_BRANDS: Record<string, string[]> = {
++  foodtruck: ["Taco Titan", "Wrap Republic", "Street Eats Co"],
++  boutique: ["Threadline", "Maison Lune", "Style Society"],
++  barcafe: ["Bean & Barrel", "Daily Grind", "Roast House"],
++  restaurant: ["Burger Barn", "Pasta Palace", "Grill & Co"],
++  gym: ["PulseFit", "Iron Works Fitness", "Anytime Strength"],
++};
++
++/** What a franchisor charges: an upfront fee, a royalty on revenue and a mandatory brand fund. */
++export function franchiseTerms(k: BusinessType): { fee: number; royalty: number; adFund: number } | null {
++  if (!k.franchise) return null;
++  return { fee: k.franchise.fee, royalty: Math.round((k.franchise.royalty / k.baseRev) * 1000) / 1000, adFund: 0.02 };
++}
++
++/**
++ * A franchised unit: the brand brings customers, a proven playbook (market fit lands in a narrow band instead of a
++ * lottery), supply deals and half the marketing bill, in return for an upfront fee, royalties on every dollar of
++ * revenue and a franchisor who sets the rules.
++ */
++export function newFranchise(kind: BusinessType, name: string, year: number, rng: Rng, brand?: string): Business | null {
++  const t = franchiseTerms(kind);
++  if (!t) return null;
++  const b = newBusiness(kind, name, year, rng);
++  const brandName = brand ?? rng.pick(FRANCHISE_BRANDS[kind.id] ?? ["Brand"]);
++  b.fit = clamp(1 + 0.07 * gauss(rng), 0.82, 1.2);
++  b.reputation = 55;
++  b.customers = Math.min(45, Math.round(kind.startCustomers * 1.6));
++  b.quality = 60;
++  b.compliance = 55;
++  b.marketing = 1.8;
++  b.basis = kind.cost + t.fee;
++  b.franchisor = { brand: brandName, royalty: t.royalty, adFund: t.adFund, since: year };
++  return b;
++}
++
+ /** Fill any field missing from a business written by an older version of the game. Mutates and returns `b`. */
+ export function ensureBusiness(b: Business): Business {
+   const kind = kindOf(b);
+@@ -93,6 +133,22 @@ export function ensureBusiness(b: Business): Business {
+   if (!d.payout || !(d.payout in PAYOUT_SHARE)) d.payout = "balanced";
+   if (typeof d.rescue !== "boolean") d.rescue = true;
+   if (!Array.isArray(d.history)) d.history = [];
++  num("boardHeat", 0);
++  num("guaranteed", 0);
++  if (!Array.isArray(d.team)) d.team = [];
++  if (!Array.isArray(d.rivals)) d.rivals = [];
++  if (!Array.isArray(d.investors)) d.investors = [];
++  if (d.shift === undefined) d.shift = null;
++  if (typeof d.passive !== "boolean") d.passive = false;
++  if (typeof d.ousted !== "boolean") d.ousted = false;
++  if (d.franchisor === undefined) d.franchisor = null;
++  // Older saves tracked only the owner's share: invent a backer so the ledger always adds up to the outside stake.
++  const outside = Math.max(0, 1 - clamp(d.ownerShare, 0, 1));
++  const ledger = d.investors.reduce((s, i) => s + i.share, 0);
++  if (outside > 0.001 && Math.abs(ledger - outside) > 0.002) {
++    if (d.investors.length === 0) d.investors.push({ id: "legacy-backers", name: "Early backers", kind: "angel", share: Math.round(outside * 1000) / 1000, agenda: "profit", invested: 0, pref: false, since: d.founded });
++    else d.investors[0].share = Math.max(0.001, Math.round((d.investors[0].share + outside - ledger) * 1000) / 1000);
++  } else if (outside <= 0.001 && d.investors.length) d.investors = [];
+   return d;
+ }
+ 
+@@ -117,6 +173,10 @@ export interface Pnl {
+   fixed: number;
+   wages: number;
+   manager: number;
++  /** Named key employees' pay. */
++  keyStaff: number;
++  /** Royalties and brand-fund contributions paid to a franchisor. */
++  franchisor: number;
+   marketing: number;
+   insurance: number;
+   upkeep: number;
+@@ -144,6 +204,7 @@ export function ownerLabour(p: PlayerState, b: Business): number {
+   const effortMult = p.effort === "grind" ? 1.1 : p.effort === "coast" ? 0.65 : 1;
+   const ability = clamp(0.9 + (p.smarts - 50) / 250, 0.7, 1.2);
+   const strain = Math.max(0, b.locations - 1);
++  if (b.manager && b.passive) return 0.05;
+   if (b.manager) return 0.15 * effortMult;
+   // Older saves could hold a job and a business at once: the business only gets the owner's spare hours.
+   const moonlight = p.currentJob ? 0.4 : 1;
+@@ -158,9 +219,47 @@ export function managerLabour(b: Business): number {
+ 
+ export const staffProductivity = (b: Business) => (0.78 + (0.22 * b.morale) / 100) * (0.85 + (0.3 * b.training) / 100);
+ 
++// ---------------------------------------------------------------------------
++// Key people, rivals and industry shifts (pure helpers; the actions live in businessPeople.ts / businessMarket.ts)
++// ---------------------------------------------------------------------------
++
++export const keyOf = (b: Business, role: KeyRole): KeyPerson | undefined => b.team.find((t) => t.role === role);
++export const teamWages = (b: Business) => b.team.reduce((s, t) => s + t.wage, 0);
++/** Labour a named key employee adds (each is worth about one hired hand, a bit more for the skilled). */
++export const teamLabour = (b: Business) => b.team.reduce((s, t) => s + staffProductivity(b) * (0.9 + t.skill / 500), 0);
++export const keySkill = (b: Business, role: KeyRole) => keyOf(b, role)?.skill ?? 0;
++
++/**
++ * How hard the named rivals are pulling customers away. Each kind attacks a different weakness: discounters hurt
++ * mid-priced shops, premium rivals hurt anyone with mediocre quality, chains hurt unknown names.
++ */
++export function rivalPull(b: Business): { customers: number; margin: number } {
++  let customers = 0;
++  let margin = 0;
++  for (const r of b.rivals) {
++    let m = 1;
++    if (r.kind === "discounter") {
++      m = b.price === 0 ? 0.7 : b.price === 2 ? 0.6 : 1.4;
++      margin += 0.012 * (r.strength / 50) * (b.price === 0 ? 1.3 : 1);
++    } else if (r.kind === "premium") m = b.quality < 55 ? 1.4 : 0.6;
++    else if (r.kind === "chain") m = b.reputation < 50 ? 1.4 : 0.8;
++    customers += r.strength * 0.07 * m;
++  }
++  return { customers: Math.min(14, customers), margin: Math.min(0.04, margin) };
++}
++
++/** This year's swing from a running industry shift (leaning in boosts a tailwind, bracing softens a headwind). */
++export function shiftEffect(b: Business): { demand: number; cost: number } {
++  const s = b.shift;
++  if (!s) return { demand: 0, cost: 0 };
++  const up = s.demand >= 0;
++  const k = s.responded ? (up ? 1.6 : 0.5) : 1;
++  return { demand: s.demand * k, cost: s.cost * (s.responded ? (s.cost >= 0 ? 0.5 : 1.6) : 1) };
++}
++
+ export function capacityOf(p: PlayerState, b: Business): number {
+   const k = kindOf(b);
+-  const units = ownerLabour(p, b) + managerLabour(b) + b.staff * staffProductivity(b);
++  const units = (ownerLabour(p, b) + managerLabour(b) + b.staff * staffProductivity(b) + teamLabour(b)) * (1 + 0.06 * keySkill(b, "ops") / 100);
+   return units / (k.ideal * b.locations);
+ }
+ 
+@@ -186,6 +285,7 @@ export function marketingEffect(stock: number) {
+ 
+ /** How much the owner's personal presence (or a manager's) helps or hurts winning customers. */
+ export function presence(p: PlayerState, b: Business): number {
++  if (b.manager && b.passive) return -0.14 + (b.manager.skill - 50) / 400;
+   if (b.manager) return -0.1 + (b.manager.skill - 50) / 400;
+   if (p.isInPrison) return -0.45;
+   return p.effort === "coast" ? -0.25 : p.effort === "grind" ? 0.04 : 0;
+@@ -200,6 +300,10 @@ export function customerTarget(p: PlayerState, b: Business, fit = b.fit): number
+   t *= 1 - 0.003 * (b.competition - 30);
+   t *= 1 + k.ownerDep * presence(p, b);
+   if (b.facility < 35) t -= (6 * (35 - b.facility)) / 35;
++  const sales = keyOf(b, "sales");
++  if (sales) t += 2.5 + (sales.skill - 50) * 0.12;
++  if (b.franchisor) t += 4;
++  t -= rivalPull(b).customers;
+   return clamp(t, 3, 100);
+ }
+ 
+@@ -222,43 +326,48 @@ export function stepYear(p: PlayerState, b: Business, sh: Shocks, fitOverride?:
+   const sales = Math.min(dem, 1.1 * cap);
+   const climate = climateFactor(p, k);
+   // Units sold are valued at the market price; the price decision scales revenue but not the cost of those units.
+-  const units = k.baseRev * locs * sales * (1 + sh.demand) * climate * (1 + b.boost) * (1 + 0.05 * b.diversified);
++  const shift = shiftEffect(b);
++  const units = k.baseRev * locs * sales * (1 + sh.demand + shift.demand) * climate * (1 + b.boost) * (1 + 0.05 * b.diversified);
+   const core = units * PRICE_MULT[b.price];
+   const royalties = b.franchises * (k.franchise?.royalty ?? 0) * (0.5 + b.reputation / 100) * clamp(climate, 0.85, 1.1);
+   const revenue = Math.max(0, core);
+ 
+   // --- costs ---
+-  const gm = clamp(k.margin - 0.002 * (b.quality - 50) - 0.0012 * (b.competition - 40), 0.1, 0.95);
+-  const cogs = Math.max(0, units) * (1 - gm) * (1 + sh.cost);
++  const gm = clamp(k.margin - 0.002 * (b.quality - 50) - 0.0012 * (b.competition - 40) - rivalPull(b).margin + (keySkill(b, "ops") > 0 ? (keySkill(b, "ops") - 50) * 0.0006 : 0) + (b.franchisor ? 0.02 : 0), 0.1, 0.95);
++  const cogs = Math.max(0, units) * (1 - gm) * (1 + sh.cost + shift.cost);
+   const fixed = k.fixed * locs;
+   const wages = b.staff * k.wage;
+   const manager = mgr?.wage ?? 0;
+-  const marketing = Math.max(k.mktNeed * revenue, 2_000 * locs);
++  const keyStaff = teamWages(b);
++  const franchisor = b.franchisor ? revenue * (b.franchisor.royalty + b.franchisor.adFund) : 0;
++  const marketing = Math.max(k.mktNeed * revenue * (b.franchisor ? 0.5 : 1), 2_000 * locs);
+   const insurance = b.insurance > 0 ? Math.max(INS_RATE[b.insurance] * revenue, 800 * locs * b.insurance) : 0;
+   const upkeep = k.upkeep * k.cost * locs;
+   const loss = sh.incident * revenue;
+   const incidentNet = loss - INS_COVER[b.insurance] * Math.max(0, loss - 0.01 * revenue);
+-  const operating = revenue + royalties * 0.9 - cogs - fixed - wages - manager - marketing - insurance - upkeep - incidentNet;
++  const operating = revenue + royalties * 0.9 - cogs - fixed - wages - manager - keyStaff - franchisor - marketing - insurance - upkeep - incidentNet;
+ 
+   // --- soft state ---
+   const neglected = !mgr && (prison || eff === "coast");
+   const neglect = neglected ? b.neglect + 1 : Math.max(0, b.neglect - 1);
+-  const supervision = mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0;
++  const supervision = (mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0) - (b.passive ? 2 : 0);
++  const craft = keyOf(b, "craft");
++  const craftQ = craft ? (craft.skill - 50) * 0.5 : 0;
+   const service = (b.morale - 50) * 0.12 + (b.training - 50) * 0.08;
+   const under = cap < 0.75 ? (0.75 - cap) * 35 : 0;
+   const neglectPen = Math.min(18, neglect * 5);
+   const stretched = !mgr && locs > 1 ? 4 * (locs - 1) : 0;
+   const priceRepPen = b.price === 2 ? Math.max(0, 60 - b.quality) * 0.15 : 0;
+-  const repTarget = clamp(22 + 0.62 * b.quality + service + supervision - under - neglectPen - priceRepPen - stretched + (b.facility < 40 ? -6 : 0), 5, 98);
++  const repTarget = clamp(22 + 0.62 * b.quality + (craft ? (craft.skill - 50) * 0.1 : 0) + service + supervision - under - neglectPen - priceRepPen - stretched + (b.facility < 40 ? -6 : 0), 5, 98);
+   const reputation = clamp(b.reputation + (repTarget > b.reputation ? 0.2 : 0.4) * (repTarget - b.reputation), 0, 100);
+-  const qBase = 28 + 0.3 * b.training + 0.22 * b.facility + 5 * b.upgrades + (mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0);
++  const qBase = 28 + 0.3 * b.training + 0.22 * b.facility + 5 * b.upgrades + craftQ + (mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0);
+   const quality = clamp(b.quality + 0.3 * (qBase - b.quality), 0, 100);
+   const overwork = cap < 0.8 ? (0.8 - cap) * 25 : 0;
+   const mBase = 58 + (mgr ? (mgr.skill - 50) * 0.15 : eff === "grind" ? -3 : eff === "coast" ? -2 : 0) - overwork - neglectPen * 0.8 + 0.1 * (b.training - 30);
+   const morale = clamp(b.morale + 0.35 * (mBase - b.morale), 0, 100);
+ 
+   return {
+-    pnl: { revenue: Math.round(revenue), royalties: Math.round(royalties), cogs: Math.round(cogs), fixed, wages, manager, marketing: Math.round(marketing), insurance: Math.round(insurance), upkeep, incidentNet: Math.round(incidentNet), operating: Math.round(operating) },
++    pnl: { revenue: Math.round(revenue), royalties: Math.round(royalties), cogs: Math.round(cogs), fixed, wages, manager, keyStaff, franchisor: Math.round(franchisor), marketing: Math.round(marketing), insurance: Math.round(insurance), upkeep, incidentNet: Math.round(incidentNet), operating: Math.round(operating) },
+     capacity: cap,
+     demand: dem,
+     next: {
+@@ -311,9 +420,31 @@ export function enterpriseValue(b: Business): number {
+ 
+ export const equityOf = (b: Business) => enterpriseValue(b) + b.cash - b.debt;
+ 
++/**
++ * What the owner receives out of a given whole-company equity value. Without preferred investors this is simply
++ * `equity x ownerShare`. A venture investor with a 1x preference is paid back first when the company sells for less
++ * than their price (they convert to ordinary shares when that is worth more), which squeezes the founder in a weak exit.
++ */
++export function ownerProceeds(b: Business, equity: number): number {
++  if (equity <= 0) return 0;
++  const outside = b.investors ?? [];
++  let rest = equity;
++  let takenShare = 0;
++  for (const i of outside) {
++    if (!i.pref || i.invested <= 0) continue;
++    if (i.share * equity < i.invested) {
++      const take = Math.min(i.invested, rest);
++      rest -= take;
++      takenShare += i.share;
++    }
++  }
++  const pool = Math.max(0, 1 - takenShare);
++  return Math.max(0, Math.round(pool > 0 ? (rest * b.ownerShare) / pool : 0));
++}
++
+ /** The owner's stake (what net worth counts). */
+ export function stakeValue(b: Business): number {
+-  return Math.max(0, Math.round(equityOf(b) * b.ownerShare));
++  return ownerProceeds(b, equityOf(b));
+ }
+ 
+ export function marketMood(p: PlayerState): number {
+@@ -338,9 +469,10 @@ export interface SaleQuote {
+ }
+ 
+ export function saleQuote(p: PlayerState, b: Business, factor = 1, premium = 1): SaleQuote {
+-  const ev = Math.round(enterpriseValue(b) * marketMood(p) * factor * premium);
++  // A franchisor must approve the buyer and takes a transfer fee.
++  const ev = Math.round(enterpriseValue(b) * marketMood(p) * factor * premium * (b.franchisor ? 0.95 : 1));
+   const equity = ev + b.cash - b.debt;
+-  const gross = Math.max(0, Math.round(equity * b.ownerShare));
++  const gross = ownerProceeds(b, equity);
+   const fee = Math.round(gross * SALE_FEE);
+   const tax = exitTax(p.residence.country, gross - fee - b.basis);
+   const earn = normalizedEarnings(b);
+@@ -447,8 +579,9 @@ export function riskNotes(p: PlayerState, b: Business): string[] {
+ }
+ 
+ /** Rough profit range for a business of this type once established (years 3+), for the "start a business" list. */
+-export function typicalOutlook(kind: BusinessType, p: PlayerState): Range {
+-  const proto = newBusiness(kind, "", p.year, makeRng(1));
++export function typicalOutlook(kind: BusinessType, p: PlayerState, franchise = false): Range {
++  const proto = (franchise ? newFranchise(kind, "", p.year, makeRng(1)) : null) ?? newBusiness(kind, "", p.year, makeRng(1));
++  const fits = franchise ? [0.9, 1, 1.1] : [0.65, 0.92, 1.2];
+   proto.customers = 55;
+   proto.reputation = 50;
+   proto.quality = 50;
+@@ -460,9 +593,9 @@ export function typicalOutlook(kind: BusinessType, p: PlayerState): Range {
+     return stepYear(p, { ...b, staff }, sh).pnl.operating;
+   };
+   return {
+-    low: at(0.65, { demand: -1.2 * kind.vol, cost: 0.06, incident: 0 }),
+-    mid: at(0.92, NO_SHOCKS),
+-    high: at(1.2, { demand: kind.vol, cost: -0.03, incident: 0 }),
++    low: at(fits[0], { demand: -1.2 * kind.vol, cost: 0.06, incident: 0 }),
++    mid: at(fits[1], NO_SHOCKS),
++    high: at(fits[2], { demand: kind.vol, cost: -0.03, incident: 0 }),
+   };
+ }
+ 
+diff --git a/src/engine/businessPeople.ts b/src/engine/businessPeople.ts
+new file mode 100644
+index 0000000..6f9ea56
+--- /dev/null
++++ b/src/engine/businessPeople.ts
+@@ -0,0 +1,194 @@
++/**
++ * Staff as people. Beyond the anonymous headcount, a company can hold up to three named key employees (one per role):
++ * the craftsperson who sets quality, the rainmaker who wins customers, the operator who keeps the machine running.
++ * They cost real money, they have loyalty, rivals try to poach them, and when they walk they take things with them
++ * (sometimes a new competitor). Candidates are deterministic for a given year so the UI can show who is on offer.
++ */
++import type { ActionResult, Business, KeyPerson, KeyRole, PlayerState } from "@/types/game.types";
++import { hashString, makeRng, type Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import type { BusinessType } from "@/data/businessTypes";
++import { addLog } from "./state";
++import { canSpend, done, fromWhere, info, open, poor, spend, unchanged, type Notices } from "./businessKit";
++import { kindOf } from "./businessModel";
++
++export const MAX_TEAM = 3;
++export const ROLES: KeyRole[] = ["craft", "sales", "ops"];
++export const ROLE_BLURB: Record<KeyRole, string> = {
++  craft: "Sets the standard: lifts product quality and reputation.",
++  sales: "Brings the customers in: lifts demand.",
++  ops: "Keeps it running: adds capacity, trims costs, keeps you compliant.",
++};
++
++const TITLES: Record<string, Record<KeyRole, string>> = {
++  foodtruck: { craft: "Head cook", sales: "Social media lead", ops: "Prep and logistics lead" },
++  onlinestore: { craft: "Product designer", sales: "Growth marketer", ops: "Fulfilment lead" },
++  boutique: { craft: "Buyer and stylist", sales: "Client relations lead", ops: "Store operations lead" },
++  consultancy: { craft: "Principal consultant", sales: "Rainmaker", ops: "Practice manager" },
++  farm: { craft: "Head grower", sales: "Market liaison", ops: "Farm operations lead" },
++  barcafe: { craft: "Head barista", sales: "Events promoter", ops: "Operations lead" },
++  restaurant: { craft: "Head chef", sales: "Events and marketing manager", ops: "Operations manager" },
++  gym: { craft: "Head coach", sales: "Membership sales lead", ops: "Facility manager" },
++  construction: { craft: "Site foreman", sales: "Estimator and bid manager", ops: "Project operations manager" },
++  logistics: { craft: "Fleet chief", sales: "Key accounts manager", ops: "Dispatch manager" },
++  nightclub: { craft: "Resident DJ and booker", sales: "Promoter", ops: "Head of security and operations" },
++  startup: { craft: "CTO", sales: "Head of growth", ops: "COO" },
++};
++
++export const roleTitle = (kindId: string, role: KeyRole) => (TITLES[kindId] ?? TITLES.restaurant)[role];
++
++const FIRST = ["Mia", "Jonas", "Priya", "Tomas", "Aisha", "Leo", "Nadia", "Marcus", "Elena", "Sam", "Ines", "Kofi", "Hana", "Ravi", "Lucia", "Omar", "Freya", "Diego", "Mei", "Callum"];
++const LAST = ["Okafor", "Lindqvist", "Patel", "Novak", "Haddad", "Brooks", "Tanaka", "Reyes", "Moreau", "Kowalski", "Mensah", "Costa", "Ivanov", "Walsh", "Sato", "Duarte"];
++
++export const keyWage = (k: BusinessType, skill: number) => Math.round((k.wage * (1.5 + (skill - 50) / 100)) / 500) * 500;
++export const recruitFee = (wage: number) => Math.round(wage * 0.2);
++export const raiseOf = (t: KeyPerson) => Math.round((t.wage * 0.12) / 100) * 100;
++export const equitySlice = 0.03;
++
++/** The candidate on the market for a role this year (the same one every time you look, until the year turns). */
++export function candidateFor(p: PlayerState, b: Business, role: KeyRole): KeyPerson {
++  const k = kindOf(b);
++  const rng = makeRng(hashString(`${p.id}${p.year}${b.name}${role}${b.team.length}`));
++  const skill = Math.round(clamp(34 + 58 * Math.pow(rng.next(), 0.9), 34, 92));
++  const name = `${rng.pick(FIRST)} ${rng.pick(LAST)}`;
++  return {
++    id: `${role}-${p.year}-${rng.int(100, 999)}`,
++    name, role, title: roleTitle(k.id, role), skill, loyalty: 60, wage: keyWage(k, skill), hired: p.year, partner: false,
++  };
++}
++
++export function teamBlocker(p: PlayerState, b: Business, role: KeyRole): string | null {
++  if (b.team.some((t) => t.role === role)) return `You already have a ${roleTitle(b.kind, role).toLowerCase()}.`;
++  if (b.team.length >= MAX_TEAM) return "You can't carry more than three key people.";
++  if (p.isInPrison) return "You can't interview anyone from a cell.";
++  return null;
++}
++
++export function recruitKey(p0: PlayerState, role: KeyRole): ActionResult {
++  const c = open(p0);
++  if (!c) return { player: p0 };
++  const { p, b } = c;
++  const blocked = teamBlocker(p, b, role);
++  if (blocked) return unchanged(p0, "Can't Recruit", blocked);
++  const cand = candidateFor(p, b, role);
++  const fee = recruitFee(cand.wage);
++  if (!canSpend(p, b, fee)) return poor(p0, "A headhunter's fee", fee);
++  const src = spend(p, b, fee, false)!;
++  b.team.push(cand);
++  b.morale = clamp(b.morale + 2);
++  return done(c, "Key Hire", `${cand.name} joined ${b.name} as ${cand.title.toLowerCase()} (skill ${cand.skill}) at ${money(cand.wage)} a year, with a ${money(fee)} search fee ${fromWhere(src)}. ${ROLE_BLURB[role]}`);
++}
++
++export function giveRaise(p0: PlayerState, id: string): ActionResult {
++  const c = open(p0);
++  const t = c?.b.team.find((x) => x.id === id);
++  if (!c || !t) return { player: p0 };
++  if ((c.p.annual[`raise_${id}`] ?? 0) >= 1) return unchanged(p0, "Already Rewarded", `${t.name} has had a raise this year.`);
++  c.p.annual[`raise_${id}`] = 1;
++  const up = raiseOf(t);
++  t.wage += up;
++  t.loyalty = clamp(t.loyalty + 15);
++  return done(c, "Raise Granted", `${t.name} now earns ${money(t.wage)} (+${money(up)}). They feel valued, and recruiters will find them harder to tempt.`);
++}
++
++export function offerEquity(p0: PlayerState, id: string): ActionResult {
++  const c = open(p0);
++  const t = c?.b.team.find((x) => x.id === id);
++  if (!c || !t) return { player: p0 };
++  const { b } = c;
++  if (t.partner) return unchanged(p0, "Already a Partner", `${t.name} already owns a slice of ${b.name}.`);
++  if (b.ownerShare - equitySlice < 0.3) return unchanged(p0, "Too Little Left", "You would be left with too small a share of your own company to hand out more.", "bad");
++  b.ownerShare = Math.round((b.ownerShare - equitySlice) * 1000) / 1000;
++  b.investors.push({ id: `staff-${t.id}`, name: t.name, kind: "staff", share: equitySlice, agenda: "profit", invested: 0, pref: false, since: c.p.year });
++  t.partner = true;
++  t.loyalty = 95;
++  b.morale = clamp(b.morale + 3);
++  return done(c, "Partner Made", `${t.name} now owns ${Math.round(equitySlice * 100)}% of ${b.name}. They think like an owner and are very hard to poach, but that slice of every payout and exit is theirs for good.`);
++}
++
++export function dismissKey(p0: PlayerState, id: string): ActionResult {
++  const c = open(p0);
++  const t = c?.b.team.find((x) => x.id === id);
++  if (!c || !t) return { player: p0 };
++  const { b } = c;
++  const sev = Math.round(t.wage * 0.3);
++  if (!spend(c.p, b, sev, false)) b.cash -= sev;
++  b.team = b.team.filter((x) => x.id !== id);
++  // A partner keeps their shares even when dismissed.
++  b.morale = clamp(b.morale - (t.loyalty > 70 ? 6 : 3));
++  return done(c, "Parted Ways", `You let ${t.name} (${t.title.toLowerCase()}) go with ${money(sev)} severance.${t.partner ? " They keep their shares in the company." : ""}`, "neutral");
++}
++
++/** The key person most likely to be listening to recruiters (for events). */
++export function flightRisk(b: Business): KeyPerson | null {
++  const pool = b.team.filter((t) => !t.partner);
++  if (pool.length === 0) return null;
++  return [...pool].sort((x, y) => x.loyalty - y.loyalty || y.skill - x.skill)[0];
++}
++
++/** Event helper: respond to a poaching attempt on the flight-risk key person. */
++export function bizKeyCounter(p: PlayerState, mode: "raise" | "equity" | "release"): string | undefined {
++  const b = p.business;
++  if (!b) return undefined;
++  const t = flightRisk(b);
++  if (!t) return undefined;
++  if (mode === "raise") {
++    const up = Math.round((t.wage * 0.15) / 100) * 100;
++    t.wage += up;
++    t.loyalty = clamp(t.loyalty + 25);
++    return `${t.name} stays on ${money(t.wage)} a year (+${money(up)}).`;
++  }
++  if (mode === "equity" && b.ownerShare - equitySlice >= 0.3) {
++    b.ownerShare = Math.round((b.ownerShare - equitySlice) * 1000) / 1000;
++    b.investors.push({ id: `staff-${t.id}`, name: t.name, kind: "staff", share: equitySlice, agenda: "profit", invested: 0, pref: false, since: p.year });
++    t.partner = true;
++    t.loyalty = 95;
++    return `${t.name} took ${Math.round(equitySlice * 100)}% of the company and tore up the other offer.`;
++  }
++  b.team = b.team.filter((x) => x.id !== t.id);
++  applyDeparture(b, t);
++  return `${t.name} left for the rival. ${roleLoss(t.role)}`;
++}
++
++const roleLoss = (role: KeyRole) => (role === "craft" ? "Quality will suffer until you find a replacement." : role === "sales" ? "Some of their customers went with them." : "Operations will be bumpier without them.");
++
++function applyDeparture(b: Business, t: KeyPerson) {
++  if (t.role === "craft") b.quality = clamp(b.quality - 5 - t.skill / 20);
++  else if (t.role === "sales") b.customers = clamp(b.customers - 3 - t.skill / 15);
++  else b.compliance = clamp(b.compliance - 10 - t.skill / 10);
++  b.morale = clamp(b.morale - 4);
++}
++
++/** Yearly: skills grow, loyalty drifts with morale and results, and people walk. */
++export function processTeam(p: PlayerState, b: Business, rng: Rng, notices: Notices, lastProfit: number) {
++  if (b.team.length === 0) return;
++  const keep: KeyPerson[] = [];
++  for (const t of b.team) {
++    if (t.skill < 95 && rng.chance(0.6)) t.skill = Math.min(95, t.skill + rng.int(0, 2));
++    const target = 52 + (b.morale - 55) * 0.5 + (t.partner ? 28 : 0) + (lastProfit < 0 ? -6 : 3) + (b.manager ? 0 : 0);
++    t.loyalty = Math.round(clamp(t.loyalty + 0.3 * (target - t.loyalty) + rng.int(-4, 4)));
++    const pLeave = clamp(0.03 + Math.max(0, 60 - t.loyalty) * 0.004 + (t.skill > 75 ? 0.03 : 0) + b.rivals.length * 0.015, 0.01, 0.4) * (t.partner ? 0.15 : 1);
++    if (!rng.chance(pLeave)) {
++      keep.push(t);
++      continue;
++    }
++    applyDeparture(b, t);
++    let extra = "";
++    if (t.skill >= 60 && b.rivals.length < 3 && rng.chance(0.3)) {
++      const surname = t.name.split(" ").slice(-1)[0];
++      b.rivals.push({ id: `spin-${t.id}`, name: `${surname} & Co`, kind: "upstart", strength: Math.round(18 + t.skill * 0.3), since: p.year });
++      extra = ` They set up as ${surname} & Co, a new competitor on your doorstep.`;
++    }
++    const body = `${t.name}, your ${t.title.toLowerCase()}, resigned. ${roleLoss(t.role)}${extra}`;
++    addLog(p, body);
++    notices.push(info("Key Person Left", body, "bad"));
++  }
++  b.team = keep;
++}
++
++/** Plain-language flags for the dashboard. */
++export function teamNotes(b: Business): string[] {
++  const notes: string[] = [];
++  for (const t of b.team) if (!t.partner && t.loyalty < 40) notes.push(`${t.name} (${t.title.toLowerCase()}) is restless and probably talking to recruiters.`);
++  return notes;
++}
+diff --git a/src/engine/legacy.ts b/src/engine/legacy.ts
+index e0348c6..67d0a0a 100644
+--- a/src/engine/legacy.ts
++++ b/src/engine/legacy.ts
+@@ -118,7 +118,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
+   const fresh = createNewPlayer({ scenario: "average", startYear: year, country: old.birthCountry }, rng);
+   const [firstName, ...rest] = child.name.split(" ");
+   const lastName = rest.join(" ") || old.lastName;
+-  const bizHeir = inheritBusiness(old, child.age, rng);
++  const bizHeir = inheritBusiness(old, child.age, rng, living);
+   const inherited = Math.round(Math.max(0, old.bankBalance) * (living ? HANDOVER_CASH_SHARE : 0.9)) + bizHeir.cash; // 10% estate tax after death
+   const heirsLeft = heirs(old).filter((c) => c.id !== child.id);
+   const survivingPartner = old.relatives.find((r) => r.relation === "Partner" && r.alive && r.partnerStatus !== "ex");
+diff --git a/src/engine/occupation.ts b/src/engine/occupation.ts
+index 50aa70d..385a4bb 100644
+--- a/src/engine/occupation.ts
++++ b/src/engine/occupation.ts
+@@ -38,7 +38,8 @@ export function bankruptcyCooloff(p: PlayerState): string | null {
+ export function blockerFor(p: PlayerState, want: Commitment): string | null {
+   const job = p.currentJob;
+   const fullTimeJob = job && !job.partTime;
+-  const biz = p.business;
++  // A passive stake (stepped back to chair, or pushed out by the board) is owned but not worked: it does not take your days.
++  const biz = p.business && !p.business.passive ? p.business : null;
+   if (isRoyal(p) && want !== "office") return "Royal duties leave no room for that.";
+   if (p.isInPrison) return "You're in prison.";
+   const creatorFT = p.influencer.fullTime ? "You're a full-time creator. Step back to part-time creating first." : null;
+@@ -97,7 +98,7 @@ export const EFFORT_INFO: Record<Effort, { label: string; emoji: string; blurb:
+ /** Does the player currently have anything that effort applies to? */
+ export function hasCommitment(p: PlayerState): boolean {
+   // A business with a general manager runs without you, so your effort setting doesn't drive it (or cost you).
+-  return !!p.currentJob || (!!p.business && !p.business.manager) || isStudying(p) || p.music.signed || p.influencer.fullTime || isAmateurAthlete(p);
++  return !!p.currentJob || (!!p.business && !p.business.manager && !p.business.passive) || isStudying(p) || p.music.signed || p.influencer.fullTime || isAmateurAthlete(p);
+ }
+ 
+ /** Performance drift for jobs, per effort level (before smarts adjustment). */
+diff --git a/src/types/game.types.ts b/src/types/game.types.ts
+index d07187b..3c81841 100644
+--- a/src/types/game.types.ts
++++ b/src/types/game.types.ts
+@@ -180,6 +180,78 @@ export interface BusinessYearRecord {
+ 
+ export type BusinessPayout = "reinvest" | "balanced" | "salary";
+ 
++/** What a named key employee is hired to do. */
++export type KeyRole = "craft" | "sales" | "ops";
++
++/** A named key employee: the chef, the rainmaker, the operations lead. They can be poached, paid, given equity or lost. */
++export interface KeyPerson {
++  id: string;
++  name: string;
++  role: KeyRole;
++  title: string;
++  /** 0-100. Drives how much they lift quality, sales or operations. */
++  skill: number;
++  /** 0-100. Low loyalty means they are listening to recruiters. */
++  loyalty: number;
++  wage: number;
++  hired: number;
++  /** Holds a slice of the company: far stickier, but the slice is gone for good. */
++  partner: boolean;
++}
++
++export type RivalKind = "discounter" | "premium" | "chain" | "upstart";
++
++/** A named competitor. Each attacks a different weakness and can be fought, bought out or outlasted. */
++export interface BusinessRival {
++  id: string;
++  name: string;
++  kind: RivalKind;
++  /** 5-95. How hard they are pulling customers away. */
++  strength: number;
++  since: number;
++}
++
++/** A multi-year change in the whole industry (a craze, a squeeze, a wave of regulation). */
++export interface MarketShift {
++  id: string;
++  label: string;
++  blurb: string;
++  /** Yearly swing in demand (fraction of revenue, positive or negative). */
++  demand: number;
++  /** Yearly swing in cost of goods. */
++  cost: number;
++  yearsLeft: number;
++  /** The owner paid to lean into a tailwind or brace for a headwind. */
++  responded: boolean;
++}
++
++export type InvestorKind = "angel" | "vc" | "staff";
++export type InvestorAgenda = "growth" | "profit" | "exit";
++
++/** Outside shareholder. The sum of investor shares is always `1 - ownerShare`. */
++export interface BusinessInvestor {
++  id: string;
++  name: string;
++  kind: InvestorKind;
++  share: number;
++  agenda: InvestorAgenda;
++  /** Money they put in (VCs get it back first on a sale below their price). */
++  invested: number;
++  /** 1x non-participating liquidation preference. */
++  pref: boolean;
++  since: number;
++}
++
++/** A franchisee's agreement with the brand they bought into. */
++export interface FranchiseDeal {
++  brand: string;
++  /** Royalty as a share of revenue. */
++  royalty: number;
++  /** Mandatory brand-fund contribution as a share of revenue. */
++  adFund: number;
++  since: number;
++}
++
+ export interface Business {
+   kind: string;
+   name: string;
+@@ -252,6 +324,23 @@ export interface Business {
+   lastPivot: number;
+   profitableYears: number;
+   history: BusinessYearRecord[];
++
++  // ---- business depth II: people, rivals, board, franchise (defaults in ensureBusiness) ----
++  /** Named key employees (at most one per role). */
++  team: KeyPerson[];
++  rivals: BusinessRival[];
++  shift: MarketShift | null;
++  investors: BusinessInvestor[];
++  /** 0-100. Investor patience running out. */
++  boardHeat: number;
++  /** The owner holds the shares but a professional runs the company, so it is not a full-time commitment. */
++  passive: boolean;
++  /** Pushed out by the board: cannot take the reins back. */
++  ousted: boolean;
++  /** Set when the owner bought into a franchise rather than inventing a concept. */
++  franchisor: FranchiseDeal | null;
++  /** Loan principal the owner has personally guaranteed. */
++  guaranteed: number;
+ }
+ 
+ // ---------------------------------------------------------------------------

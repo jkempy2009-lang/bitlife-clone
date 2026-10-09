@@ -1,0 +1,1447 @@
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 6bd0550..4f43082 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -1,4 +1,5 @@
+ @import "tailwindcss";
++@source "../";
+ 
+ :root {
+   color-scheme: dark;
+diff --git a/src/components/TrialView.tsx b/src/components/TrialView.tsx
+index 7374a94..6e5b285 100644
+--- a/src/components/TrialView.tsx
++++ b/src/components/TrialView.tsx
+@@ -2,8 +2,7 @@
+ 
+ import { useGame } from "@/context/GameStateContext";
+ import { bribeChance, bribeCost, postBail, bribeOfficial, representationOptions, resolveTrial } from "@/engine/crime";
+-import { RECORD_LABEL, bailFee, expectedYears, recordLevel } from "@/engine/justice";
+-import { lawFor } from "@/data/justiceCountries";
++import { RECORD_LABEL, bailFee, expectedYears, lawOf, recordLevel } from "@/engine/justice";
+ import { money } from "@/lib/format";
+ import { StatBar } from "./ui";
+ 
+@@ -19,7 +18,7 @@ export default function TrialView() {
+   const bail = charge.bail;
+   const fee = bail ? bailFee(bail.amount) : 0;
+   const options = representationOptions(p);
+-  const law = lawFor(p.residence.country);
++  const law = lawOf(p);
+   const canBribe = !charge.juvenile && law.corruption >= 0.15;
+   const bribeBlock = (p.annual.bribe ?? 0) >= 1 ? "You already tried this year." : bribeCost(p, charge) > p.bankBalance ? `You can't afford ${money(bribeCost(p, charge))}.` : null;
+   return (
+@@ -41,7 +40,7 @@ export default function TrialView() {
+             </p>
+             <p className="mt-1 text-xs text-slate-500">Your record: {RECORD_LABEL[recordLevel(p)]}.{charge.innocent ? " You are innocent, but that doesn't make it easy." : ""}</p>
+             {charge.juvenile && <p className="mt-1 text-xs text-amber-300">Tried as a minor: detention instead of prison, no bail, and a record that may be sealed at 18.</p>}
+-            {charge.capital && !charge.juvenile && <p className="mt-1 text-xs text-rose-300">This is a capital charge{lawFor(p.residence.country).deathPenalty ? ` and ${p.residence.country} has the death penalty.` : ", but the death penalty does not apply here."}</p>}
++            {charge.capital && !charge.juvenile && <p className="mt-1 text-xs text-rose-300">This is a capital charge{law.deathPenalty ? ` and ${p.residence.country} has the death penalty.` : ", but the death penalty does not apply here."}</p>}
+           </div>
+ 
+           {!charge.juvenile && bail && (
+diff --git a/src/data/laws.ts b/src/data/laws.ts
+new file mode 100644
+index 0000000..cbe2343
+--- /dev/null
++++ b/src/data/laws.ts
+@@ -0,0 +1,114 @@
++/**
++ * The statute book a politician can write: concrete bills with concrete consequences.
++ * Every bill belongs to one of the five political issues and to one side of it (-1 left, 0 centre, +1 right);
++ * a politician can only push bills that match the position they have publicly staked out.
++ * Effects land on the nation's indicators (and, for criminal-justice bills, on the justice system itself).
++ */
++export type IndicatorId = "prosperity" | "health" | "environment" | "safety" | "liberty" | "finances";
++export type IssueKey = "economy" | "health" | "environment" | "security" | "liberty";
++
++/** How the country's justice system shifts when the bill is law. Added to the country's profile. */
++export interface LawDelta {
++  policing?: number;
++  corruption?: number;
++  harshness?: number;
++  compensation?: number;
++  /** Force the death penalty on or off. */
++  deathPenalty?: boolean;
++}
++
++export interface LawDef {
++  id: string;
++  issue: IssueKey;
++  /** -1 left, 0 centre, +1 right: the position you must hold to push it. */
++  stance: -1 | 0 | 1;
++  name: string;
++  blurb: string;
++  /** Lowest office from which it can be proposed (0 council, 1 mayor, 2 governor, 3 senator, 4 head of state). */
++  minTier: number;
++  /** 0 (a formality) to 1 (a fight): raises the votes needed. */
++  opposition: number;
++  /** Steady-state change to each indicator once fully in force, at the scale of a senator. */
++  effects: Partial<Record<IndicatorId, number>>;
++  law?: LawDelta;
++}
++
++export const INDICATORS: { id: IndicatorId; name: string; emoji: string; blurb: string }[] = [
++  { id: "prosperity", name: "Prosperity", emoji: "💰", blurb: "Jobs, wages and growth." },
++  { id: "health", name: "Public health", emoji: "🏥", blurb: "Access to care and life expectancy." },
++  { id: "environment", name: "Environment", emoji: "🌍", blurb: "Clean air, water and land." },
++  { id: "safety", name: "Public safety", emoji: "🚓", blurb: "How safe people feel on the street." },
++  { id: "liberty", name: "Civil liberty", emoji: "🗽", blurb: "Privacy, speech and fair treatment." },
++  { id: "finances", name: "Public finances", emoji: "🏦", blurb: "Budget balance. Below 20 means a fiscal crisis." },
++];
++
++/** Which indicators matter to voters of each issue. */
++export const ISSUE_INDICATORS: Record<IssueKey, IndicatorId[]> = {
++  economy: ["prosperity", "finances"],
++  health: ["health"],
++  environment: ["environment"],
++  security: ["safety"],
++  liberty: ["liberty"],
++};
++
++export const LAWS: LawDef[] = [
++  // ---------- economy ----------
++  { id: "living_wage", issue: "economy", stance: -1, minTier: 0, opposition: 0.3, name: "Living wage ordinance", blurb: "Raise the local minimum wage.", effects: { prosperity: 2, health: 1, finances: -2 } },
++  { id: "public_works", issue: "economy", stance: -1, minTier: 0, opposition: 0.3, name: "Public works programme", blurb: "Build roads and schools, hire locally.", effects: { prosperity: 4, finances: -4 } },
++  { id: "wealth_tax", issue: "economy", stance: -1, minTier: 2, opposition: 0.65, name: "Wealth tax", blurb: "A levy on the largest fortunes. Business will not forgive it.", effects: { finances: 8, prosperity: -3 } },
++  { id: "small_biz", issue: "economy", stance: 1, minTier: 0, opposition: 0.25, name: "Small-business tax break", blurb: "Cut red tape and taxes for local firms.", effects: { prosperity: 3, finances: -2 } },
++  { id: "tax_cut", issue: "economy", stance: 1, minTier: 2, opposition: 0.5, name: "Income tax cut", blurb: "Put more money in pockets, and a hole in the budget.", effects: { prosperity: 5, finances: -6 } },
++  { id: "deregulation", issue: "economy", stance: 1, minTier: 2, opposition: 0.5, name: "Deregulation act", blurb: "Strip back rules on industry. Growth now, bills later.", effects: { prosperity: 4, environment: -3, safety: -1 } },
++  { id: "balanced_budget", issue: "economy", stance: 0, minTier: 1, opposition: 0.35, name: "Balanced budget act", blurb: "Hard spending caps and a rainy-day fund.", effects: { finances: 6, prosperity: -1 } },
++  // ---------- health ----------
++  { id: "free_clinics", issue: "health", stance: -1, minTier: 0, opposition: 0.3, name: "Free neighbourhood clinics", blurb: "A clinic in every district.", effects: { health: 3, finances: -2 } },
++  { id: "universal_care", issue: "health", stance: -1, minTier: 2, opposition: 0.7, name: "Universal care", blurb: "A public health service free at the point of use.", effects: { health: 9, finances: -6, prosperity: 1 } },
++  { id: "hsa_vouchers", issue: "health", stance: 1, minTier: 1, opposition: 0.35, name: "Health savings vouchers", blurb: "Let patients shop for care with tax-free accounts.", effects: { health: 3, finances: -1, prosperity: 1 } },
++  { id: "private_hospitals", issue: "health", stance: 1, minTier: 2, opposition: 0.5, name: "Private hospital licences", blurb: "Open the system to private operators.", effects: { health: 2, prosperity: 3, finances: 2 } },
++  { id: "insurance_mandate", issue: "health", stance: 0, minTier: 2, opposition: 0.4, name: "Insurance mandate", blurb: "Everyone must be covered, by competing insurers.", effects: { health: 5, finances: -2 } },
++  // ---------- environment ----------
++  { id: "clean_air", issue: "environment", stance: -1, minTier: 0, opposition: 0.25, name: "Clean air ordinance", blurb: "Low-emission zones and a recycling mandate.", effects: { environment: 3, prosperity: -1 } },
++  { id: "carbon_tax", issue: "environment", stance: -1, minTier: 3, opposition: 0.65, name: "Carbon tax", blurb: "Make polluters pay. Prices rise before the air clears.", effects: { environment: 8, finances: 3, prosperity: -4 } },
++  { id: "green_fund", issue: "environment", stance: -1, minTier: 2, opposition: 0.5, name: "Green transition fund", blurb: "Public money for renewables and retraining.", effects: { environment: 5, prosperity: 1, finances: -4 } },
++  { id: "drilling", issue: "environment", stance: 1, minTier: 2, opposition: 0.5, name: "Drilling and mining leases", blurb: "Open public land to extraction.", effects: { prosperity: 4, finances: 3, environment: -6, health: -1 } },
++  { id: "fast_permits", issue: "environment", stance: 1, minTier: 1, opposition: 0.3, name: "Fast-track permits", blurb: "Approve building projects in months, not years.", effects: { prosperity: 3, environment: -3 } },
++  { id: "emission_standards", issue: "environment", stance: 0, minTier: 2, opposition: 0.4, name: "Emissions standards", blurb: "Gradual, predictable limits on industry.", effects: { environment: 4, prosperity: -2 } },
++  // ---------- security ----------
++  { id: "community_policing", issue: "security", stance: -1, minTier: 0, opposition: 0.3, name: "Community policing", blurb: "Officers who know the neighbourhood, and oversight boards.", effects: { safety: 2, liberty: 2, finances: -1 }, law: { policing: -0.02, harshness: -0.04 } },
++  { id: "sentencing_reform", issue: "security", stance: -1, minTier: 2, opposition: 0.6, name: "Sentencing reform", blurb: "Shorter terms for minor offences, better pay-outs for the wrongly convicted.", effects: { liberty: 3, safety: -1, finances: 2 }, law: { harshness: -0.2, compensation: 15_000 } },
++  { id: "abolish_death_penalty", issue: "security", stance: -1, minTier: 3, opposition: 0.6, name: "Abolish the death penalty", blurb: "No more executions, ever.", effects: { liberty: 4 }, law: { deathPenalty: false } },
++  { id: "more_police", issue: "security", stance: 1, minTier: 0, opposition: 0.25, name: "More police on the street", blurb: "Hire hundreds of officers.", effects: { safety: 3, finances: -3 }, law: { policing: 0.06 } },
++  { id: "mandatory_minimums", issue: "security", stance: 1, minTier: 2, opposition: 0.55, name: "Mandatory minimum sentences", blurb: "Judges lose discretion; sentences get longer.", effects: { safety: 3, liberty: -3, finances: -2 }, law: { harshness: 0.2 } },
++  { id: "reinstate_death_penalty", issue: "security", stance: 1, minTier: 3, opposition: 0.65, name: "Reinstate the death penalty", blurb: "Capital punishment for the worst crimes.", effects: { safety: 1, liberty: -3 }, law: { deathPenalty: true } },
++  { id: "anti_corruption", issue: "security", stance: 0, minTier: 2, opposition: 0.45, name: "Anti-corruption commission", blurb: "An independent body with subpoena powers. It will come for friends of yours too.", effects: { finances: 3, prosperity: 1 }, law: { corruption: -0.15, policing: 0.03 } },
++  // ---------- liberty ----------
++  { id: "privacy_act", issue: "liberty", stance: -1, minTier: 1, opposition: 0.4, name: "Privacy act", blurb: "Limits on data collection and police searches.", effects: { liberty: 5, safety: -1 }, law: { policing: -0.02 } },
++  { id: "decriminalise", issue: "liberty", stance: -1, minTier: 2, opposition: 0.55, name: "Decriminalise minor offences", blurb: "Fines and treatment instead of cells for petty crime.", effects: { liberty: 3, safety: -2, finances: 2 }, law: { harshness: -0.1 } },
++  { id: "speech_charter", issue: "liberty", stance: -1, minTier: 3, opposition: 0.5, name: "Free-speech charter", blurb: "Constitutional protection for dissent and the press.", effects: { liberty: 6 } },
++  { id: "surveillance", issue: "liberty", stance: 1, minTier: 2, opposition: 0.5, name: "Surveillance powers", blurb: "Wide powers to monitor communications.", effects: { safety: 4, liberty: -6 }, law: { policing: 0.1 } },
++  { id: "public_order", issue: "liberty", stance: 1, minTier: 1, opposition: 0.35, name: "Public order act", blurb: "Tighter rules on protests and gatherings.", effects: { safety: 3, liberty: -3 } },
++  { id: "civil_rights_deal", issue: "liberty", stance: 0, minTier: 2, opposition: 0.4, name: "Civil rights compromise", blurb: "A modest charter both sides can live with.", effects: { liberty: 2, safety: 1 } },
++];
++
++export const LAW_BY_ID: Record<string, LawDef> = Object.fromEntries(LAWS.map((l) => [l.id, l]));
++
++/** How much of a bill's effect an office can deliver: a council ordinance is not national policy. */
++export const TIER_SCALE = [0.3, 0.5, 0.8, 1, 1.2];
++
++/** Pairs of laws that cannot both stand: passing one repeals the other. */
++const CONFLICT_PAIRS: [string, string][] = [
++  ["wealth_tax", "tax_cut"],
++  ["universal_care", "private_hospitals"],
++  ["universal_care", "hsa_vouchers"],
++  ["carbon_tax", "drilling"],
++  ["green_fund", "drilling"],
++  ["sentencing_reform", "mandatory_minimums"],
++  ["decriminalise", "mandatory_minimums"],
++  ["abolish_death_penalty", "reinstate_death_penalty"],
++  ["privacy_act", "surveillance"],
++  ["speech_charter", "public_order"],
++  ["clean_air", "fast_permits"],
++];
++
++export const conflictsOf = (id: string): string[] =>
++  CONFLICT_PAIRS.flatMap(([a, b]) => (a === id ? [b] : b === id ? [a] : []));
+diff --git a/src/data/politicsData.ts b/src/data/politicsData.ts
+new file mode 100644
+index 0000000..16caa68
+--- /dev/null
++++ b/src/data/politicsData.ts
+@@ -0,0 +1,17 @@
++/** Issues and parties of the political game. Shared by the engine and the UI. */
++
++export const ISSUES = [
++  { id: "economy", name: "Economy", emoji: "💰", options: ["Tax the wealthy", "Balanced budget", "Cut taxes"] },
++  { id: "health", name: "Healthcare", emoji: "🏥", options: ["Universal care", "Mixed system", "Market-based"] },
++  { id: "environment", name: "Environment", emoji: "🌍", options: ["Green transition", "Gradual change", "Drill and grow"] },
++  { id: "security", name: "Policing", emoji: "🚓", options: ["Reform policing", "Status quo", "Tough on crime"] },
++  { id: "liberty", name: "Liberty", emoji: "🗽", options: ["Expand freedoms", "Balanced", "Order first"] },
++] as const;
++
++export const PARTIES = [
++  { id: "progressive", name: "Progressive Alliance", emoji: "🌹", blurb: "Strong in steady times. +4% odds when the economy is normal. Platform: left on every issue.", platform: [-1, -1, -1, -1, -1] },
++  { id: "conservative", name: "Conservative Union", emoji: "🏛️", blurb: "Trusted when the economy is stable or booming. +4% odds. Platform: right on every issue.", platform: [1, 1, 1, 1, 1] },
++  { id: "centrist", name: "Centrist Pact", emoji: "⚖️", blurb: "Moderate and dependable. +3% odds in any climate. Platform: stay in the middle.", platform: [0, 0, 0, 0, 0] },
++  { id: "populist", name: "People's Front", emoji: "📢", blurb: "Thrives in recessions (+8%), struggles in booms (−3%). Left on money, right on order.", platform: [-1, -1, 1, 1, 1] },
++  { id: "green", name: "Green Party", emoji: "🌿", blurb: "Rewards good character: +5% odds if your Karma is 60+. Greens on the environment and liberty.", platform: [-1, 0, -1, 0, -1] },
++] as const;
+diff --git a/src/engine/crime.ts b/src/engine/crime.ts
+index a0dac4c..19e1dfc 100644
+--- a/src/engine/crime.ts
++++ b/src/engine/crime.ts
+@@ -6,8 +6,9 @@ import type { ActionResult, CrimeCharge, PlayerState } from "@/types/game.types"
+ import type { Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+ import { CRIME_BY_ID, LAWYERS, crimeMeta } from "@/data/crimes";
+-import { LAW, lawFor } from "@/data/justiceCountries";
++import { LAW } from "@/data/justiceCountries";
+ import { addLog, changeStat, clone } from "./state";
++import { dropMobPlace, parkMobPlace, restoreMobPlace } from "./mobPlace";
+ import {
+   CREW_CUT,
+   acquittalChance,
+@@ -20,6 +21,7 @@ import {
+   fineFor,
+   forfeit,
+   isViolentName,
++  lawOf,
+   lawyerById,
+   lawyerCost,
+   lawyerQuality,
+@@ -135,12 +137,12 @@ export function postBail(p0: PlayerState): ActionResult {
+ 
+ export function bribeCost(p: PlayerState, charge: CrimeCharge): number {
+   const base = { minor: 2_000, serious: 15_000, heinous: 80_000 }[charge.severity];
+-  return Math.round((base * (1.4 - lawFor(p.residence.country).corruption)) / 500) * 500;
++  return Math.round((base * (1.4 - lawOf(p).corruption)) / 500) * 500;
+ }
+ 
+ export function bribeChance(p: PlayerState, charge: CrimeCharge): number {
+   const sev = charge.severity === "heinous" ? 0.25 : charge.severity === "serious" ? 0.05 : 0;
+-  return clamp(lawFor(p.residence.country).corruption * 0.9 - sev - ((charge.evidence ?? 50) - 50) / 400, 0.03, 0.8);
++  return clamp(lawOf(p).corruption * 0.9 - sev - ((charge.evidence ?? 50) - 50) / 400, 0.03, 0.8);
+ }
+ 
+ /** Try to make the case go away. Works where money talks; backfires badly where it doesn't. */
+@@ -187,6 +189,66 @@ export interface Representation {
+   affordable: boolean;
+   /** Reason it is not on the table. */
+   locked?: string;
++  /** Terms and risks in plain words, shown instead of the default odds line. */
++  detail?: string;
++}
++
++/** How much of the sentence a straight guilty plea leaves: stingy when the case is strong, generous when it is shaky. */
++export const pleaFactor = (charge: CrimeCharge) => clamp(0.5 + ((charge.evidence ?? 50) - 55) / 160, 0.45, 0.78);
++
++const LESSER_NAMES: Record<string, string> = {
++  Burglary: "Criminal Trespass",
++  "Grand Theft Auto": "Joyriding",
++  "Computer Fraud": "Unauthorised Computer Access",
++  Counterfeiting: "Trademark Infringement",
++  "Identity Fraud": "Misuse of Personal Data",
++  "Tax Evasion": "Tax Filing Violation",
++  Embezzlement: "Misuse of Funds",
++  "Insurance Fraud": "False Statement",
++  Smuggling: "Customs Violation",
++  "Drug Trafficking": "Drug Possession",
++  "Armed Robbery": "Theft by Threat",
++  Extortion: "Harassment",
++  Racketeering: "Conspiracy",
++  "Money Laundering": "Structuring Deposits",
++  "Armed Bank Robbery": "Robbery",
++  Murder: "Manslaughter",
++  "Attempted Murder": "Aggravated Assault",
++  Kidnapping: "False Imprisonment",
++  Arson: "Criminal Damage",
++  Assault: "Disorderly Conduct",
++  Conspiracy: "Obstruction",
++  "Corruption in Office": "Breach of Public Trust",
++};
++
++/** The lesser offence a prosecutor might accept a plea to, or null if there is nothing below this charge. */
++export function lesserCharge(charge: CrimeCharge): CrimeCharge | null {
++  if (charge.severity === "minor" || charge.juvenile) return null;
++  const heinous = charge.severity === "heinous";
++  const name = LESSER_NAMES[charge.name] ?? `Lesser count of ${charge.name.toLowerCase()}`;
++  return {
++    ...charge,
++    name,
++    severity: heinous ? "serious" : "minor",
++    years: Math.max(1, Math.round(charge.years * (heinous ? 0.5 : 0.4))),
++    capital: false,
++    violent: heinous ? charge.violent : false,
++    description: `Prosecutors agreed to reduce the charge to ${name.toLowerCase()} in return for a guilty plea.`,
++  };
++}
++
++/** Chance a prosecutor trades a lesser charge: weaker evidence and a clean record help; a heinous crime and priors do not. */
++export function reducedChance(p: PlayerState, charge: CrimeCharge): number {
++  return clamp(
++    0.78 - ((charge.evidence ?? 50) - 50) / 150 - p.justice.convictions * 0.07 - (charge.severity === "heinous" ? 0.25 : 0) + (p.karma - 50) / 500 + (p.skills.charisma - 30) / 1000,
++    0.1,
++    0.85,
++  );
++}
++
++/** Anyone with accomplices to name, and every made man, can trade testimony for a lighter sentence. */
++export function canCooperate(p: PlayerState, charge: CrimeCharge): boolean {
++  return !charge.juvenile && (p.currentJob?.lineId === "mafia" || p.justice.accomplices > 0);
+ }
+ 
+ /** The menu shown at trial: every option with its price, odds and likely sentence. */
+@@ -204,20 +266,69 @@ export function representationOptions(p: PlayerState): Representation[] {
+       blurb: l.blurb,
+       cost,
+       acquittal: plea ? null : acquittalChance(p, charge, l.id),
+-      years: plea ? Math.max(1, Math.ceil(base * 0.5)) : Math.max(1, Math.round(base * (1 - 0.25 * q))),
++      years: plea ? Math.max(1, Math.ceil(base * pleaFactor(charge))) : Math.max(1, Math.round(base * (1 - 0.25 * q))),
+       affordable: cost <= p.bankBalance,
++      detail: plea ? `Certain conviction as charged, about ${Math.max(1, Math.ceil(base * pleaFactor(charge)))} year${Math.max(1, Math.ceil(base * pleaFactor(charge))) === 1 ? "" : "s"}. The prosecutor takes ${Math.round((1 - pleaFactor(charge)) * 100)}% off because ${(charge.evidence ?? 50) >= 70 ? "their case is strong, so the discount is small" : "they want a sure thing"}.` : undefined,
+     };
+   });
+-  const inMob = p.currentJob?.lineId === "mafia";
+-  if (inMob && !charge.juvenile) {
+-    out.push({ id: "cooperate", name: "Cooperate with Prosecutors", blurb: "Testify against the family. A third of the sentence, witness protection, and a target on your back.", cost: 0, acquittal: null, years: Math.max(1, Math.ceil(base * 0.35)), affordable: true });
++  const lesser = lesserCharge(charge);
++  const priv = lawyerById("private");
++  if (lesser && priv) {
++    const cost = lawyerCost(p, charge, priv);
++    const lesserYears = Math.max(1, Math.ceil(expectedYears(p, lesser) * 0.7));
++    out.push({
++      id: "plea_reduced",
++      name: "Negotiate a Lesser Charge",
++      blurb: `Your private attorney bargains with the prosecutor to reduce the charge to ${lesser.name.toLowerCase()}.`,
++      cost,
++      acquittal: null,
++      years: lesserYears,
++      affordable: cost <= p.bankBalance,
++      detail: `${Math.round(reducedChance(p, charge) * 100)}% the prosecutor agrees: ${lesser.severity === "minor" ? "a misdemeanour on your record, and probably no cell" : "a lesser felony"} (about ${lesserYears} year${lesserYears === 1 ? "" : "s"} at most). If not, your attorney takes the case to trial (${Math.round(acquittalChance(p, charge, "private") * 100)}% acquittal) and you keep the fee's worth of defence.`,
++    });
++  }
++  if (canCooperate(p, charge)) {
++    const mob = p.currentJob?.lineId === "mafia";
++    const years = Math.max(1, Math.ceil(base * 0.35));
++    out.push({
++      id: "cooperate",
++      name: mob ? "Cooperate with Prosecutors" : "Testify Against Your Accomplices",
++      blurb: mob
++        ? "Testify against the family. A third of the sentence, witness protection, and a target on your back."
++        : "Name the people you worked with. A third of the sentence, and every street in the country will know you talked.",
++      cost: 0,
++      acquittal: null,
++      years,
++      affordable: true,
++      detail: `About ${years} year${years === 1 ? "" : "s"}. ${mob ? "The family will never take you back." : "No gang or crew will trust you again, you start your sentence with no standing, and old associates may come looking."}`,
++    });
+   }
+   return out;
+ }
+ 
++/** Politicians who are convicted lose their seat; a minor conviction only costs them votes. */
++function loseOffice(p: PlayerState, charge: CrimeCharge, prison: boolean) {
++  const job = p.currentJob;
++  if (job?.lineId !== "politics") return;
++  const sc = p.statecraft;
++  if (charge.severity === "minor" && !prison) {
++    p.politics.popularity = clamp(p.politics.popularity - 10);
++    addLog(p, "Your conviction made the front pages. Your approval rating took the hit, but voters let you keep the seat.");
++    return;
++  }
++  p.currentJob = null;
++  p.annualSalary = 0;
++  sc.termsInOffice = 0;
++  sc.removed += 1;
++  p.politics.yearsInOffice = 0;
++  p.politics.popularity = clamp(p.politics.popularity - 15);
++  addLog(p, `Convicted of ${charge.name}, you forfeited your seat as ${job.title}.`);
++}
++
+ function payTime(p: PlayerState, charge: CrimeCharge, rng: Rng, years: number, extra: { plea: boolean; q: number; detained: boolean; cooperate?: boolean }): ActionResult {
+   const j = p.justice;
+   const priors = j.convictions;
++  const wasMob = p.currentJob?.lineId === "mafia";
+   recordConviction(p, charge);
+   const seizedTarget = j.proceeds > 0 ? Math.round(j.proceeds * rng.float(0.5, 1)) : 0;
+   const seized = seizedTarget > 0 ? forfeit(p, seizedTarget) : 0;
+@@ -225,19 +336,56 @@ function payTime(p: PlayerState, charge: CrimeCharge, rng: Rng, years: number, e
+   const seizedText = seized > 0 ? ` The court seized ${money(seized)} of your proceeds.` : "";
+   const pleaText = extra.plea ? " (plea bargain)" : "";
+ 
+-  // Minor offences, and first offenders with a strong lawyer, often avoid a cell.
+-  const minor = charge.severity === "minor";
++  // Minor adult offences: fines, community service, probation, and a short jail stint for the repeat offender.
++  // A cell for a year is not what a court gives a first shoplifter.
++  if (charge.severity === "minor" && !charge.juvenile) {
++    const repeatJail = priors >= 3 && !rng.chance(clamp(0.35 + extra.q * 0.3 + (extra.plea ? 0.1 : 0), 0.1, 0.8));
++    if (!repeatJail) {
++      loseOffice(p, charge, false);
++      const roll = rng.next();
++      const jailChance = priors >= 1 ? 0.12 + 0.05 * Math.min(priors, 3) : 0;
++      const fine = fineFor(p, rng.int(500, 5_000));
++      p.bankBalance -= fine;
++      if (roll < jailChance) {
++        const weeks = rng.int(2, 12);
++        changeStat(p, "happiness", -6);
++        changeStat(p, "health", -1);
++        let lost = "";
++        if (p.currentJob && p.currentJob.lineId !== "politics" && rng.chance(0.4)) {
++          lost = ` Your employer let you go while you were away.`;
++          p.currentJob = null;
++          p.annualSalary = 0;
++        }
++        const body = `Found guilty of ${charge.name}${pleaText}. The judge gave you ${weeks} weeks in the county jail and a ${money(fine)} fine.${lost}${seizedText}`;
++        addLog(p, body);
++        return { player: p, notices: [info("Short Jail Term", body, "bad")] };
++      }
++      if (roll < jailChance + 0.45) {
++        const term = years + 1;
++        p.probation = { yearsLeft: term, charge: charge.name, strikes: 0 };
++        changeStat(p, "happiness", -5);
++        const body = `Found guilty of ${charge.name}${pleaText}: a ${money(fine)} fine and ${term} year${term === 1 ? "" : "s"} of probation. No cell this time. Stay out of trouble.${seizedText}`;
++        addLog(p, body);
++        return { player: p, notices: [info("Probation", body, "bad")] };
++      }
++      changeStat(p, "happiness", -3);
++      const body = `Found guilty of ${charge.name}${pleaText}. The judge ordered a ${money(fine)} fine and community service. It is on your record, but nobody is taking you away.${seizedText}`;
++      addLog(p, body);
++      return { player: p, notices: [info("Fined", body, "bad")] };
++    }
++  }
++
++  // Juveniles and first offenders with a strong lawyer often avoid a cell.
+   const probChance = charge.juvenile
+-    ? (minor ? 0.85 : 0.45)
+-    : minor
+-      ? clamp(0.4 + extra.q * 0.3 + (priors === 0 ? 0.15 : -0.1 * Math.min(priors, 3)) + (extra.plea ? 0.1 : 0), 0.1, 0.9)
+-      : charge.severity === "serious" && priors === 0 && extra.q >= 0.5 && !extra.plea
+-        ? 0.2
+-        : 0;
++    ? (charge.severity === "minor" ? 0.85 : 0.45)
++    : charge.severity === "serious" && priors === 0 && (extra.q >= 0.5 || extra.plea) && !extra.cooperate
++      ? (extra.q >= 0.5 ? 0.2 : 0.12)
++      : 0;
+   if (!extra.cooperate && probChance > 0 && rng.chance(probChance)) {
++    loseOffice(p, charge, false);
+     const fine = charge.juvenile ? 0 : fineFor(p, rng.int(500, 5_000));
+     p.bankBalance -= fine;
+-    const term = minor ? years + 1 : Math.max(2, years);
++    const term = Math.max(2, years);
+     p.probation = { yearsLeft: term, charge: charge.name, strikes: 0 };
+     changeStat(p, "happiness", -6);
+     const body = charge.juvenile
+@@ -247,8 +395,10 @@ function payTime(p: PlayerState, charge: CrimeCharge, rng: Rng, years: number, e
+     return { player: p, notices: [info("Probation", body, "bad")] };
+   }
+ 
++  loseOffice(p, charge, true);
++  if (wasMob && !extra.cooperate) parkMobPlace(p);
+   p.isInPrison = true;
+-  const capital = !charge.juvenile && !!charge.capital && !extra.plea && !extra.cooperate && DEATH_PENALTY.has(p.residence.country) && rng.chance(0.3);
++  const capital = !charge.juvenile && !!charge.capital && !extra.plea && !extra.cooperate && lawOf(p).deathPenalty && rng.chance(0.3);
+   const credit = !charge.juvenile && extra.detained && years > 2 ? 1 : 0;
+   p.prison = capital
+     ? { charge: charge.name, sentenceYears: rng.int(3, 7), yearsServed: 0, deathRow: true }
+@@ -264,8 +414,16 @@ function payTime(p: PlayerState, charge: CrimeCharge, rng: Rng, years: number, e
+   if (charge.juvenile) p.prison.juvenile = true;
+   if (charge.innocent) p.prison.wrongful = true;
+   if (extra.cooperate) {
+-    p.mob.informant = true;
+-    p.mob.witsec = true;
++    if (wasMob) {
++      p.mob.informant = true;
++      p.mob.witsec = true;
++      dropMobPlace(p);
++    } else {
++      j.snitch = true;
++      j.accomplices = 0;
++      j.gangTies = null;
++      p.prison.standing = 3;
++    }
+   }
+   p.currentJob = null;
+   p.annualSalary = 0;
+@@ -275,7 +433,7 @@ function payTime(p: PlayerState, charge: CrimeCharge, rng: Rng, years: number, e
+     ? `GUILTY. The judge sentenced you to DEATH for ${charge.name}. You have about ${p.prison.sentenceYears} years of appeals left.${seizedText}`
+     : charge.juvenile
+       ? `Found delinquent of ${charge.name}${pleaText}. You were sent to juvenile detention for up to ${years} year${years > 1 ? "s" : ""}. No adult prison, and your record is sealed if you stay out of trouble.`
+-      : `GUILTY. The judge sentenced you to ${years} year${years > 1 ? "s" : ""} in prison for ${charge.name}${pleaText}.${credit ? " One year of pre-trial detention counts as time served." : ""} You lost your job.${seizedText}${charge.innocent ? " You know you didn't do it." : ""}`;
++      : `GUILTY. The judge sentenced you to ${years} year${years > 1 ? "s" : ""} in prison for ${charge.name}${pleaText}.${credit ? " One year of pre-trial detention counts as time served." : ""} You lost your job.${seizedText}${charge.innocent ? " You know you didn't do it." : ""}${wasMob && !extra.cooperate ? " The family will keep your place if you keep quiet." : ""}`;
+   addLog(p, body);
+   return { player: p, notices: [info(charge.juvenile ? "Juvenile Detention" : "Found Guilty", body, "bad")] };
+ }
+@@ -283,65 +441,98 @@ function payTime(p: PlayerState, charge: CrimeCharge, rng: Rng, years: number, e
+ /** Resolve the Trial overlay by choosing representation. */
+ export function resolveTrial(p0: PlayerState, lawyerId: string, rng: Rng): ActionResult {
+   const p = clone(p0);
+-  const charge = p.pendingTrial;
+-  if (!charge) return { player: p0 };
++  const original = p.pendingTrial;
++  if (!original) return { player: p0 };
+   const cooperate = lawyerId === "cooperate";
+-  if (cooperate && p.currentJob?.lineId !== "mafia") return { player: p0 };
+-  const lawyer = lawyerById(cooperate ? "plea" : lawyerId);
++  const negotiate = lawyerId === "plea_reduced";
++  if (cooperate && !canCooperate(p, original)) return { player: p0 };
++  if (negotiate && !lesserCharge(original)) return { player: p0 };
++  const lawyer = lawyerById(cooperate ? "plea" : negotiate ? "private" : lawyerId);
+   if (!lawyer) return { player: p0 };
+-  const cost = lawyerCost(p, charge, lawyer);
++  const cost = lawyerCost(p, original, lawyer);
+   if (cost > p.bankBalance) {
+     return { player: p0, notices: [info("Can't afford it", `${lawyer.name} costs ${money(cost)}.`, "bad")] };
+   }
+   p.bankBalance -= cost;
+   p.pendingTrial = null;
+-  const plea = lawyer.id === "plea";
++  let charge: CrimeCharge = original;
++  let plea = lawyer.id === "plea";
+   const detained = !charge.juvenile && !!charge.bail && !charge.bail.posted;
+   const notices: NonNullable<ActionResult["notices"]> = [];
+ 
+-  // Waiting in a cell costs you your job and your health, whatever the verdict.
++  // Waiting in a cell costs you your job and your health, whatever the verdict. The family keeps a made man's place.
+   if (detained) {
+     changeStat(p, "health", -2);
+     changeStat(p, "happiness", -4);
+-    if (p.currentJob && rng.chance(0.7)) {
++    if (p.currentJob?.lineId === "mafia") {
++      parkMobPlace(p);
++      p.currentJob = null;
++      p.annualSalary = 0;
++    } else if (p.currentJob && p.currentJob.lineId !== "politics" && rng.chance(0.7)) {
+       addLog(p, `You lost your job as a ${p.currentJob.title} while locked up awaiting trial.`);
+       p.currentJob = null;
+       p.annualSalary = 0;
+     }
+   }
+ 
+-  const q = plea ? 0 : lawyerQuality(p, lawyer);
++  // Plea negotiation: a lesser charge if the prosecutor bites, otherwise a trial with the attorney you hired.
++  let negotiated = false;
++  if (negotiate) {
++    const lesser = lesserCharge(charge)!;
++    if (rng.chance(reducedChance(p, charge))) {
++      const list = charge.juvenile ? p.justice.juvenileRecord : p.criminalRecord;
++      const at = list.lastIndexOf(charge.name);
++      if (at >= 0) list[at] = lesser.name;
++      const body = `Your attorney got the prosecutor to accept a plea to ${lesser.name.toLowerCase()}. It is a ${lesser.severity === "minor" ? "misdemeanour" : "lesser felony"}, and it is on your record instead of ${charge.name.toLowerCase()}.`;
++      addLog(p, body);
++      notices.push(info("Deal Struck", body, "good"));
++      charge = lesser;
++      plea = true;
++      negotiated = true;
++    } else {
++      const body = `The prosecutor refused to move on ${charge.name.toLowerCase()}. Your attorney is taking the case to a jury.`;
++      addLog(p, body);
++      notices.push(info("No Deal", body, "bad"));
++    }
++  }
++
++  const q = plea && !negotiated ? 0 : lawyerQuality(p, lawyer);
+   if (!plea) {
+     if (rng.chance(0.04)) {
+       removeRecordEntry(p, charge);
+       addHeat(p, -5);
++      restoreMobPlace(p, rng, 0, notices);
+       const body = `The jury could not reach a verdict on ${charge.name}, and prosecutors declined to retry. The case is over.`;
+       addLog(p, body);
+-      return { player: p, notices: [info("Hung Jury", body, "good")] };
++      return { player: p, notices: [...notices, info("Hung Jury", body, "good")] };
+     }
+     const jury = rng.float(-0.1, 0.1);
+     if (rng.chance(clamp(acquittalChance(p, charge, lawyer.id) + jury, 0.01, 0.95))) {
+       removeRecordEntry(p, charge);
+       addHeat(p, -8);
+       changeStat(p, "happiness", 6);
++      restoreMobPlace(p, rng, 0, notices);
+       const body = charge.innocent
+         ? `${lawyer.name} showed the jury what really happened. You were found NOT GUILTY of ${charge.name}. Justice, for once.`
+         : `${lawyer.name} was brilliant. You were found NOT GUILTY of ${charge.name}!`;
+       addLog(p, body);
+-      return { player: p, notices: [info("Not Guilty", body, "good")] };
++      return { player: p, notices: [...notices, info("Not Guilty", body, "good")] };
+     }
+   }
+ 
+   const base = expectedYears(p, charge);
+   const years = cooperate
+     ? Math.max(1, Math.ceil(base * 0.35))
+-    : plea
+-      ? Math.max(1, Math.ceil(base * 0.5))
+-      : Math.max(1, Math.round(base * rng.float(0.8, 1.25) * (1 - 0.25 * q)));
++    : negotiated
++      ? Math.max(1, Math.ceil(base * 0.7))
++      : plea
++        ? Math.max(1, Math.ceil(base * pleaFactor(charge)))
++        : Math.max(1, Math.round(base * rng.float(0.8, 1.25) * (1 - 0.25 * q)));
+   const result = payTime(p, charge, rng, years, { plea, q, detained, cooperate });
+   if (cooperate) {
+     p.currentJob = null;
+-    notices.push(info("You Talked", "The family will know by morning. You are in the programme now.", "bad"));
++    const mob = !!p.mob.witsec;
++    notices.push(info("You Talked", mob ? "The family will know by morning. You are in the programme now." : "Your accomplices will know by morning. Nobody on the street will trust you again.", "bad"));
+   }
+-  return { player: result.player, notices: [...(result.notices ?? []), ...notices] };
++  return { player: result.player, notices: [...notices, ...(result.notices ?? [])] };
+ }
+diff --git a/src/engine/justice.ts b/src/engine/justice.ts
+index 097f6db..69052b4 100644
+--- a/src/engine/justice.ts
++++ b/src/engine/justice.ts
+@@ -7,14 +7,42 @@ import type { ActionResult, CrimeCharge, PlayerState } from "@/types/game.types"
+ import type { Rng } from "@/lib/rng";
+ import { clamp } from "@/lib/format";
+ import { CRIME_BY_ID, LAWYERS, crimeMeta, type LawyerDef } from "@/data/crimes";
+-import { lawFor } from "@/data/justiceCountries";
++import { lawFor, type LawProfile } from "@/data/justiceCountries";
++import { LAW_BY_ID, TIER_SCALE } from "@/data/laws";
+ import { addLog, changeStat, clone, hasFlag, netWorth } from "./state";
+ 
+ // ---------------------------------------------------------------------------
+ // Heat and detection
+ // ---------------------------------------------------------------------------
+ 
+-export const policingOf = (p: PlayerState) => lawFor(p.residence.country).policing;
++/**
++ * The justice system as it applies to you: the country's profile as reshaped by any laws you passed there.
++ * Everything that used to read `lawFor(country)` for the player should go through this.
++ */
++export function lawOf(p: PlayerState): LawProfile {
++  const base = lawFor(p.residence.country);
++  const laws = p.statecraft?.laws;
++  if (!laws?.length) return base;
++  const out = { ...base };
++  for (const l of laws) {
++    if (l.country !== p.residence.country) continue;
++    const d = LAW_BY_ID[l.id]?.law;
++    if (!d) continue;
++    const k = l.power * (TIER_SCALE[l.tier] ?? 1);
++    out.policing += (d.policing ?? 0) * k;
++    out.corruption += (d.corruption ?? 0) * k;
++    out.harshness += (d.harshness ?? 0) * k;
++    out.compensation += (d.compensation ?? 0) * k;
++    if (d.deathPenalty !== undefined) out.deathPenalty = d.deathPenalty;
++  }
++  out.policing = clamp(out.policing, 0.5, 1.6);
++  out.corruption = clamp(out.corruption, 0.02, 0.95);
++  out.harshness = clamp(out.harshness, 0.4, 1.8);
++  out.compensation = Math.max(0, Math.round(out.compensation));
++  return out;
++}
++
++export const policingOf = (p: PlayerState) => lawOf(p).policing;
+ 
+ export function addHeat(p: PlayerState, n: number) {
+   p.justice.heat = clamp(Math.round(p.justice.heat + n));
+@@ -78,7 +106,7 @@ const JUVENILE_CAP = { minor: 1, serious: 3, heinous: 6 } as const;
+ /** The sentence a conviction would carry before the judge's mood and your lawyer's mitigation. */
+ export function expectedYears(p: PlayerState, charge: CrimeCharge): number {
+   if (charge.juvenile) return Math.max(1, Math.min(charge.years, JUVENILE_CAP[charge.severity]));
+-  const law = lawFor(p.residence.country);
++  const law = lawOf(p);
+   let m = law.harshness * (1 + 0.2 * Math.min(4, p.justice.convictions));
+   if (habitualOffender(p, charge)) m *= 1.35;
+   return Math.max(1, Math.round(charge.years * m));
+diff --git a/src/engine/justiceState.ts b/src/engine/justiceState.ts
+index 39be9a5..a5af46f 100644
+--- a/src/engine/justiceState.ts
++++ b/src/engine/justiceState.ts
+@@ -5,6 +5,7 @@
+ import type { JusticeState, MobState, PlayerState, PrisonState, SpyState, StatecraftState } from "@/types/game.types";
+ 
+ export const ISSUE_IDS = ["economy", "health", "environment", "security", "liberty"] as const;
++export const INDICATOR_IDS = ["prosperity", "health", "environment", "safety", "liberty", "finances"] as const;
+ 
+ export const freshJustice = (): JusticeState => ({
+   heat: 0,
+@@ -23,6 +24,10 @@ export const freshJustice = (): JusticeState => ({
+   programs: [],
+   gangTies: null,
+   exonerations: 0,
++  snitch: false,
++  housing: "stable",
++  officerTrust: 50,
++  cleanYears: 0,
+ });
+ 
+ export const freshMob = (): MobState => ({
+@@ -37,6 +42,8 @@ export const freshMob = (): MobState => ({
+   exposure: 0,
+   witsec: false,
+   marked: false,
++  crewList: [],
++  held: null,
+ });
+ 
+ export const freshSpy = (): SpyState => ({
+@@ -51,8 +58,13 @@ export const freshSpy = (): SpyState => ({
+   missions: 0,
+   secrets: 0,
+   partnerKnows: false,
++  conscience: 65,
++  dilemmas: 0,
+ });
+ 
++/** Where the country stands before any of your laws: a middling 50 on everything. */
++export const freshIndicators = (): Record<string, number> => Object.fromEntries(INDICATOR_IDS.map((i) => [i, 50]));
++
+ export const freshStatecraft = (): StatecraftState => ({
+   machine: 20,
+   funds: 0,
+@@ -73,8 +85,16 @@ export const freshStatecraft = (): StatecraftState => ({
+   removed: 0,
+   electionsWon: 0,
+   electionsLost: 0,
++  indicators: freshIndicators(),
++  laws: [],
++  evidence: 0,
+ });
+ 
++const LEGACY_CREW = ["Sal", "Dmitri", "Benny", "Wei"];
++/** Saves from before named crews: turn the headcount into people. */
++const legacyCrew = (n: number): MobState["crewList"] =>
++  Array.from({ length: Math.min(4, Math.max(0, n)) }, (_, i) => ({ id: `legacy${i}`, name: LEGACY_CREW[i % LEGACY_CREW.length], loyalty: 60, skill: 45, years: 1 }));
++
+ /** Default any new prison fields on a sentence that was saved before they existed. */
+ export function hydratePrison(prison: PrisonState | null | undefined): PrisonState | null {
+   if (!prison) return null;
+@@ -99,7 +119,7 @@ export function hydrateCrimeLife(p: PlayerState): Pick<PlayerState, "justice" |
+     : { convictions: p.criminalRecord?.length ?? 0, felonies: p.flags?.includes("ex_con") ? Math.max(1, Math.round((p.criminalRecord?.length ?? 0) / 2)) : 0 };
+   return {
+     justice: { ...freshJustice(), ...legacyRecord, ...(p.justice ?? {}), juvenileRecord: p.justice?.juvenileRecord ?? [], programs: p.justice?.programs ?? [] },
+-    mob: { ...freshMob(), ...(p.mob ?? {}) },
++    mob: { ...freshMob(), ...(p.mob ?? {}), crewList: p.mob?.crewList ?? legacyCrew(p.mob?.crew ?? 0), held: p.mob?.held ?? null },
+     spy: { ...freshSpy(), ...(p.spy ?? {}) },
+     statecraft: {
+       ...freshStatecraft(),
+@@ -107,6 +127,8 @@ export function hydrateCrimeLife(p: PlayerState): Pick<PlayerState, "justice" |
+       donors: p.statecraft?.donors ?? [],
+       stances: { ...freshStatecraft().stances, ...(p.statecraft?.stances ?? {}) },
+       mood: { ...freshStatecraft().mood, ...(p.statecraft?.mood ?? {}) },
++      indicators: { ...freshIndicators(), ...(p.statecraft?.indicators ?? {}) },
++      laws: p.statecraft?.laws ?? [],
+     },
+     prison: hydratePrison(p.prison),
+   };
+diff --git a/src/engine/legislature.ts b/src/engine/legislature.ts
+new file mode 100644
+index 0000000..22238b1
+--- /dev/null
++++ b/src/engine/legislature.ts
+@@ -0,0 +1,301 @@
++/**
++ * The legislature: bills with real content, whip counts, compromise and horse-trading, executive orders,
++ * and a country whose health, wealth, air and freedom actually move when you govern.
++ * Laws you pass stay on the books after you leave (until someone repeals them), reshape the justice system
++ * for criminal-justice bills, and are what voters judge you on at the next election.
++ */
++import type { ActionResult, EnactedLaw, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { INDICATORS, ISSUE_INDICATORS, LAWS, LAW_BY_ID, TIER_SCALE, conflictsOf, type IndicatorId, type IssueKey, type LawDef } from "@/data/laws";
++import { ISSUES, PARTIES } from "@/data/politicsData";
++import { addLog, changeStat, clone } from "./state";
++import { ISSUE_IDS } from "./justiceState";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
++  ({ kind: "info" as const, title, body, tone });
++
++const holdsOffice = (p: PlayerState) => p.currentJob?.lineId === "politics";
++const officeTier = (p: PlayerState) => (holdsOffice(p) ? p.currentJob!.tier : -1);
++
++export type Approach = "plain" | "compromise" | "horse_trade";
++
++export const APPROACHES: { id: Approach; name: string; blurb: string }[] = [
++  { id: "plain", name: "As written", blurb: "Full effect, full fight." },
++  { id: "compromise", name: "Compromise", blurb: "Water it down: +20% to pass, half the effect." },
++  { id: "horse_trade", name: "Horse-trade", blurb: "Buy votes with district projects: +15% to pass, costs money, smells." },
++];
++
++export const issueName = (id: string) => ISSUES.find((i) => i.id === id)?.name ?? id;
++
++/** Money a horse-trade costs: scaled to the office, not a fixed sum. */
++export function horseTradeCost(p: PlayerState): number {
++  return Math.max(3_000, Math.round((p.currentJob?.salary ?? 60_000) * 0.3));
++}
++
++export const lawName = (id: string) => LAW_BY_ID[id]?.name ?? id;
++
++export const isEnacted = (p: PlayerState, id: string) => p.statecraft.laws.some((l) => l.id === id && l.country === p.residence.country);
++
++/** The stance a bill needs. A centrist (stance 0) can only push centrist bills once they belong to a party. */
++function stanceAllows(p: PlayerState, law: LawDef): boolean {
++  const s = p.statecraft.stances[law.issue] ?? 0;
++  if (law.stance === 0) return s === 0 && p.politics.party !== null;
++  return s === law.stance;
++}
++
++/** Bills this politician can introduce right now: their office, their stated positions, not already law. */
++export function availableBills(p: PlayerState, issue?: IssueKey): LawDef[] {
++  const tier = officeTier(p);
++  if (tier < 0) return [];
++  return LAWS.filter((l) => (!issue || l.issue === issue) && l.minTier <= tier && stanceAllows(p, l) && !isEnacted(p, l.id));
++}
++
++/** Bills that would be possible but are held back by a missing position or a lower office. */
++export function lockedBills(p: PlayerState, issue: IssueKey): { law: LawDef; why: string }[] {
++  const tier = officeTier(p);
++  const out: { law: LawDef; why: string }[] = [];
++  for (const l of LAWS) {
++    if (l.issue !== issue || isEnacted(p, l.id)) continue;
++    if (!stanceAllows(p, l)) continue;
++    if (l.minTier > tier) out.push({ law: l, why: `Needs ${["City Councillor", "Mayor", "State Governor", "Senator", "Head of State"][l.minTier]}` });
++  }
++  return out;
++}
++
++/** Chance a bill clears the chamber. Party standing, coalition, approval and effort count; so does how hard a fight it is. */
++export function billChance(p: PlayerState, law: LawDef, approach: Approach = "plain"): number {
++  const sc = p.statecraft;
++  const tier = Math.max(0, officeTier(p));
++  const effort = p.effort === "grind" ? 8 : p.effort === "coast" ? -10 : 0;
++  const votes = sc.machine * 0.35 + sc.coalition * 0.35 + p.politics.popularity * 0.3 + effort;
++  const need = 26 + tier * 6 + law.opposition * 30;
++  const idx = ISSUE_IDS.indexOf(law.issue);
++  const plat = PARTIES.find((x) => x.id === p.politics.party)?.platform[idx];
++  const platform = plat !== undefined && law.stance === plat ? 0.05 : plat !== undefined && plat !== 0 && law.stance !== plat ? -0.1 : 0;
++  const bonus = approach === "compromise" ? 0.2 : approach === "horse_trade" ? 0.15 : 0;
++  return clamp((votes - need) / 60 + 0.5 + platform + bonus, 0.08, 0.92);
++}
++
++/** Plain-words summary of what a bill does, for the UI and the log. */
++export function effectChips(law: LawDef, power = 1): { label: string; delta: number }[] {
++  const out: { label: string; delta: number }[] = [];
++  for (const [k, v] of Object.entries(law.effects) as [IndicatorId, number][]) {
++    const name = INDICATORS.find((i) => i.id === k)?.name ?? k;
++    out.push({ label: name, delta: Math.round(v * power * 10) / 10 });
++  }
++  const d = law.law;
++  if (d?.harshness) out.push({ label: "Sentences", delta: d.harshness > 0 ? 1 : -1 });
++  if (d?.policing) out.push({ label: "Policing", delta: d.policing > 0 ? 1 : -1 });
++  if (d?.corruption) out.push({ label: "Corruption", delta: d.corruption > 0 ? 1 : -1 });
++  if (d?.deathPenalty !== undefined) out.push({ label: "Death penalty", delta: d.deathPenalty ? 1 : -1 });
++  return out;
++}
++
++function spend(p: PlayerState, cost: number): boolean {
++  const sc = p.statecraft;
++  if (sc.funds + p.bankBalance < cost) return false;
++  const fromFunds = Math.min(sc.funds, cost);
++  sc.funds -= fromFunds;
++  p.bankBalance -= cost - fromFunds;
++  return true;
++}
++
++function enact(p: PlayerState, law: LawDef, power: number): string[] {
++  const notes: string[] = [];
++  const country = p.residence.country;
++  for (const other of conflictsOf(law.id)) {
++    const i = p.statecraft.laws.findIndex((l) => l.id === other && l.country === country);
++    if (i >= 0) {
++      p.statecraft.laws.splice(i, 1);
++      notes.push(`It repealed the ${lawName(other).toLowerCase()}.`);
++    }
++  }
++  const entry: EnactedLaw = { id: law.id, year: p.year, country, power, tier: Math.max(0, officeTier(p)) };
++  p.statecraft.laws.push(entry);
++  return notes;
++}
++
++const consequenceText = (law: LawDef, power: number) => {
++  const up = effectChips(law, power).filter((c) => c.delta > 0).map((c) => c.label.toLowerCase());
++  const down = effectChips(law, power).filter((c) => c.delta < 0).map((c) => c.label.toLowerCase());
++  return `${up.length ? `Expect ${up.join(" and ")} to improve over the next three years` : ""}${up.length && down.length ? ", " : ""}${down.length ? `${up.length ? "at the cost of" : "Expect a hit to"} ${down.join(" and ")}` : ""}.`;
++};
++
++/** Introduce a bill. One floor fight a year. Passing it changes the country; losing it costs you. */
++export function pushBill(p0: PlayerState, rng: Rng, lawId: string, approach: Approach = "plain"): ActionResult {
++  const p = clone(p0);
++  const law = LAW_BY_ID[lawId];
++  if (!holdsOffice(p)) return { player: p0, notices: [info("Not in Office", "You need a seat to propose legislation.", "bad")] };
++  if (!law || !availableBills(p).some((l) => l.id === law.id)) return { player: p0, notices: [info("Can't Table That", "You can only push bills that match the positions you've staked out and the office you hold.", "bad")] };
++  if ((p.annual["pol:policy"] ?? 0) >= 1) return { player: p0, notices: [info("Floor Time Used", "The legislature has no more time for your agenda this year.")] };
++  const sc = p.statecraft;
++  if (approach === "horse_trade") {
++    const cost = horseTradeCost(p);
++    if (!spend(p, cost)) return { player: p0, notices: [info("Insufficient Funds", `Greasing the votes costs ${money(cost)}.`, "bad")] };
++  }
++  p.annual["pol:policy"] = 1;
++  const power = approach === "compromise" ? 0.5 : 1;
++  if (rng.chance(billChance(p, law, approach))) {
++    sc.policyWins += 1;
++    p.annual["pol:win"] = (p.annual["pol:win"] ?? 0) + 1;
++    const mood = sc.mood[law.issue] ?? 0;
++    const popular = law.stance !== 0 ? law.stance * mood > 0 : Math.abs(mood) < 0.3;
++    p.politics.popularity = clamp(p.politics.popularity + (popular ? 5 : 1));
++    sc.machine = clamp(sc.machine + 2);
++    changeStat(p, "fame", 1);
++    const notes = enact(p, law, power);
++    let extra = "";
++    if (approach === "horse_trade" && !sc.scandal && rng.chance(0.2)) {
++      sc.scandal = { kind: "expenses", title: "Pork-barrel spending", severity: 1, year: p.year };
++      extra = " Journalists are already counting the district projects you handed out.";
++    }
++    const body = `Your ${law.name.toLowerCase()} passed${approach === "compromise" ? " in a watered-down form" : ""}. ${popular ? "Voters like it." : "Voters shrugged: it isn't what they're asking for right now."} ${consequenceText(law, power)}${notes.length ? ` ${notes.join(" ")}` : ""}${extra}`;
++    addLog(p, body);
++    return { player: p, notices: [info("Bill Passed", body, "good")] };
++  }
++  p.politics.popularity = clamp(p.politics.popularity - 3);
++  sc.machine = clamp(sc.machine - 2);
++  const body = `Your ${law.name.toLowerCase()} died in committee. ${approach === "compromise" ? "Even the watered-down version could not find the votes." : "The opposition made sure of it."}`;
++  addLog(p, body);
++  return { player: p, notices: [info("Bill Defeated", body, "bad")] };
++}
++
++/** Governors and above can sign an order without a vote, if the courts let it stand. */
++export function executiveOrder(p0: PlayerState, rng: Rng, lawId: string): ActionResult {
++  const p = clone(p0);
++  const law = LAW_BY_ID[lawId];
++  if (!holdsOffice(p) || officeTier(p) < 2) return { player: p0, notices: [info("No Such Power", "Only a Governor or higher can govern by order.", "bad")] };
++  if (!law || !availableBills(p).some((l) => l.id === law.id)) return { player: p0, notices: [info("Can't Order That", "You can only order what you've campaigned for, from the office you hold.", "bad")] };
++  if ((p.annual["pol:exec"] ?? 0) >= 1) return { player: p0, notices: [info("Pen Down", "You've already signed an order this year.")] };
++  p.annual["pol:exec"] = 1;
++  const sc = p.statecraft;
++  const struck = rng.chance(clamp(0.2 + law.opposition * 0.35, 0.2, 0.45));
++  sc.machine = clamp(sc.machine - 3);
++  if (struck) {
++    p.politics.popularity = clamp(p.politics.popularity - 5);
++    const body = `You signed an executive order on the ${law.name.toLowerCase()}. A court struck it down within weeks, and the press called it overreach.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Order Struck Down", body, "bad")] };
++  }
++  p.politics.popularity = clamp(p.politics.popularity - 3);
++  const notes = enact(p, law, 0.6);
++  const body = `You signed the ${law.name.toLowerCase()} by executive order. It stands, at 60% strength, and critics call it rule by decree. ${consequenceText(law, 0.6)}${notes.length ? ` ${notes.join(" ")}` : ""}`;
++  addLog(p, body);
++  return { player: p, notices: [info("Executive Order", body, "neutral")] };
++}
++
++/** Try to strike a law from the books. Uses the year's floor time. */
++export function repealLaw(p0: PlayerState, rng: Rng, lawId: string): ActionResult {
++  const p = clone(p0);
++  const law = LAW_BY_ID[lawId];
++  if (!holdsOffice(p)) return { player: p0, notices: [info("Not in Office", "Only a sitting legislator can repeal a law.", "bad")] };
++  const i = p.statecraft.laws.findIndex((l) => l.id === lawId && l.country === p.residence.country);
++  if (!law || i < 0) return { player: p0 };
++  if ((p.annual["pol:policy"] ?? 0) >= 1) return { player: p0, notices: [info("Floor Time Used", "The legislature has no more time for your agenda this year.")] };
++  p.annual["pol:policy"] = 1;
++  const chance = clamp(billChance(p, { ...law, opposition: 0.4 }) , 0.1, 0.85);
++  if (rng.chance(chance)) {
++    p.statecraft.laws.splice(i, 1);
++    p.politics.popularity = clamp(p.politics.popularity - 2);
++    const body = `The ${law.name.toLowerCase()} was repealed. The country starts to drift back to where it was.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Law Repealed", body, "neutral")] };
++  }
++  p.politics.popularity = clamp(p.politics.popularity - 3);
++  const body = `Your repeal of the ${law.name.toLowerCase()} failed. Its supporters had the votes.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Repeal Failed", body, "bad")] };
++}
++
++// ---------------------------------------------------------------------------
++// The state of the nation
++// ---------------------------------------------------------------------------
++
++/** Where each indicator is heading given the laws on the books and the economic climate. */
++export function indicatorTargets(p: PlayerState): Record<IndicatorId, number> {
++  const t = Object.fromEntries(INDICATORS.map((i) => [i.id, 50])) as Record<IndicatorId, number>;
++  const climate = p.economy.climate;
++  if (climate === "recession") {
++    t.prosperity -= 8;
++    t.finances -= 4;
++  } else if (climate === "boom") {
++    t.prosperity += 6;
++    t.finances += 3;
++  }
++  for (const l of p.statecraft.laws) {
++    if (l.country !== p.residence.country) continue;
++    const def = LAW_BY_ID[l.id];
++    if (!def) continue;
++    const ramp = clamp((p.year - l.year + 1) / 3, 0.34, 1);
++    const k = (TIER_SCALE[l.tier] ?? 1) * l.power * ramp;
++    for (const [id, v] of Object.entries(def.effects) as [IndicatorId, number][]) t[id] += v * k;
++  }
++  for (const i of INDICATORS) t[i.id] = clamp(t[i.id]);
++  return t;
++}
++
++/** Sum of how far each indicator sits from neutral, in units of 50: roughly -6 to +6. */
++export function nationScore(p: PlayerState): number {
++  let sum = 0;
++  for (const i of INDICATORS) sum += ((p.statecraft.indicators[i.id] ?? 50) - 50) / 50;
++  return sum;
++}
++
++/** Voters weigh the issues they care about most: the indicators behind the issue you campaigned on. */
++export function issueScore(p: PlayerState, issue: IssueKey): number {
++  const ids = ISSUE_INDICATORS[issue];
++  return ids.reduce((s, id) => s + (p.statecraft.indicators[id] ?? 50) - 50, 0) / ids.length;
++}
++
++/** Yearly: laws bite, the country moves, budgets break and old laws get repealed. */
++export function processNation(p: PlayerState, rng: Rng, notices: Notices) {
++  const sc = p.statecraft;
++  const target = indicatorTargets(p);
++  for (const i of INDICATORS) {
++    const v = sc.indicators[i.id] ?? 50;
++    sc.indicators[i.id] = Math.round(clamp(v + (target[i.id] - v) * 0.45 + rng.float(-0.6, 0.6)) * 10) / 10;
++  }
++  const here = sc.laws.filter((l) => l.country === p.residence.country);
++  if (!holdsOffice(p)) {
++    // Whoever governs now may undo what you did.
++    for (const l of [...here]) {
++      if (p.year - l.year < 1 || !rng.chance(0.06)) continue;
++      sc.laws = sc.laws.filter((x) => x !== l);
++      const body = `The new government repealed your ${lawName(l.id).toLowerCase()}.`;
++      addLog(p, body);
++      notices.push(info("Law Repealed", body, "bad"));
++    }
++    return;
++  }
++  if ((sc.indicators.finances ?? 50) < 20) {
++    p.politics.popularity = clamp(p.politics.popularity - 8);
++    sc.indicators.prosperity = clamp((sc.indicators.prosperity ?? 50) - 2);
++    const body = "The ratings agencies downgraded the country over its deficits. Austerity is on the table, and voters blame you.";
++    addLog(p, body);
++    notices.push(info("Fiscal Crisis", body, "bad"));
++  }
++  if ((sc.indicators.liberty ?? 50) < 22 && rng.chance(0.4)) {
++    p.politics.popularity = clamp(p.politics.popularity - 6);
++    const body = "Protesters filled the squares, furious at what has been done to their rights. The images ran on every channel.";
++    addLog(p, body);
++    notices.push(info("Mass Protests", body, "bad"));
++  }
++  if ((sc.indicators.health ?? 50) < 25 && rng.chance(0.35)) {
++    p.politics.popularity = clamp(p.politics.popularity - 4);
++    const body = "Hospitals are overwhelmed and a bad winter has made it a national story. The blame is landing on the government.";
++    addLog(p, body);
++    notices.push(info("Health Emergency", body, "bad"));
++  }
++}
++
++/** Approval effect of how the country is doing under you (added to the yearly drift). */
++export function nationApproval(p: PlayerState): number {
++  return Math.round(nationScore(p) * 2.5);
++}
++
++/** Election-odds factor for the state of the nation. */
++export function nationFactor(p: PlayerState): number {
++  return clamp(nationScore(p) * 0.02, -0.1, 0.1);
++}
+diff --git a/src/engine/mobPlace.ts b/src/engine/mobPlace.ts
+new file mode 100644
+index 0000000..39834be
+--- /dev/null
++++ b/src/engine/mobPlace.ts
+@@ -0,0 +1,60 @@
++/**
++ * Doing time as a made man. The family keeps your place while you are away, if you keep your mouth shut:
++ * a stand-up guy walks out to the rank he left; someone who talked, or who the family wrote off, does not.
++ * Kept apart from underworld.ts so the courts and prisons can use it without a dependency loop.
++ */
++import type { ActionResult, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { CAREER_BY_ID } from "@/data/careersRegistry";
++import { addLog } from "./state";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++
++const inFamily = (p: PlayerState) => p.currentJob?.lineId === "mafia";
++
++/** Take the player out of the family's day-to-day (arrest, detention, prison) while remembering the place. */
++export function parkMobPlace(p: PlayerState) {
++  if (!inFamily(p) || !p.currentJob) return;
++  p.mob.held = { tier: p.currentJob.tier, company: p.currentJob.company, year: p.year };
++}
++
++/** Forget the place for good (you talked, or the family cut you loose). */
++export function dropMobPlace(p: PlayerState) {
++  p.mob.held = null;
++}
++
++/** Can the family still take this person back? */
++export function mobWouldTakeBack(p: PlayerState): boolean {
++  const m = p.mob;
++  return !!m.held && !m.informant && !m.witsec && !m.marked && m.loyalty >= 20;
++}
++
++/**
++ * Come home to the family (release, acquittal, charges dropped). Returns true if the place was restored.
++ * `yearsAway` demotes you after a long stretch: the family does not wait forever for the same rank.
++ */
++export function restoreMobPlace(p: PlayerState, rng: Rng, yearsAway: number, notices?: Notices): boolean {
++  const held = p.mob.held;
++  if (!held) return false;
++  const ok = mobWouldTakeBack(p);
++  p.mob.held = null;
++  if (!ok) {
++    const body = p.mob.informant
++      ? "The family knows you talked. Nobody from the old crew will ever call."
++      : "The family has moved on. Your seat was given to someone else while you were away.";
++    addLog(p, body);
++    notices?.push({ kind: "info", title: "No Place Waiting", body, tone: "bad" });
++    return false;
++  }
++  const line = CAREER_BY_ID.mafia;
++  const tier = Math.max(0, Math.min(held.tier - (yearsAway >= 8 ? 2 : yearsAway >= 4 ? 1 : 0), line.ladder.length - 1));
++  p.currentJob = { id: rng.id(), title: line.ladder[tier].title, company: held.company, salary: line.ladder[tier].salary, performance: p.mob.respect, tier, lineId: "mafia", yearsInRole: 0 };
++  p.annualSalary = p.currentJob.salary;
++  const demoted = tier < held.tier;
++  const body = demoted
++    ? `The ${held.company} did not forget a man who kept quiet, but a long absence costs you: you're back as ${line.ladder[tier].title}.`
++    : `The ${held.company} kept your place warm. You walk back in as ${line.ladder[tier].title}, and nobody asks where you've been.`;
++  addLog(p, body);
++  notices?.push({ kind: "info", title: demoted ? "Back in the Family" : "Welcome Back", body, tone: "good" });
++  return true;
++}
+diff --git a/src/engine/politics.ts b/src/engine/politics.ts
+index 7ba1cd1..9be4e65 100644
+--- a/src/engine/politics.ts
++++ b/src/engine/politics.ts
+@@ -14,6 +14,7 @@ import { blockerFor } from "./occupation";
+ import { ISSUE_IDS } from "./justiceState";
+ import { officeBlocker, recordLevel } from "./justice";
+ import { startTrial } from "./crime";
++import { availableBills, billChance, nationApproval, nationFactor, processNation, pushBill } from "./legislature";
+ 
+ type Notices = NonNullable<ActionResult["notices"]>;
+ const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
+@@ -30,21 +31,8 @@ export const MIN_TENURE = [0, 4, 4, 4, 8];
+ /** Fame voters expect of a candidate for each office; below it, name recognition costs you. */
+ export const FAME_NEEDED = [0, 8, 18, 32, 50];
+ 
+-export const ISSUES = [
+-  { id: "economy", name: "Economy", emoji: "💰", options: ["Tax the wealthy", "Balanced budget", "Cut taxes"] },
+-  { id: "health", name: "Healthcare", emoji: "🏥", options: ["Universal care", "Mixed system", "Market-based"] },
+-  { id: "environment", name: "Environment", emoji: "🌍", options: ["Green transition", "Gradual change", "Drill and grow"] },
+-  { id: "security", name: "Policing", emoji: "🚓", options: ["Reform policing", "Status quo", "Tough on crime"] },
+-  { id: "liberty", name: "Liberty", emoji: "🗽", options: ["Expand freedoms", "Balanced", "Order first"] },
+-] as const;
+-
+-export const PARTIES = [
+-  { id: "progressive", name: "Progressive Alliance", emoji: "🌹", blurb: "Strong in steady times. +4% odds when the economy is normal. Platform: left on every issue.", platform: [-1, -1, -1, -1, -1] },
+-  { id: "conservative", name: "Conservative Union", emoji: "🏛️", blurb: "Trusted when the economy is stable or booming. +4% odds. Platform: right on every issue.", platform: [1, 1, 1, 1, 1] },
+-  { id: "centrist", name: "Centrist Pact", emoji: "⚖️", blurb: "Moderate and dependable. +3% odds in any climate. Platform: stay in the middle.", platform: [0, 0, 0, 0, 0] },
+-  { id: "populist", name: "People's Front", emoji: "📢", blurb: "Thrives in recessions (+8%), struggles in booms (−3%). Left on money, right on order.", platform: [-1, -1, 1, 1, 1] },
+-  { id: "green", name: "Green Party", emoji: "🌿", blurb: "Rewards good character: +5% odds if your Karma is 60+. Greens on the environment and liberty.", platform: [-1, 0, -1, 0, -1] },
+-] as const;
++import { ISSUES, PARTIES } from "@/data/politicsData";
++export { ISSUES, PARTIES };
+ 
+ export function partyBonus(p: PlayerState): number {
+   const c = p.economy.climate;
+@@ -136,6 +124,7 @@ export function electionOdds(p: PlayerState, tier: number, mode: "run" | "reelec
+     { label: "Opposition research", value: (annual["pol:oppo"] ?? 0) / 100 },
+     { label: "Economy", value: mode === "reelect" ? (recession ? -0.06 : boom ? 0.03 : 0) : 0 },
+     { label: "Incumbency", value: mode === "reelect" ? 0.07 : currentTier(p) >= 0 ? 0.03 : 0 },
++    { label: "State of the nation", value: sc.laws.length > 0 || mode === "reelect" ? nationFactor(p) : 0 },
+     { label: "Scandal", value: sc.scandal ? -sc.scandal.severity * 0.08 : 0 },
+     { label: "Criminal record", value: rec === "misdemeanor" ? -0.06 : rec === "clean" ? 0 : -0.3 },
+     { label: "Name recognition", value: -Math.max(0, FAME_NEEDED[Math.min(4, tier)] - p.fame) / 250 },
+@@ -487,45 +476,23 @@ export function inOffice(p: PlayerState): boolean {
+   return p.currentJob?.lineId === "politics";
+ }
+ 
+-/** Chance a policy push passes this year. */
++/** The bill a politician would table on an issue (the least contentious one they can), or undefined. */
++export function defaultBill(p: PlayerState, issueId: string) {
++  return availableBills(p, issueId as never).sort((x, y) => x.opposition - y.opposition)[0];
++}
++
++/** Chance a policy push on an issue passes this year (the least contentious bill available). */
+ export function policyChance(p: PlayerState, issueId: string): number {
+-  const sc = p.statecraft;
+-  const tier = Math.max(0, currentTier(p));
+-  const stance = sc.stances[issueId] ?? 0;
+-  const idx = ISSUE_IDS.indexOf(issueId as (typeof ISSUE_IDS)[number]);
+-  const plat = platformOf(p)?.[idx];
+-  const effort = p.effort === "grind" ? 8 : p.effort === "coast" ? -10 : 0;
+-  const votes = sc.machine * 0.35 + sc.coalition * 0.35 + p.politics.popularity * 0.3 + effort;
+-  const need = 38 + tier * 6;
+-  return clamp((votes - need) / 60 + 0.5 + (plat !== undefined && stance === plat ? 0.05 : plat !== undefined && plat !== 0 && stance !== 0 ? -0.1 : 0), 0.1, 0.9);
++  const bill = defaultBill(p, issueId);
++  return bill ? billChance(p, bill) : 0;
+ }
+ 
++/** Push the easiest bill on an issue. The Politics tab lets you pick the bill and the approach; this is the shortcut. */
+ export function pushPolicy(p0: PlayerState, rng: Rng, issueId: string): ActionResult {
+-  const p = clone(p0);
+-  if (!inOffice(p)) return { player: p0, notices: [info("Not in Office", "You need a seat to propose legislation.", "bad")] };
+-  const issue = ISSUES.find((i) => i.id === issueId);
+-  const sc = p.statecraft;
+-  const stance = sc.stances[issueId] ?? 0;
+-  if (!issue || stance === 0) return { player: p0, notices: [info("No Position", "Take a stance on that issue first.", "bad")] };
+-  if ((p.annual["pol:policy"] ?? 0) >= 1) return { player: p0, notices: [info("Floor Time Used", "The legislature has no more time for your agenda this year.")] };
+-  p.annual["pol:policy"] = 1;
+-  const title = issue.options[stance + 1];
+-  if (rng.chance(policyChance(p, issueId))) {
+-    sc.policyWins += 1;
+-    p.annual["pol:win"] = (p.annual["pol:win"] ?? 0) + 1;
+-    const popular = stance * (sc.mood[issueId] ?? 0) > 0;
+-    p.politics.popularity = clamp(p.politics.popularity + (popular ? 5 : 1));
+-    sc.machine = clamp(sc.machine + 2);
+-    changeStat(p, "fame", 1);
+-    const body = `Your "${title}" bill passed. ${popular ? "Voters like it." : "Voters shrugged: it isn't what they're asking for right now."}`;
+-    addLog(p, body);
+-    return { player: p, notices: [info("Bill Passed", body, "good")] };
+-  }
+-  p.politics.popularity = clamp(p.politics.popularity - 3);
+-  sc.machine = clamp(sc.machine - 2);
+-  const body = `Your "${title}" bill died in committee. The opposition made sure of it.`;
+-  addLog(p, body);
+-  return { player: p, notices: [info("Bill Defeated", body, "bad")] };
++  if (!inOffice(p0)) return { player: p0, notices: [info("Not in Office", "You need a seat to propose legislation.", "bad")] };
++  const bill = defaultBill(p0, issueId);
++  if (!bill) return { player: p0, notices: [info("No Position", "Take a stance on that issue first, from an office that can act on it.", "bad")] };
++  return pushBill(p0, rng, bill.id);
+ }
+ 
+ export function buildCoalition(p0: PlayerState): ActionResult {
+@@ -548,18 +515,28 @@ export function kickbackAmount(p: PlayerState): number {
+   return Math.round((p.currentJob?.salary ?? 60_000) * 1.2);
+ }
+ 
+-/** A developer slips you an envelope. The money is real; so is the paper trail. */
+-export function takeKickback(p0: PlayerState, rng: Rng): ActionResult {
++/** What prosecutors could prove today, as a plain word. */
++export const evidenceWord = (e: number) => (e >= 65 ? "damning" : e >= 35 ? "serious" : e >= 12 ? "thin" : "none");
++
++/**
++ * A developer slips you an envelope. The money is real; so is the paper trail, and it does not go away.
++ * Running it through a "charity" costs a fifth of it and leaves a far thinner trail.
++ */
++export function takeKickback(p0: PlayerState, rng: Rng, launder = false): ActionResult {
+   const p = clone(p0);
+   if (!inOffice(p)) return { player: p0 };
+   if ((p.annual["pol:kickback"] ?? 0) >= 1) return { player: p0, notices: [info("Too Greedy", "One envelope a year is plenty.")] };
+   p.annual["pol:kickback"] = 1;
+-  const amount = Math.round(kickbackAmount(p) * rng.float(0.7, 1.4));
++  const gross = Math.round(kickbackAmount(p) * rng.float(0.7, 1.4));
++  const amount = launder ? Math.round(gross * 0.8) : gross;
+   p.bankBalance += amount;
+   p.statecraft.bribes += amount;
++  p.statecraft.evidence = clamp(p.statecraft.evidence + (launder ? rng.int(4, 9) : rng.int(12, 22)));
+   p.justice.proceeds += amount;
+-  changeStat(p, "karma", -8);
+-  const body = `A developer's "consulting fee" of ${money(amount)} landed in your account in return for a zoning vote. Nobody will ever find out. Probably.`;
++  changeStat(p, "karma", launder ? -9 : -8);
++  const body = launder
++    ? `A developer's "consulting fee" went through a friendly charity and reached you as ${money(amount)}, a fifth lighter and much harder to trace. A zoning vote went his way.`
++    : `A developer's "consulting fee" of ${money(amount)} landed in your account in return for a zoning vote. Somebody, somewhere, kept a copy of the paperwork.`;
+   addLog(p, body);
+   return { player: p, notices: [info("Envelope", body, "bad")] };
+ }
+@@ -749,6 +726,7 @@ function newScandal(p: PlayerState, rng: Rng): StatecraftState["scandal"] {
+ /** Yearly: approval drifts, the machine hums, scandals break, incumbents face the voters. */
+ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
+   const sc = p.statecraft;
++  if (sc.laws.length > 0 || sc.highestTier >= 0) processNation(p, rng, notices);
+   driftMood(p, rng);
+   sc.endorsed = false;
+   sc.coalition = clamp(sc.coalition - 12);
+@@ -805,7 +783,14 @@ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
+       p.bankBalance += Math.round(PUNDIT_PAY * 0.75);
+       changeStat(p, "fame", 1);
+     }
+-    // A past corruption investigation can still catch up.
++    // A past corruption investigation can still catch up, and so can an incoming government's auditors.
++    sc.evidence = clamp(Math.round(sc.evidence * 0.96 - 1));
++    if (!sc.investigation && sc.bribes > 0 && sc.evidence >= 15 && rng.chance(sc.evidence / 500)) {
++      sc.investigation = { kind: "corruption", yearsLeft: rng.int(1, 2), evidence: clamp(Math.round(sc.evidence * 0.8) + rng.int(0, 15), 10, 90) };
++      const body = "The new government's auditors reopened the books on your time in office. Investigators have a subpoena for your accounts.";
++      addLog(p, body);
++      notices.push(info("Under Investigation", body, "bad"));
++    }
+     if (sc.investigation) resolveInvestigationYear(p, rng, notices, false);
+     if (sc.scandal && p.year - sc.scandal.year >= 2) sc.scandal = null;
+     return;
+@@ -821,7 +806,7 @@ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
+   const effort = p.effort === "grind" ? 3 : p.effort === "coast" ? -4 : 0;
+   const wins = (p.annual["pol:win"] ?? 0) * 3;
+   const drag = sc.scandal ? -sc.scandal.severity * 5 : 0;
+-  const delta = Math.round((45 - p.politics.popularity) * 0.2 + climate + effort + wins + (p.karma - 50) / 25 + drag - 2);
++  const delta = Math.round((45 - p.politics.popularity) * 0.2 + climate + effort + wins + (p.karma - 50) / 25 + drag - 2 + nationApproval(p));
+   p.politics.popularity = clamp(p.politics.popularity + delta);
+   if (effort < 0 && rng.chance(0.4)) {
+     const body = "The press noticed you are barely showing up to work. Absentee politicians don't last.";
+@@ -845,11 +830,12 @@ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
+     }
+   }
+ 
+-  // Corruption investigations.
++  // Corruption investigations: the paper trail is what opens them. Witnesses forget slowly, documents never do.
++  sc.evidence = clamp(Math.round(sc.evidence * 0.96 - 1));
+   if (!sc.investigation && sc.bribes > 0) {
+-    const open = clamp(0.03 + sc.bribes / (job.salary * 25), 0.03, 0.3);
++    const open = clamp(0.02 + sc.evidence / 220 + sc.bribes / (job.salary * 40), 0.02, 0.5);
+     if (rng.chance(open)) {
+-      sc.investigation = { kind: "corruption", yearsLeft: rng.int(1, 3), evidence: clamp(20 + rng.int(0, 25) + Math.round((sc.bribes / (job.salary * 10)) * 15), 10, 90) };
++      sc.investigation = { kind: "corruption", yearsLeft: rng.int(1, 3), evidence: clamp(Math.round(sc.evidence * 0.8) + rng.int(0, 20), 10, 90) };
+       const body = "Prosecutors opened a corruption investigation into your finances. Your lawyer says to say nothing.";
+       addLog(p, body);
+       notices.push(info("Under Investigation", body, "bad"));
+@@ -930,6 +916,7 @@ function resolveInvestigationYear(p: PlayerState, rng: Rng, notices: Notices, in
+   const tier = Math.max(0, sc.highestTier);
+   if (inv.evidence >= 65) {
+     sc.bribes = 0; // the proceeds booked when the money was taken are forfeited on conviction
++    sc.evidence = 0;
+     if (inOfficeNow) removeFromOffice(p, 0, 6);
+     startTrial(p, {
+       name: "Corruption in Office",
+@@ -942,12 +929,14 @@ function resolveInvestigationYear(p: PlayerState, rng: Rng, notices: Notices, in
+   } else if (inv.evidence >= 35) {
+     p.politics.popularity = clamp(p.politics.popularity - 15);
+     sc.machine = clamp(sc.machine - 20);
++    sc.evidence = Math.round(sc.evidence * 0.7);
+     const body = "The investigation ended without charges, but a formal censure was published. The stain stays.";
+     addLog(p, body);
+     notices.push(info("Censured", body, "bad"));
+   } else {
+     p.politics.popularity = clamp(p.politics.popularity + 6);
+     sc.bribes = Math.round(sc.bribes * 0.5);
++    sc.evidence = Math.round(sc.evidence * 0.5);
+     const body = "Investigators found nothing they could prove. You called it a witch hunt and the voters agreed.";
+     addLog(p, body);
+     notices.push(info("Cleared", body, "good"));
+diff --git a/src/engine/prison.ts b/src/engine/prison.ts
+index 61c8ea7..99a1a19 100644
+--- a/src/engine/prison.ts
++++ b/src/engine/prison.ts
+@@ -5,10 +5,9 @@
+ import type { ActionResult, PlayerState, PrisonState, Probation } from "@/types/game.types";
+ import type { Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+-import { lawFor } from "@/data/justiceCountries";
+ import { addLog, changeStat, clone, hasFlag, setFlag } from "./state";
+ import { hydratePrison } from "./justiceState";
+-import { addHeat, isViolentName, sealJuvenileRecord } from "./justice";
++import { addHeat, isViolentName, lawOf, sealJuvenileRecord } from "./justice";
+ import { killPlayer } from "./mortality";
+ 
+ type Notices = NonNullable<ActionResult["notices"]>;
+@@ -100,7 +99,7 @@ export function releaseFromPrison(p: PlayerState, kind: ReleaseKind, rng: Rng, n
+   let title = "Released!";
+   let tone: "good" | "jackpot" = "good";
+   if (kind === "exonerated") {
+-    const law = lawFor(p.residence.country);
++    const law = lawOf(p);
+     const pay = Math.round(served * law.compensation);
+     p.bankBalance += pay;
+     p.justice.exonerations += 1;
+@@ -441,7 +440,7 @@ export function attemptEscape(p0: PlayerState, pathId: string, rng: Rng): Action
+     return { player: p0, notices: [info("Too hot", "The guards are watching you closely this year.")] };
+   }
+   p.annual.escape = 1;
+-  const lawGuards = 1 / lawFor(p.residence.country).policing;
++  const lawGuards = 1 / lawOf(p).policing;
+   if (rng.chance(clamp((path.chance + (p.smarts - 50) / 800) * lawGuards + (pr.gang ? 0.04 : 0), 0.02, 0.4))) {
+     p.isInPrison = false;
+     p.isFugitive = true;
+diff --git a/src/engine/spy.ts b/src/engine/spy.ts
+index 1308337..c5cafeb 100644
+--- a/src/engine/spy.ts
++++ b/src/engine/spy.ts
+@@ -9,7 +9,8 @@ import { clamp, money } from "@/lib/format";
+ import { addLog, changeStat, clone, getPartner, setFlag } from "./state";
+ import { applyForJob, promoteJob } from "./career";
+ import { killPlayer } from "./mortality";
+-import { startTrial, DEATH_PENALTY } from "./crime";
++import { startTrial } from "./crime";
++import { lawOf } from "./justice";
+ import { freshSpy } from "./justiceState";
+ import { COUNTRIES } from "@/data/countries";
+ 
+@@ -356,7 +357,7 @@ export function processSpy(p: PlayerState, rng: Rng, notices: Notices) {
+         description: "Counter-intelligence traced the leaks to you. The money trail was thorough.",
+         years: 25,
+         severity: "heinous",
+-        capital: DEATH_PENALTY.has(p.residence.country),
++        capital: lawOf(p).deathPenalty,
+         evidence: 88,
+       });
+       notices.push(info("Mole Caught", "Counter-intelligence found the leak. It was you.", "bad"));
+diff --git a/src/types/game.types.ts b/src/types/game.types.ts
+index d07187b..173248b 100644
+--- a/src/types/game.types.ts
++++ b/src/types/game.types.ts
+@@ -1036,6 +1036,14 @@ export interface JusticeState {
+   programs: string[];
+   gangTies: string | null;
+   exonerations: number;
++  /** Turned state's evidence against people who do not forget. */
++  snitch: boolean;
++  /** Where you live after release: shapes supervision risk and relapse. */
++  housing: "stable" | "halfway" | "unstable";
++  /** Trust with your parole or probation officer, 0-100. */
++  officerTrust: number;
++  /** Years since you last committed a crime the police know of (drives early discharge). */
++  cleanYears: number;
+ }
+ 
+ export interface MobState {
+@@ -1059,6 +1067,28 @@ export interface MobState {
+   witsec: boolean;
+   /** The family wants you gone. */
+   marked: boolean;
++  /** Named people working under you. `crew` always equals the roster length. */
++  crewList: CrewMember[];
++  /** The place the family keeps for you while you serve time (null when you are not away). */
++  held: HeldPlace | null;
++}
++
++export interface CrewMember {
++  id: string;
++  name: string;
++  /** How much they will take for you before they take a deal, 0-100. */
++  loyalty: number;
++  /** Competence 0-100: improves the odds of jobs they join. */
++  skill: number;
++  /** Years in your crew. */
++  years: number;
++}
++
++export interface HeldPlace {
++  tier: number;
++  company: string;
++  /** Year the sentence began. */
++  year: number;
+ }
+ 
+ export interface SpyState {
+@@ -1077,6 +1107,10 @@ export interface SpyState {
+   secrets: number;
+   /** Told your partner what you do. */
+   partnerKnows: boolean;
++  /** Moral compass 0-100. Ruthless choices in the field wear it down; low conscience haunts you. */
++  conscience: number;
++  /** Operations that ended in a moral choice. */
++  dilemmas: number;
+ }
+ 
+ export interface Donor {
+@@ -1133,6 +1167,24 @@ export interface StatecraftState {
+   removed: number;
+   electionsWon: number;
+   electionsLost: number;
++  /** How the country is doing under your laws, 0-100 each (prosperity, health, environment, safety, liberty, finances). */
++  indicators: Record<string, number>;
++  /** Laws you passed that are still on the books. */
++  laws: EnactedLaw[];
++  /** The paper trail of your corruption, 0-100: what prosecutors can eventually prove. */
++  evidence: number;
++}
++
++/** A bill you got through the legislature. Effects ramp up over a few years. */
++export interface EnactedLaw {
++  id: string;
++  year: number;
++  /** Country whose statute book it changed. */
++  country: string;
++  /** 1 = passed as written, 0.5 = watered down in a compromise. */
++  power: number;
++  /** The office you held when it passed. */
++  tier: number;
+ }
+ 
+ export interface LifetimeStats {

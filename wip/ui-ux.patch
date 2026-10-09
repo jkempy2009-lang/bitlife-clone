@@ -1,0 +1,1652 @@
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 6bd0550..b8c402b 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -4,6 +4,11 @@
+   color-scheme: dark;
+ }
+ 
++/* Secondary text: Tailwind's slate-500 is below 4.5:1 on our dark surfaces; this keeps the hierarchy but passes AA. */
++:root {
++  --color-slate-500: #8291a8;
++}
++
+ body {
+   background: #0f172a;
+   color: #f1f5f9;
+@@ -38,4 +43,18 @@ html[data-motion="reduce"] *::after {
+ }
+ @media (prefers-reduced-motion: reduce) {
+   .banner-flash { animation: none; }
++  *, *::before, *::after {
++    animation-duration: 0.01ms !important;
++    animation-iteration-count: 1 !important;
++    transition-duration: 0.01ms !important;
++    scroll-behavior: auto !important;
++  }
++}
++
++/* Keyboard users always see where they are. */
++:focus-visible {
++  outline: 2px solid #34d399;
++  outline-offset: 2px;
+ }
++input[type="range"]:focus-visible,
++textarea:focus-visible { outline-offset: 1px; }
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 6b2b08d..23ac8ee 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -10,7 +10,6 @@ export const metadata: Metadata = {
+ export const viewport: Viewport = {
+   width: "device-width",
+   initialScale: 1,
+-  maximumScale: 1,
+   themeColor: "#0f172a",
+ };
+ 
+diff --git a/src/components/ActivitiesTab.tsx b/src/components/ActivitiesTab.tsx
+index a711caf..ea5e9c1 100644
+--- a/src/components/ActivitiesTab.tsx
++++ b/src/components/ActivitiesTab.tsx
+@@ -29,18 +29,21 @@ import type { Vices } from "@/types/game.types";
+ import { CRIMES, crimeMeta } from "@/data/crimes";
+ import { blackjackClear, blackjackDeal, blackjackHit, blackjackStand, handValue, type Card as PlayingCard } from "@/engine/blackjack";
+ import { money } from "@/lib/format";
++import { useSection } from "@/lib/nav";
+ import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
+ import ViolencePanel from "./ViolencePanel";
+ 
+ type Panel = "medical" | "wellness" | "hobbies" | "casino" | "crime" | "surgery" | "leisure";
++const PANELS: readonly Panel[] = ["medical", "wellness", "hobbies", "casino", "crime", "surgery", "leisure"];
+ 
+ export default function ActivitiesTab() {
+   const { player } = useGame();
+-  const [panel, setPanel] = useState<Panel>("wellness");
++  const [panel, setPanel] = useSection<Panel>("activities", PANELS, "wellness");
+   if (player.age < 6) return <TooYoung>You're too little for activities. Enjoy being a kid, and ask your parents for a cookie.</TooYoung>;
+   return (
+     <div>
+       <Segmented<Panel>
++        label="Activity sections"
+         value={panel}
+         onChange={setPanel}
+         options={[
+diff --git a/src/components/AssetsTab.tsx b/src/components/AssetsTab.tsx
+index 28683bc..376ef0e 100644
+--- a/src/components/AssetsTab.tsx
++++ b/src/components/AssetsTab.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { useMemo, useState } from "react";
++import { useMemo } from "react";
+ import { useGame } from "@/context/GameStateContext";
+ import { buyCar, buyHouse, carInventory, houseInventory, maxLoan, renovate, repayLoan, sellCar, sellHouse, takeLoan } from "@/engine/assets";
+ import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/data/assetsCatalog";
+@@ -8,17 +8,20 @@ import { money } from "@/lib/format";
+ import { SAVINGS_LEVELS, contributionFor, drawdownFor, withdrawRetirement, setSavingsLevel } from "@/engine/retirement";
+ import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
+ import { COUNTRIES } from "@/data/countries";
++import { useSection } from "@/lib/nav";
+ import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, LIFESTYLES, RENT_TIERS, divest, invest, portfolioValue, livesWithParents, relocate, setLifestyle, setRentTier, toggleFamilyHome } from "@/engine/world";
+ 
+ type Panel = "cars" | "homes" | "living" | "invest" | "bank";
++const PANELS: readonly Panel[] = ["cars", "homes", "living", "invest", "bank"];
+ 
+ export default function AssetsTab() {
+   const { player } = useGame();
+-  const [panel, setPanel] = useState<Panel>("cars");
++  const [panel, setPanel] = useSection<Panel>("assets", PANELS, "cars");
+   if (player.age < 16) return <TooYoung>Cars and houses can wait. Come back when you're 16 (or inherit a castle).</TooYoung>;
+   return (
+     <div>
+       <Segmented<Panel>
++        label="Asset sections"
+         value={panel}
+         onChange={setPanel}
+         options={[
+diff --git a/src/components/CareerTab.tsx b/src/components/CareerTab.tsx
+index cde2910..8d1d23a 100644
+--- a/src/components/CareerTab.tsx
++++ b/src/components/CareerTab.tsx
+@@ -32,6 +32,7 @@ import { royalStyleText } from "@/engine/royalty";
+ import { EFFORT_INFO, hasCommitment } from "@/engine/occupation";
+ import { CERTIFICATES, CERT_BY_ID } from "@/data/certificates";
+ import { money } from "@/lib/format";
++import { useSection } from "@/lib/nav";
+ import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
+ import { MovieStarSection } from "./career/MovieStarSection";
+ import { MusicSection } from "./career/MusicSection";
+@@ -39,11 +40,13 @@ import { CourtSection, FormerRoyalCard } from "./career/CourtSection";
+ import { AdultWorkSection, AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, SpySection, UnderworldSection } from "./CareerPaths";
+ 
+ type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "spy" | "adult" | "stardom" | "music";
++/** Sections the guide can deep-link to and the tab remembers (keep in step with `Section`). */
++const SECTION_IDS: readonly Section[] = ["work", "school", "business", "sports", "online", "politics", "underworld", "spy", "adult", "stardom", "music"];
+ 
+ export default function CareerTab() {
+   const { player: p } = useGame();
+   const royal = isRoyal(p);
+-  const [section, setSection] = useState<Section>(royal ? "work" : p.education.stage !== "None" && !p.currentJob ? "school" : "work");
++  const [picked, setSection] = useSection<Section>("career", SECTION_IDS, royal ? "work" : p.education.stage !== "None" && !p.currentJob ? "school" : "work");
+ 
+   if (p.age < 5) return <TooYoung>No career yet — your job is to nap, eat, and be adorable.</TooYoung>;
+   const options: { id: Section; label: string }[] = [
+@@ -55,10 +58,12 @@ export default function CareerTab() {
+     ...(royal ? [] : [{ id: "stardom" as const, label: "🎬 Movie Star" }]),
+     { id: "music", label: "🎸 Rock Star" },
+   ];
++  // A remembered section can vanish (mature content switched off, a crown acquired): fall back to Work.
++  const section: Section = options.some((o) => o.id === picked) ? picked : "work";
+   return (
+     <div>
+       <EffortCard />
+-      <Segmented<Section> value={section} onChange={setSection} options={options} />
++      <Segmented<Section> label="Career sections" value={section} onChange={setSection} options={options} />
+       {section === "work" && (royal ? <RoyalDuties /> : <CorporateCareer />)}
+       {section === "school" && <Academics />}
+       {section === "business" && <BusinessSection />}
+diff --git a/src/components/DashboardTab.tsx b/src/components/DashboardTab.tsx
+index 0bfde1c..113d96f 100644
+--- a/src/components/DashboardTab.tsx
++++ b/src/components/DashboardTab.tsx
+@@ -1,31 +1,18 @@
+ "use client";
+ 
+-import { useMemo } from "react";
++import { useMemo, useState } from "react";
+ import { useGame } from "@/context/GameStateContext";
+ import { money } from "@/lib/format";
+ import { netWorth, playerTitle } from "@/engine/state";
+ import { Card, Pill, SectionTitle, StatBar } from "./ui";
+ import { ACHIEVEMENTS } from "@/data/achievements";
+ import { AchievementGrid } from "./HallOfLives";
+-import { suggestTips } from "@/lib/tips";
++import { groupJournal } from "@/lib/journal";
++import { CoachCard, GlossarySheet, GuideCard } from "./Guide";
++import { JournalSheet, YearBlock } from "./Journal";
+ import { CHALLENGE_BY_ID } from "@/data/challenges";
+ import { activeStorylines } from "@/engine/storylines";
+ 
+-interface YearGroup {
+-  header: string;
+-  entries: string[];
+-}
+-
+-function groupLog(log: string[]): YearGroup[] {
+-  const groups: YearGroup[] = [];
+-  for (const line of log) {
+-    if (line.startsWith("## ")) groups.push({ header: line.slice(3), entries: [] });
+-    else if (groups.length) groups[groups.length - 1].entries.push(line);
+-    else groups.push({ header: "Prologue", entries: [line] });
+-  }
+-  return groups.reverse();
+-}
+-
+ function Delta({ label, v, isMoney }: { label: string; v: number; isMoney?: boolean }) {
+   if (v === 0) return null;
+   const good = v > 0;
+@@ -52,10 +39,12 @@ function LastYear({ y }: { y: NonNullable<ReturnType<typeof useGame>["player"]["
+ }
+ 
+ export default function DashboardTab() {
+-  const { player: p, setTab } = useGame();
+-  const tips = suggestTips(p);
++  const { player: p } = useGame();
++  const [glossary, setGlossary] = useState(false);
++  const [journal, setJournal] = useState(false);
+   const stories = activeStorylines(p);
+-  const groups = useMemo(() => groupLog(p.lifeLog), [p.lifeLog]);
++  const years = useMemo(() => groupJournal(p.lifeLog), [p.lifeLog]);
++  const recent = years.slice(0, 3);
+   const nw = netWorth(p);
+   const showFame = p.fame > 0 || p.specialCareers.length > 0 || p.royalRank !== "none";
+ 
+@@ -101,6 +90,11 @@ export default function DashboardTab() {
+ 
+       {/* Status bars */}
+       <Card>
++        <div className="-mt-1 mb-1.5 flex justify-end">
++          <button type="button" onClick={() => setGlossary(true)} className="rounded-lg px-2 py-1 text-xs font-semibold text-sky-300 hover:bg-slate-700/60">
++            ⓘ What do these mean?
++          </button>
++        </div>
+         <div className="grid grid-cols-2 gap-x-4">
+           <StatBar label="😊 Happiness" value={p.happiness} color="green" />
+           <StatBar label="❤️ Health" value={p.health} color="teal" />
+@@ -115,6 +109,9 @@ export default function DashboardTab() {
+ 
+       {p.lastYear && p.lastYear.age === p.age && <LastYear y={p.lastYear} />}
+ 
++      <CoachCard onGlossary={() => setGlossary(true)} />
++      <GuideCard />
++
+       <div className="grid grid-cols-3 gap-2 text-center">
+         <Card className="p-3">
+           <div className="text-[11px] uppercase text-slate-400">Cash</div>
+@@ -145,23 +142,6 @@ export default function DashboardTab() {
+         );
+       })()}
+ 
+-      {tips.length > 0 && (
+-        <div className="flex flex-col gap-1.5">
+-          {tips.map((t) => (
+-            <button
+-              key={t.text}
+-              type="button"
+-              onClick={() => setTab(t.tab)}
+-              className="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-left text-sm text-sky-100 transition-colors hover:bg-sky-500/20"
+-            >
+-              <span className="text-lg">{t.emoji}</span>
+-              <span className="flex-1">{t.text}</span>
+-              <span className="text-xs text-sky-300">Go →</span>
+-            </button>
+-          ))}
+-        </div>
+-      )}
+-
+       {stories.length > 0 && (
+         <div>
+           <SectionTitle hint="your choices echo">Ongoing storylines</SectionTitle>
+@@ -188,24 +168,21 @@ export default function DashboardTab() {
+       {/* Core feed */}
+       <div>
+         <SectionTitle hint="newest first">Life Story</SectionTitle>
+-        <div className="scroll-thin max-h-[52vh] overflow-y-auto rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3" aria-live="polite">
+-          {groups.map((g, i) => (
+-            <div key={`${g.header}-${i}`} className={i === 0 ? "" : "opacity-80"}>
+-              <div className={`sticky top-0 z-10 -mx-3 mb-1.5 mt-3 bg-slate-800/95 px-3 py-1 text-xs font-bold uppercase tracking-wider first:mt-0 ${i === 0 ? "text-emerald-300" : "text-slate-400"}`}>
+-                {g.header}
+-              </div>
+-              <ul className="space-y-1.5">
+-                {g.entries.map((e, j) => (
+-                  <li key={j} className="text-[14px] leading-snug text-slate-200">
+-                    {e}
+-                  </li>
+-                ))}
+-                {g.entries.length === 0 && <li className="text-sm italic text-slate-500">Nothing notable happened.</li>}
+-              </ul>
+-            </div>
++        <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3" aria-live="polite">
++          {recent.map((y, i) => (
++            <YearBlock key={`${y.header}-${i}`} year={y} current={i === 0} />
+           ))}
++          <button
++            type="button"
++            onClick={() => setJournal(true)}
++            className="mt-3 w-full rounded-xl border border-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-700/60"
++          >
++            📖 Open the full journal · {years.length} {years.length === 1 ? "year" : "years"}
++          </button>
+         </div>
+       </div>
++      {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
++      {journal && <JournalSheet log={p.lifeLog} onClose={() => setJournal(false)} />}
+     </div>
+   );
+ }
+diff --git a/src/components/Guide.tsx b/src/components/Guide.tsx
+new file mode 100644
+index 0000000..ea59bd0
+--- /dev/null
++++ b/src/components/Guide.tsx
+@@ -0,0 +1,143 @@
++"use client";
++
++import { useState } from "react";
++import { useGame } from "@/context/GameStateContext";
++import { GLOSSARY, HOW_TO_PLAY } from "@/lib/glossary";
++import { dismissCoach, useCoachVisible } from "@/lib/coach";
++import { lifeStage, yearGuide, type GuideItem, type GuideKind } from "@/lib/guide";
++import { requestSection } from "@/lib/nav";
++import { Button, Modal } from "./ui";
++
++const KIND_STYLE: Record<GuideKind, { ring: string; tag: string; tagText: string }> = {
++  urgent: { ring: "border-rose-500/50 bg-rose-500/10 hover:bg-rose-500/20", tag: "bg-rose-900/70 text-rose-200", tagText: "Needs attention" },
++  chance: { ring: "border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20", tag: "bg-emerald-900/70 text-emerald-200", tagText: "Opportunity" },
++  routine: { ring: "border-slate-600 bg-slate-800/60 hover:bg-slate-700/60", tag: "bg-slate-700 text-slate-300", tagText: "Routine" },
++};
++
++const TAB_NAME: Record<string, string> = { relationships: "People", activities: "Activities", career: "Career", assets: "Assets", dashboard: "" };
++
++/** "This year": what is worth doing right now for this age and situation, each one tap away. */
++export function GuideCard() {
++  const { player: p, setTab } = useGame();
++  const [all, setAll] = useState(false);
++  const items = yearGuide(p);
++  const stage = lifeStage(p);
++  const shown = all ? items : items.slice(0, 3);
++  const go = (i: GuideItem) => {
++    if (i.tab === "dashboard") return;
++    requestSection(i.tab, i.section);
++    setTab(i.tab);
++  };
++  return (
++    <section aria-labelledby="guide-h" className="rounded-2xl border border-slate-700/60 bg-slate-800/60 p-3">
++      <div className="mb-2 flex items-baseline justify-between gap-2">
++        <h3 id="guide-h" className="text-sm font-semibold uppercase tracking-wider text-slate-300">This year</h3>
++        <span className="truncate text-xs text-slate-400">{stage.label}</span>
++      </div>
++      <p className="mb-2 text-xs text-slate-400">{stage.blurb}</p>
++      {items.length === 0 ? (
++        <p className="rounded-xl bg-slate-900/50 px-3 py-2 text-sm text-slate-300">Nothing pressing. Age Up when you are ready.</p>
++      ) : (
++        <ul className="flex flex-col gap-1.5">
++          {shown.map((i) => {
++            const st = KIND_STYLE[i.kind];
++            const body = (
++              <>
++                <span className="text-xl leading-none" aria-hidden="true">{i.emoji}</span>
++                <span className="min-w-0 flex-1">
++                  <span className="block text-sm font-semibold text-slate-100">{i.title}</span>
++                  {i.detail && <span className="block text-xs text-slate-300">{i.detail}</span>}
++                </span>
++                {i.tab !== "dashboard" && (
++                  <span className="shrink-0 text-right">
++                    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.tag}`}>{st.tagText}</span>
++                    <span className="mt-0.5 block text-xs text-slate-300">{TAB_NAME[i.tab]} →</span>
++                  </span>
++                )}
++              </>
++            );
++            return (
++              <li key={i.id}>
++                {i.tab === "dashboard" ? (
++                  <div className="flex items-center gap-2.5 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2.5">{body}</div>
++                ) : (
++                  <button type="button" onClick={() => go(i)} className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${st.ring}`}>
++                    {body}
++                  </button>
++                )}
++              </li>
++            );
++          })}
++        </ul>
++      )}
++      {items.length > 3 && (
++        <button type="button" aria-expanded={all} onClick={() => setAll((v) => !v)} className="mt-2 w-full rounded-lg py-2 text-xs font-semibold text-slate-300 underline-offset-2 hover:underline">
++          {all ? "Show fewer" : `Show ${items.length - 3} more ideas`}
++        </button>
++      )}
++    </section>
++  );
++}
++
++/** First-run card. Shown once per browser until dismissed; the glossary stays reachable from the Life tab and Settings. */
++export function CoachCard({ onGlossary }: { onGlossary: () => void }) {
++  const visible = useCoachVisible();
++  if (!visible) return null;
++  return (
++    <section aria-labelledby="coach-h" className="rounded-2xl border border-sky-500/40 bg-sky-500/10 p-3">
++      <h3 id="coach-h" className="text-sm font-bold text-sky-100">Getting started</h3>
++      <ol className="mt-2 flex flex-col gap-1.5">
++        {HOW_TO_PLAY.map((s, n) => (
++          <li key={s.title} className="flex gap-2.5 text-sm text-slate-200">
++            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-900 text-[11px] font-bold text-sky-200" aria-hidden="true">{n + 1}</span>
++            <span>
++              <span className="font-semibold">{s.title}.</span> <span className="text-slate-300">{s.text}</span>
++            </span>
++          </li>
++        ))}
++      </ol>
++      <div className="mt-3 grid grid-cols-2 gap-2">
++        <Button variant="ghost" onClick={onGlossary}>What do the stats mean?</Button>
++        <Button variant="primary" onClick={dismissCoach}>Got it</Button>
++      </div>
++    </section>
++  );
++}
++
++/** Reference sheet: how to play and what every stat means. */
++export function GlossarySheet({ onClose }: { onClose: () => void }) {
++  const groups = ["Vitals", "Money", "People", "How it works"] as const;
++  return (
++    <Modal label="How to play and glossary" onClose={onClose} className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/85 p-3 sm:items-center">
++      <div className="pop-in flex max-h-[90dvh] w-full max-w-md flex-col rounded-3xl border border-slate-600 bg-slate-800">
++        <div className="flex items-center justify-between gap-2 border-b border-slate-700 px-5 py-3">
++          <h2 className="text-lg font-bold">How to play</h2>
++          <Button variant="ghost" className="px-3 py-1.5" onClick={onClose} data-autofocus>Close</Button>
++        </div>
++        <div className="scroll-thin overflow-y-auto px-5 pb-5 pt-3">
++          <ol className="mb-4 flex flex-col gap-2">
++            {HOW_TO_PLAY.map((s) => (
++              <li key={s.title} className="flex gap-2.5 text-sm">
++                <span aria-hidden="true">{s.emoji}</span>
++                <span><span className="font-semibold">{s.title}.</span> <span className="text-slate-300">{s.text}</span></span>
++              </li>
++            ))}
++          </ol>
++          {groups.map((g) => (
++            <div key={g} className="mt-4">
++              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{g}</h3>
++              <dl className="flex flex-col gap-2">
++                {GLOSSARY.filter((e) => e.group === g).map((e) => (
++                  <div key={e.id} className="rounded-xl bg-slate-900/50 p-2.5">
++                    <dt className="text-sm font-semibold"><span aria-hidden="true">{e.emoji}</span> {e.term}</dt>
++                    <dd className="mt-0.5 text-xs leading-relaxed text-slate-300">{e.text}</dd>
++                  </div>
++                ))}
++              </dl>
++            </div>
++          ))}
++        </div>
++      </div>
++    </Modal>
++  );
++}
+diff --git a/src/components/HallOfLives.tsx b/src/components/HallOfLives.tsx
+index ef1cc1f..78174ac 100644
+--- a/src/components/HallOfLives.tsx
++++ b/src/components/HallOfLives.tsx
+@@ -5,7 +5,7 @@ import { ACHIEVEMENTS } from "@/data/achievements";
+ import { CHALLENGES } from "@/data/challenges";
+ import { clearHall, hallServerSnapshot, readHall, subscribeHall } from "@/engine/hall";
+ import { money } from "@/lib/format";
+-import { Button, Card, SectionTitle } from "./ui";
++import { Button, Card, Modal, SectionTitle } from "./ui";
+ 
+ export function useHall() {
+   return useSyncExternalStore(subscribeHall, readHall, hallServerSnapshot);
+@@ -34,11 +34,11 @@ export function AchievementGrid({ unlocked }: { unlocked: string[] }) {
+ export default function HallOfLives({ onClose }: { onClose: () => void }) {
+   const hall = useHall();
+   return (
+-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/95">
+-      <div className="mx-auto max-w-md p-4">
++    <Modal label="Hall of Lives" onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/95">
++      <div className="mx-auto max-w-md p-4 sm:max-w-2xl">
+         <div className="mb-3 flex items-center justify-between">
+           <h2 className="text-xl font-black">🏆 Hall of Lives</h2>
+-          <Button variant="ghost" className="px-3 py-1.5" onClick={onClose}>Close</Button>
++          <Button variant="ghost" className="px-3 py-1.5" onClick={onClose} data-autofocus>Close</Button>
+         </div>
+         <SectionTitle hint={`${hall.achievements.length}/${ACHIEVEMENTS.length} unlocked`}>Achievements</SectionTitle>
+         <AchievementGrid unlocked={hall.achievements} />
+@@ -79,6 +79,6 @@ export default function HallOfLives({ onClose }: { onClose: () => void }) {
+           </button>
+         )}
+       </div>
+-    </div>
++    </Modal>
+   );
+-}
++}
+\ No newline at end of file
+diff --git a/src/components/Journal.tsx b/src/components/Journal.tsx
+new file mode 100644
+index 0000000..86ad235
+--- /dev/null
++++ b/src/components/Journal.tsx
+@@ -0,0 +1,102 @@
++"use client";
++
++import { useDeferredValue, useMemo, useState } from "react";
++import { countEntries, filterJournal, groupJournal, type JournalFilter, type JournalYear } from "@/lib/journal";
++import { Button, Modal, Segmented } from "./ui";
++
++export function YearBlock({ year, current, highlight }: { year: JournalYear; current?: boolean; highlight?: string }) {
++  const mark = (text: string) => {
++    const q = highlight?.trim();
++    if (!q) return text;
++    const at = text.toLowerCase().indexOf(q.toLowerCase());
++    if (at < 0) return text;
++    return (
++      <>
++        {text.slice(0, at)}
++        <mark className="rounded bg-amber-400/30 px-0.5 text-amber-100">{text.slice(at, at + q.length)}</mark>
++        {text.slice(at + q.length)}
++      </>
++    );
++  };
++  return (
++    <div className={current === false ? "opacity-90" : ""}>
++      <h4 className={`sticky top-0 z-10 -mx-3 mb-1.5 mt-3 bg-slate-800/95 px-3 py-1 text-xs font-bold uppercase tracking-wider first:mt-0 ${current ? "text-emerald-300" : "text-slate-300"}`}>{year.header}</h4>
++      <ul className="space-y-1.5">
++        {year.entries.map((e, j) => (
++          <li key={j} className={`text-[14px] leading-snug ${e.milestone ? "font-medium text-slate-50" : "text-slate-200"}`}>
++            {e.milestone && <span aria-label="Milestone" className="mr-1 text-amber-300">★</span>}
++            {mark(e.text)}
++          </li>
++        ))}
++        {year.entries.length === 0 && <li className="text-sm italic text-slate-400">Nothing notable happened.</li>}
++      </ul>
++    </div>
++  );
++}
++
++const PAGE = 12;
++
++/** Full, searchable life journal. */
++export function JournalSheet({ log, onClose }: { log: string[]; onClose: () => void }) {
++  const [query, setQuery] = useState("");
++  const [filter, setFilter] = useState<JournalFilter>("all");
++  const [pages, setPages] = useState(1);
++  const deferred = useDeferredValue(query);
++  const years = useMemo(() => groupJournal(log), [log]);
++  const hits = useMemo(() => filterJournal(years, deferred, filter), [years, deferred, filter]);
++  const shown = hits.slice(0, pages * PAGE);
++  const total = countEntries(hits);
++  return (
++    <Modal label="Life journal" onClose={onClose} className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/90 p-0 sm:items-center sm:p-4">
++      <div className="pop-in flex h-[94dvh] w-full max-w-2xl flex-col rounded-t-3xl border border-slate-600 bg-slate-800 sm:h-[88dvh] sm:rounded-3xl">
++        <div className="flex items-center justify-between gap-2 px-4 pt-3">
++          <h2 className="text-lg font-bold">Life journal</h2>
++          <Button variant="ghost" className="px-3 py-1.5" onClick={onClose} data-autofocus>Close</Button>
++        </div>
++        <div className="px-4 pt-2">
++          <input
++            type="search"
++            value={query}
++            onChange={(e) => {
++              setQuery(e.target.value);
++              setPages(1);
++            }}
++            placeholder="Search your life: a name, a year, a word…"
++            aria-label="Search your life journal"
++            className="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100 outline-none placeholder:text-slate-500 focus:border-emerald-500"
++          />
++          <div className="mt-2">
++            <Segmented<JournalFilter>
++              onPanel
++              label="Journal filter"
++              value={filter}
++              onChange={(f) => {
++                setFilter(f);
++                setPages(1);
++              }}
++              options={[
++                { id: "all", label: "Everything" },
++                { id: "milestones", label: "★ Milestones" },
++                { id: "people", label: "💞 People" },
++                { id: "money", label: "💰 Money" },
++                { id: "health", label: "🩺 Health" },
++              ]}
++            />
++          </div>
++          <div className="mb-1 text-xs text-slate-400" aria-live="polite">{total} {total === 1 ? "entry" : "entries"}{deferred.trim() ? ` matching “${deferred.trim()}”` : ""}</div>
++        </div>
++        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-4 pb-4">
++          {shown.map((y, i) => (
++            <YearBlock key={`${y.header}-${i}`} year={y} current={i === 0 && !deferred && filter === "all"} highlight={deferred} />
++          ))}
++          {hits.length > shown.length && (
++            <Button variant="ghost" className="mt-3 w-full" onClick={() => setPages((n) => n + 1)}>
++              Show older years ({hits.length - shown.length} more)
++            </Button>
++          )}
++          {hits.length === 0 && <p className="mt-6 text-center text-sm text-slate-400">Nothing in your story matches that yet.</p>}
++        </div>
++      </div>
++    </Modal>
++  );
++}
+diff --git a/src/components/ModalManager.tsx b/src/components/ModalManager.tsx
+index b8ccafb..7fcadd7 100644
+--- a/src/components/ModalManager.tsx
++++ b/src/components/ModalManager.tsx
+@@ -1,11 +1,12 @@
+ "use client";
+ 
+ import { useGame } from "@/context/GameStateContext";
+-import { fillTokens, canAfford, optionCost } from "@/engine/events";
++import { fillTokens, canAfford } from "@/engine/events";
+ import { money, signed } from "@/lib/format";
++import { previewOption } from "@/lib/preview";
+ import type { Tone } from "@/types/game.types";
+ import type { EventCategory } from "@/data/lifeEventsEngine";
+-import { Button } from "./ui";
++import { Button, Modal } from "./ui";
+ 
+ const CATEGORY_EMOJI: Record<EventCategory, string> = {
+   general: "🌟",
+@@ -29,22 +30,26 @@ const TONE_STYLES: Record<Tone, { ring: string; title: string; emoji: string }>
+   surgery: { ring: "border-fuchsia-500/60", title: "text-fuchsia-300", emoji: "💉" },
+ };
+ 
++const ODDS_STYLE = { likely: "text-emerald-300", "toss-up": "text-amber-300", "long shot": "text-rose-300" } as const;
++
+ /** Universal modal: life events, choices, surgeries and text feedback. */
+ export default function ModalManager() {
+   const { state, player, resolveEvent, dismissNotice } = useGame();
+   const notice = state.notices[0];
+   if (!notice) return null;
++  const waiting = state.notices.length - 1;
++  const infoWaiting = state.notices.slice(1).filter((n) => n.kind === "info");
++  const label = notice.kind === "event" ? notice.event.title : notice.title;
+ 
+   return (
+-    <div
+-      className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:items-center"
+-      role="dialog"
+-      aria-modal="true"
+-    >
+-      <div className="pop-in max-h-[88vh] w-full max-w-md overflow-y-auto rounded-3xl">
++    <Modal label={label} focusKey={notice.id} className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:items-center">
++      <div className="pop-in max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl">
+         {notice.kind === "event" ? (
+           <div className="rounded-3xl border border-slate-600 bg-slate-800 p-5 shadow-2xl">
+-            <div className="mb-1 text-3xl">{CATEGORY_EMOJI[notice.event.category]}</div>
++            <div className="mb-1 flex items-start justify-between">
++              <span className="text-3xl" aria-hidden="true">{CATEGORY_EMOJI[notice.event.category]}</span>
++              <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-300">Age {player.age}{waiting > 0 ? ` · ${waiting} more after this` : ""}</span>
++            </div>
+             <h2 className="text-xl font-bold text-slate-50">{notice.event.title}</h2>
+             <p className="mb-4 mt-2 text-[15px] leading-relaxed text-slate-300">
+               {fillTokens(notice.event.description, player)}
+@@ -52,17 +57,25 @@ export default function ModalManager() {
+             <div className="flex flex-col gap-2">
+               {notice.event.options.map((opt, i) => {
+                 const affordable = canAfford(player, opt);
+-                const cost = optionCost(opt);
++                const pv = previewOption(opt);
+                 return (
+                   <button
+                     key={i}
+                     type="button"
+                     disabled={!affordable}
+                     onClick={() => resolveEvent(notice.id, i)}
+-                    className="rounded-xl border border-slate-600 bg-slate-700/70 px-4 py-3 text-left text-[15px] font-medium text-slate-100 transition-colors hover:border-emerald-500 hover:bg-slate-700 active:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
++                    className="rounded-xl border border-slate-600 bg-slate-700/70 px-4 py-3 text-left text-[15px] font-medium text-slate-100 transition-colors hover:border-emerald-500 hover:bg-slate-700 active:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                   >
+                     {fillTokens(opt.text, player)}
+-                    {!affordable && cost > 0 && <span className="ml-2 text-xs text-rose-300">(need {money(cost)})</span>}
++                    {(pv.cost > 0 || pv.odds || pv.warnings.length > 0) && (
++                      <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs font-semibold">
++                        {pv.cost > 0 && <span className={affordable ? "text-amber-300" : "text-rose-300"}>{affordable ? `Costs ${money(pv.cost)}` : `Need ${money(pv.cost)}`}</span>}
++                        {pv.odds && <span className={ODDS_STYLE[pv.odds]}>🎲 {pv.odds === "likely" ? "Likely to work" : pv.odds === "toss-up" ? "Toss-up" : "Long shot"}</span>}
++                        {pv.warnings.map((w) => (
++                          <span key={w} className="text-rose-300">{w}</span>
++                        ))}
++                      </span>
++                    )}
+                   </button>
+                 );
+               })}
+@@ -70,7 +83,10 @@ export default function ModalManager() {
+           </div>
+         ) : (
+           <div className={`rounded-3xl border bg-slate-800 p-5 shadow-2xl ${TONE_STYLES[notice.tone].ring}`}>
+-            <div className="mb-1 text-3xl">{TONE_STYLES[notice.tone].emoji}</div>
++            <div className="mb-1 flex items-start justify-between">
++              <span className="text-3xl" aria-hidden="true">{TONE_STYLES[notice.tone].emoji}</span>
++              {waiting > 0 && <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-300">{waiting} more after this</span>}
++            </div>
+             <h2 className={`text-xl font-bold ${TONE_STYLES[notice.tone].title}`}>{notice.title}</h2>
+             <p className="mb-4 mt-2 whitespace-pre-line text-[15px] leading-relaxed text-slate-300">{notice.body}</p>
+             {notice.chips && notice.chips.length > 0 && (
+@@ -87,12 +103,23 @@ export default function ModalManager() {
+                 ))}
+               </div>
+             )}
+-            <Button variant="primary" className="w-full py-3 text-base" onClick={() => dismissNotice(notice.id)}>
++            <Button variant="primary" className="w-full py-3 text-base" onClick={() => dismissNotice(notice.id)} data-autofocus>
+               Continue
+             </Button>
++            {infoWaiting.length >= 2 && (
++              <button
++                type="button"
++                onClick={() => {
++                  for (const n of state.notices) if (n.kind === "info") dismissNotice(n.id);
++                }}
++                className="mt-2 w-full rounded-lg py-2 text-xs font-semibold text-slate-400 hover:text-slate-200"
++              >
++                Skip {infoWaiting.length + 1} updates (they stay in your Life Story)
++              </button>
++            )}
+           </div>
+         )}
+       </div>
+-    </div>
++    </Modal>
+   );
+ }
+diff --git a/src/components/StartScreen.tsx b/src/components/StartScreen.tsx
+index 562883f..ef256c9 100644
+--- a/src/components/StartScreen.tsx
++++ b/src/components/StartScreen.tsx
+@@ -1,9 +1,11 @@
+ "use client";
+ 
+-import { useState } from "react";
++import { useState, useSyncExternalStore } from "react";
+ import { useGame } from "@/context/GameStateContext";
+ import { COUNTRIES } from "@/data/countries";
+ import type { NewLifeOptions } from "@/engine/state";
++import { saveSummary, subscribeSave } from "@/engine/save";
++import { money } from "@/lib/format";
+ import { Button } from "./ui";
+ import HallOfLives, { useHall } from "./HallOfLives";
+ import { ACHIEVEMENTS } from "@/data/achievements";
+@@ -34,6 +36,7 @@ export default function StartScreen() {
+   const [challenging, setChallenging] = useState(false);
+   const [showHall, setShowHall] = useState(false);
+   const hall = useHall();
++  const saved = useSyncExternalStore(subscribeSave, saveSummary, () => null);
+   const [firstName, setFirstName] = useState("");
+   const [lastName, setLastName] = useState("");
+   const [gender, setGender] = useState<NonNullable<NewLifeOptions["gender"]>>("random");
+@@ -86,8 +89,13 @@ export default function StartScreen() {
+         ) : !designing ? (
+           <div className="flex flex-col gap-3">
+             {hasSave && (
+-              <Button variant="primary" className="py-3.5 text-base" onClick={continueSave}>
++              <Button variant="primary" className="py-3 text-base" onClick={continueSave}>
+                 ▶ Continue Your Life
++                {saved && (
++                  <span className="block text-xs font-normal text-emerald-100">
++                    {saved.name}, {saved.alive ? `age ${saved.age}` : `died at ${saved.age}`} · {saved.title} · Gen {saved.generation} · {money(saved.netWorth)}
++                  </span>
++                )}
+               </Button>
+             )}
+             <Button variant={hasSave ? "secondary" : "primary"} className="py-3.5 text-base" onClick={() => newGame({ scenario: "random" })}>
+@@ -103,7 +111,7 @@ export default function StartScreen() {
+               🏆 Hall of Lives · {hall.achievements.length}/{ACHIEVEMENTS.length}
+             </Button>
+             {hasSave && (
+-              <button type="button" className="mt-1 text-xs text-slate-500 underline" onClick={deleteSave}>
++              <button type="button" className="mt-1 py-2 text-xs text-slate-400 underline" onClick={() => { if (confirm("Delete your saved life for good? This can't be undone. Export a backup from Settings first if you might want it.")) deleteSave(); }}>
+                 Delete saved game
+               </button>
+             )}
+diff --git a/src/components/TombstoneOverlay.tsx b/src/components/TombstoneOverlay.tsx
+index d550a95..f93d21f 100644
+--- a/src/components/TombstoneOverlay.tsx
++++ b/src/components/TombstoneOverlay.tsx
+@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
+ import { useGame } from "@/context/GameStateContext";
+ import { epitaph, heirs, lifeStoryText, summarize } from "@/engine/legacy";
+ import { money } from "@/lib/format";
+-import { Button } from "./ui";
++import { Button, Modal } from "./ui";
+ import LifeChart from "./LifeChart";
++import { JournalSheet } from "./Journal";
+ 
+ /** Endgame overlay: pauses all engine operations until the player chooses what to do next. */
+ export default function TombstoneOverlay() {
+@@ -27,7 +28,8 @@ export default function TombstoneOverlay() {
+   };
+ 
+   return (
+-    <div className="fixed inset-0 z-50 overflow-y-auto bg-gradient-to-b from-slate-950 via-slate-900 to-black">
++    <>
++    <Modal label={`${p.firstName} ${p.lastName} has died`} className="fixed inset-0 z-50 overflow-y-auto bg-slate-950 bg-gradient-to-b from-slate-950 via-slate-900 to-black">
+       <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center p-5">
+         <div className="pop-in w-full">
+           {/* Tombstone */}
+@@ -86,16 +88,17 @@ export default function TombstoneOverlay() {
+               <Button variant="primary" className="w-full" onClick={() => { quitToMenu(); }}>
+                 🌱 Start a New Life
+               </Button>
+-              <Button variant="ghost" className="w-full" onClick={() => setShowLog((s) => !s)}>
+-                {showLog ? "Hide" : "Read"} your life story
++              <Button variant="ghost" className="w-full" onClick={() => setShowLog(true)}>
++                📖 Read your life story
+               </Button>
+               <Button variant="secondary" className="w-full" onClick={copyStory}>
+                 {copied ? "✅ Copied!" : "📋 Copy life story"}
+               </Button>
+               <button
+                 type="button"
+-                className="text-xs text-slate-500 underline"
++                className="py-2.5 text-xs text-slate-400 underline"
+                 onClick={() => {
++                  if (!confirm("Delete this save for good? Your Hall of Lives keeps this life, but you can't continue it.")) return;
+                   deleteSave();
+                   quitToMenu();
+                 }}
+@@ -123,17 +126,10 @@ export default function TombstoneOverlay() {
+             </div>
+           )}
+ 
+-          {showLog && (
+-            <div className="scroll-thin mt-4 max-h-72 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900/80 p-3 text-sm">
+-              {[...p.lifeLog].reverse().map((l, i) => (
+-                <div key={i} className={l.startsWith("## ") ? "mt-2 text-xs font-bold uppercase text-emerald-300" : "text-slate-300"}>
+-                  {l.startsWith("## ") ? l.slice(3) : l}
+-                </div>
+-              ))}
+-            </div>
+-          )}
+         </div>
+       </div>
+-    </div>
++    </Modal>
++    {showLog && <JournalSheet log={p.lifeLog} onClose={() => setShowLog(false)} />}
++    </>
+   );
+ }
+diff --git a/src/components/TrialView.tsx b/src/components/TrialView.tsx
+index 7374a94..2a88fb1 100644
+--- a/src/components/TrialView.tsx
++++ b/src/components/TrialView.tsx
+@@ -5,7 +5,7 @@ import { bribeChance, bribeCost, postBail, bribeOfficial, representationOptions,
+ import { RECORD_LABEL, bailFee, expectedYears, recordLevel } from "@/engine/justice";
+ import { lawFor } from "@/data/justiceCountries";
+ import { money } from "@/lib/format";
+-import { StatBar } from "./ui";
++import { Modal, StatBar } from "./ui";
+ 
+ const strength = (e: number) => (e >= 75 ? "Overwhelming" : e >= 60 ? "Strong" : e >= 40 ? "Moderate" : "Weak");
+ 
+@@ -23,7 +23,7 @@ export default function TrialView() {
+   const canBribe = !charge.juvenile && law.corruption >= 0.15;
+   const bribeBlock = (p.annual.bribe ?? 0) >= 1 ? "You already tried this year." : bribeCost(p, charge) > p.bankBalance ? `You can't afford ${money(bribeCost(p, charge))}.` : null;
+   return (
+-    <div className="fixed inset-0 z-30 overflow-y-auto bg-gradient-to-b from-slate-950 via-rose-950/60 to-slate-950">
++    <Modal label={charge.juvenile ? "Juvenile court" : "Your trial"} className="fixed inset-0 z-30 overflow-y-auto bg-slate-950 bg-gradient-to-b from-slate-950 via-rose-950/60 to-slate-950">
+       <div className="mx-auto flex min-h-full max-w-md flex-col justify-center p-5">
+         <div className="pop-in">
+           <div className="text-center text-5xl">{charge.juvenile ? "🧒" : "⚖️"}</div>
+@@ -111,6 +111,6 @@ export default function TrialView() {
+           )}
+         </div>
+       </div>
+-    </div>
++    </Modal>
+   );
+ }
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index 3ca93c2..c6189ea 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import type { ButtonHTMLAttributes, ReactNode } from "react";
++import { useEffect, useRef, useState, type ButtonHTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
+ 
+ export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+   return <div className={`rounded-2xl border border-slate-700/60 bg-slate-800/70 p-4 ${className}`}>{children}</div>;
+@@ -18,7 +18,7 @@ export function SectionTitle({ children, hint }: { children: ReactNode; hint?: s
+ type Variant = "primary" | "secondary" | "danger" | "ghost" | "gold";
+ 
+ const VARIANTS: Record<Variant, string> = {
+-  primary: "bg-emerald-600 text-white hover:bg-emerald-500 active:bg-emerald-700",
++  primary: "bg-emerald-700 text-white hover:bg-emerald-600 active:bg-emerald-800",
+   secondary: "bg-slate-700 text-slate-100 hover:bg-slate-600 active:bg-slate-800",
+   danger: "bg-rose-700 text-white hover:bg-rose-600 active:bg-rose-800",
+   ghost: "bg-transparent text-slate-300 hover:bg-slate-700/60 border border-slate-600",
+@@ -111,25 +111,135 @@ export function Segmented<T extends string>({
+   options,
+   value,
+   onChange,
++  label,
++  onPanel = false,
+ }: {
+   options: { id: T; label: string }[];
+   value: T;
+   onChange: (v: T) => void;
++  label?: string;
++  /** True when the chips sit on a slate-800 panel (modal) rather than the page background. */
++  onPanel?: boolean;
++}) {
++  const row = useRef<HTMLDivElement>(null);
++  const [more, setMore] = useState(false);
++  // Tell the player there are more chips off-screen, and keep the active one in view.
++  useEffect(() => {
++    const el = row.current;
++    if (!el) return;
++    const measure = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
++    const active = el.querySelector<HTMLElement>("[aria-pressed=true]");
++    if (active && (active.offsetLeft < el.scrollLeft || active.offsetLeft + active.offsetWidth > el.scrollLeft + el.clientWidth)) {
++      el.scrollLeft = Math.max(0, active.offsetLeft - 16);
++    }
++    measure();
++    el.addEventListener("scroll", measure, { passive: true });
++    window.addEventListener("resize", measure);
++    return () => {
++      el.removeEventListener("scroll", measure);
++      window.removeEventListener("resize", measure);
++    };
++  }, [value, options.length]);
++  return (
++    <div className="relative -mx-1 mb-3">
++      <div ref={row} role="group" aria-label={label ?? "Sections"} className="scroll-thin flex gap-1.5 overflow-x-auto px-1 pb-1">
++        {options.map((o) => (
++          <button
++            key={o.id}
++            type="button"
++            aria-pressed={value === o.id}
++            onClick={() => onChange(o.id)}
++            className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
++              value === o.id ? "bg-emerald-700 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
++            }`}
++          >
++            {o.label}
++          </button>
++        ))}
++      </div>
++      {more && (
++        <div aria-hidden="true" className={`pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-end bg-gradient-to-l ${onPanel ? "from-slate-800 via-slate-800/80" : "from-slate-900 via-slate-900/80"} to-transparent pb-1 pr-1.5 text-lg font-bold text-slate-300`}>
++          ›
++        </div>
++      )}
++    </div>
++  );
++}
++
++const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
++
++/**
++ * Accessible overlay: role=dialog, labelled, Escape to close (when `onClose` is given), Tab stays inside,
++ * focus moves in on open (to `[data-autofocus]` or the dialog itself) and returns to where it was on close.
++ * Change `focusKey` to move focus again when the content swaps (e.g. the next notice in a queue).
++ */
++export function Modal({
++  children,
++  onClose,
++  label,
++  className = "",
++  focusKey,
++}: {
++  children: ReactNode;
++  onClose?: () => void;
++  label: string;
++  className?: string;
++  focusKey?: string;
+ }) {
++  const ref = useRef<HTMLDivElement>(null);
++  const opener = useRef<HTMLElement | null>(null);
++  useEffect(() => {
++    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
++    return () => {
++      const el = opener.current;
++      if (el && el.isConnected) el.focus({ preventScroll: true });
++    };
++  }, []);
++  useEffect(() => {
++    const root = ref.current;
++    if (!root) return;
++    const target = root.querySelector<HTMLElement>("[data-autofocus]") ?? root;
++    target.focus({ preventScroll: true });
++  }, [focusKey]);
++  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
++    if (e.key === "Escape" && onClose) {
++      e.stopPropagation();
++      onClose();
++      return;
++    }
++    if (e.key !== "Tab") return;
++    const root = ref.current;
++    if (!root) return;
++    const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null);
++    if (items.length === 0) {
++      e.preventDefault();
++      return;
++    }
++    const first = items[0];
++    const last = items[items.length - 1];
++    const active = document.activeElement;
++    if (e.shiftKey && (active === first || active === root)) {
++      e.preventDefault();
++      last.focus();
++    } else if (!e.shiftKey && active === last) {
++      e.preventDefault();
++      first.focus();
++    }
++  };
+   return (
+-    <div className="scroll-thin -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+-      {options.map((o) => (
+-        <button
+-          key={o.id}
+-          type="button"
+-          onClick={() => onChange(o.id)}
+-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+-            value === o.id ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+-          }`}
+-        >
+-          {o.label}
+-        </button>
+-      ))}
++    <div
++      ref={ref}
++      role="dialog"
++      aria-modal="true"
++      aria-label={label}
++      tabIndex={-1}
++      onKeyDown={onKeyDown}
++      onClick={(e) => {
++        if (onClose && e.target === e.currentTarget) onClose();
++      }}
++      className={`outline-none ${className}`}
++    >
++      {children}
+     </div>
+   );
+ }
+diff --git a/src/context/GameStateContext.tsx b/src/context/GameStateContext.tsx
+index 79bbb9b..c5cb969 100644
+--- a/src/context/GameStateContext.tsx
++++ b/src/context/GameStateContext.tsx
+@@ -15,7 +15,7 @@ import type { Rng } from "@/lib/rng";
+ import { freshSeed } from "@/lib/rng";
+ import { initialState, reducer } from "@/engine/reducer";
+ import { recordAchievements, recordChallenge, recordLife } from "@/engine/hall";
+-import { clearSave, exportSave, exportShareCode, hasSaveSnapshot, loadGame, parseSave, saveGame, subscribeSave } from "@/engine/save";
++import { clearSave, exportSave, exportShareCode, hasSaveSnapshot, loadGame, loadPending, parseSave, saveGame, savePending, subscribeSave } from "@/engine/save";
+ import type { NewLifeOptions } from "@/engine/state";
+ import { consumeIntro } from "@/lib/prefs";
+ 
+@@ -61,6 +61,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
+     if (state.screen === "game" && state.player) saveGame(state.player, state.rngState);
+   }, [state.player, state.rngState, state.screen]);
+ 
++  // Keep unanswered decisions next to the save so a reload doesn't swallow them.
++  useEffect(() => {
++    if (state.screen === "game" && state.player) savePending(state.player, state.notices);
++  }, [state.notices, state.player, state.screen]);
++
+   // Immortalise finished lives and unlocked achievements in the Hall of Lives.
+   useEffect(() => {
+     const pl = state.player;
+@@ -90,7 +95,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
+       },
+       continueSave: () => {
+         const data = loadGame();
+-        if (data) dispatch({ type: "LOAD", player: data.player, rngState: data.rngState });
++        if (data) dispatch({ type: "LOAD", player: data.player, rngState: data.rngState, notices: loadPending(data.player) });
+       },
+       continueAsChild: (childId) => {
+         dispatch({ type: "CONTINUE_AS_CHILD", childId });
+diff --git a/src/engine/__tests__/zz-gen.test.ts b/src/engine/__tests__/zz-gen.test.ts
+new file mode 100644
+index 0000000..c34f7fe
+--- /dev/null
++++ b/src/engine/__tests__/zz-gen.test.ts
+@@ -0,0 +1,25 @@
++import { it } from "vitest";
++import fs from "node:fs";
++import { makeRng } from "@/lib/rng";
++import { createNewPlayer } from "../state";
++import { skipYears } from "../skip";
++import { exportSave } from "../save";
++import { heirs } from "../legacy";
++
++it("gen saves", () => {
++  const out = "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/";
++  for (let seed = 1; seed < 60; seed++) {
++    const rng = makeRng(seed);
++    let p = createNewPlayer({ scenario: "average", startYear: 2026 } as never, rng);
++    for (let i = 0; i < 4 && p.alive; i++) {
++      const r = skipYears(p, rng, 10);
++      p = r.player;
++      if (p.pendingTrial || p.isInPrison) break;
++      if (p.age >= 38 && heirs(p).length > 0 && p.alive && !p.pendingTrial && !p.isInPrison) {
++        fs.writeFileSync(out + "alive.json", exportSave(p, rng.state()));
++        console.log("alive save seed", seed, p.age, heirs(p).length);
++        return;
++      }
++    }
++  }
++});
+diff --git a/src/engine/reducer.ts b/src/engine/reducer.ts
+index 9929648..9502153 100644
+--- a/src/engine/reducer.ts
++++ b/src/engine/reducer.ts
+@@ -10,7 +10,7 @@ import { CHALLENGE_BY_ID } from "@/data/challenges";
+ 
+ export type Action =
+   | { type: "NEW_GAME"; opts: NewLifeOptions; seed: number; intro?: boolean }
+-  | { type: "LOAD"; player: PlayerState; rngState: number }
++  | { type: "LOAD"; player: PlayerState; rngState: number; notices?: Notice[] }
+   | { type: "AGE_UP" }
+   | { type: "FAST_FORWARD"; years?: number }
+   | { type: "RUN"; run: (p: PlayerState, rng: Rng) => ActionResult }
+@@ -58,7 +58,7 @@ export function reducer(state: GameState, action: Action): GameState {
+       return { ...initialState, screen: "game", player, rngState: rng.state(), notices };
+     }
+     case "LOAD":
+-      return { ...initialState, screen: "game", player: action.player, rngState: action.rngState, tab: action.player.isInPrison ? "prison" : "dashboard" };
++      return { ...initialState, screen: "game", player: action.player, rngState: action.rngState, notices: action.notices ?? [], tab: action.player.isInPrison ? "prison" : "dashboard" };
+     case "QUIT_TO_MENU":
+       return { ...initialState };
+     case "SET_TAB":
+diff --git a/src/engine/save.ts b/src/engine/save.ts
+index 1358544..9b11c52 100644
+--- a/src/engine/save.ts
++++ b/src/engine/save.ts
+@@ -1,4 +1,6 @@
+-import type { PlayerState, Talents } from "@/types/game.types";
++import type { Notice, PlayerState, Talents } from "@/types/game.types";
++import { EVENT_BY_ID } from "@/data/lifeEventsEngine";
++import { netWorth, playerTitle } from "./state";
+ import { TALENT_KEYS } from "@/data/talents";
+ import { hydrateAthlete } from "./athleteState";
+ import { upgradeBusiness } from "./business";
+@@ -25,7 +27,49 @@ export const subscribeSave = (cb: () => void) => {
+     listeners.delete(cb);
+   };
+ };
+-export const hasSaveSnapshot = () => loadGame() !== null;
++/**
++ * "Is there a save?" is asked on every render of the game provider, so it must be cheap: a sniff of the stored text,
++ * not a parse + hydrate of the whole life. A damaged save still fails safely in `loadGame`.
++ */
++export const hasSaveSnapshot = () => {
++  try {
++    return (localStorage.getItem(KEY) ?? "").startsWith('{"v":1,');
++  } catch {
++    return false;
++  }
++};
++
++export interface SaveSummary {
++  name: string;
++  age: number;
++  year: number;
++  generation: number;
++  alive: boolean;
++  title: string;
++  netWorth: number;
++}
++
++let summaryCache: { raw: string | null; summary: SaveSummary | null } = { raw: null, summary: null };
++
++/** A one-line description of the saved life for the Continue button. Cached per stored text so it is stable for React. */
++export function saveSummary(): SaveSummary | null {
++  let raw: string | null = null;
++  try {
++    raw = localStorage.getItem(KEY);
++  } catch {
++    return null;
++  }
++  if (raw === summaryCache.raw) return summaryCache.summary;
++  const data = raw ? loadGame() : null;
++  const p = data?.player;
++  summaryCache = {
++    raw,
++    summary: p
++      ? { name: `${p.firstName} ${p.lastName}`, age: p.age, year: p.year, generation: p.generation, alive: p.alive, title: playerTitle(p), netWorth: netWorth(p) }
++      : null,
++  };
++  return summaryCache.summary;
++}
+ 
+ export function saveGame(player: PlayerState, rngState: number) {
+   try {
+@@ -155,8 +199,54 @@ export function restorePrevious(): boolean {
+   }
+ }
+ 
++// ---------------------------------------------------------------------------
++// Pending decisions: the event or result you were looking at when the tab closed.
++// ---------------------------------------------------------------------------
++
++const PENDING_KEY = "lifeline-pending-v1";
++
++type StoredNotice = Extract<Notice, { kind: "info" }> | { id: string; kind: "event"; eventId: string };
++
++/** Remember unanswered notices next to the save, so reloading mid-year doesn't silently swallow a decision. */
++export function savePending(player: PlayerState, notices: Notice[]) {
++  try {
++    if (notices.length === 0) {
++      localStorage.removeItem(PENDING_KEY);
++      return;
++    }
++    const stored: StoredNotice[] = [];
++    for (const n of notices) {
++      if (n.kind === "info") stored.push(n);
++      // Events carry functions, so store their id; one-off generated events can't be rebuilt and are dropped.
++      else if (EVENT_BY_ID[n.event.id]?.title === n.event.title) stored.push({ id: n.id, kind: "event", eventId: n.event.id });
++    }
++    localStorage.setItem(PENDING_KEY, JSON.stringify({ playerId: player.id, age: player.age, notices: stored }));
++  } catch {
++    /* storage unavailable */
++  }
++}
++
++/** Notices saved for this exact moment of this life (same person, same age), or none. */
++export function loadPending(player: PlayerState): Notice[] {
++  try {
++    const raw = localStorage.getItem(PENDING_KEY);
++    if (!raw) return [];
++    const data = JSON.parse(raw) as { playerId?: string; age?: number; notices?: StoredNotice[] };
++    if (data.playerId !== player.id || data.age !== player.age || !Array.isArray(data.notices)) return [];
++    const out: Notice[] = [];
++    for (const n of data.notices) {
++      if (n?.kind === "info" && typeof n.id === "string" && typeof n.title === "string") out.push(n);
++      else if (n?.kind === "event" && EVENT_BY_ID[n.eventId]) out.push({ id: n.id, kind: "event", event: EVENT_BY_ID[n.eventId] });
++    }
++    return out;
++  } catch {
++    return [];
++  }
++}
++
+ export function clearSave() {
+   try {
++    localStorage.removeItem(PENDING_KEY);
+     localStorage.removeItem(KEY);
+     localStorage.removeItem(PREV_KEY);
+     lastSaved = null;
+diff --git a/src/lib/coach.ts b/src/lib/coach.ts
+new file mode 100644
+index 0000000..c5dd284
+--- /dev/null
++++ b/src/lib/coach.ts
+@@ -0,0 +1,43 @@
++"use client";
++
++import { useSyncExternalStore } from "react";
++
++/** First-run onboarding flag: the "Getting started" card is shown until it is dismissed once, on this browser. */
++const KEY = "lifeline-coach-v1";
++const listeners = new Set<() => void>();
++let cached: boolean | null = null;
++
++function read(): boolean {
++  if (cached !== null) return cached;
++  try {
++    cached = localStorage.getItem(KEY) === "1";
++  } catch {
++    cached = false;
++  }
++  return cached;
++}
++
++export function dismissCoach() {
++  cached = true;
++  try {
++    localStorage.setItem(KEY, "1");
++  } catch {
++    /* private mode: it simply comes back next visit */
++  }
++  listeners.forEach((l) => l());
++}
++
++/** True while the onboarding card should show. Server render says false so there is no hydration flash. */
++export function useCoachVisible(): boolean {
++  const dismissed = useSyncExternalStore(
++    (cb) => {
++      listeners.add(cb);
++      return () => {
++        listeners.delete(cb);
++      };
++    },
++    read,
++    () => true,
++  );
++  return !dismissed;
++}
+diff --git a/src/lib/glossary.ts b/src/lib/glossary.ts
+new file mode 100644
+index 0000000..0146ef5
+--- /dev/null
++++ b/src/lib/glossary.ts
+@@ -0,0 +1,35 @@
++/** Plain-language explanations of the numbers and ideas the game throws at a new player. */
++export interface GlossaryEntry {
++  id: string;
++  emoji: string;
++  term: string;
++  text: string;
++  group: "Vitals" | "Money" | "People" | "How it works";
++}
++
++export const GLOSSARY: GlossaryEntry[] = [
++  { id: "happiness", emoji: "😊", term: "Happiness", group: "Vitals", text: "Your mood. It drifts back toward your natural temperament over time. Low happiness drags down health and work; high happiness protects them." },
++  { id: "health", emoji: "❤️", term: "Health", group: "Vitals", text: "Resistance to illness and how long you will live. Sport, hard work and some careers also need stamina. Habits, illness, age and vices change it every year." },
++  { id: "smarts", emoji: "🧠", term: "Smarts", group: "Vitals", text: "Grades, which jobs and courses you qualify for, and how well a business runs. Study, reading and the library raise it." },
++  { id: "looks", emoji: "✨", term: "Looks", group: "Vitals", text: "Helps with hiring in some fields, dating, modelling and fame. It fades with age; the gym and surgery can help." },
++  { id: "karma", emoji: "☯️", term: "Karma", group: "Vitals", text: "Your moral balance. Kindness and honesty raise it; crime and cruelty lower it. Some paths open only at low karma (the Underworld), and fortune tends to treat high karma gently." },
++  { id: "fame", emoji: "🌟", term: "Fame", group: "Vitals", text: "How well known you are. It comes from media, sport, music, politics and scandal, and it fades if you stay out of the spotlight." },
++  { id: "networth", emoji: "💰", term: "Net worth", group: "Money", text: "Cash plus property, cars, investments, business stake and retirement savings, minus every loan and mortgage." },
++  { id: "salary", emoji: "💵", term: "Salary", group: "Money", text: "Your gross yearly pay before tax. Raises and promotions grow it; losing your job zeroes it." },
++  { id: "credit", emoji: "🧾", term: "Credit score", group: "Money", text: "From 300 to 850. A better score gets you bigger loans at a lower price. Paying debts on time raises it; defaulting wrecks it." },
++  { id: "economy", emoji: "📈", term: "Economy", group: "Money", text: "Boom, steady or recession. Booms mean hiring and rising markets; recessions mean layoffs and falling markets. It changes every few years." },
++  { id: "relationship", emoji: "💞", term: "Relationship bar", group: "People", text: "How close you are to someone. Spend time, talk and help to build it; neglect lets it fade. Partners, kids and friends all notice." },
++  { id: "effort", emoji: "🔥", term: "Effort", group: "How it works", text: "How hard you push at work, study and business. Coasting is easy and slow; grinding is fast but costs health, happiness and the people close to you." },
++  { id: "annual", emoji: "📅", term: "Once per year", group: "How it works", text: "Most activities can be done once each year. Age Up starts a new year and resets them, so there is no need to rush." },
++  { id: "ageup", emoji: "⏳", term: "Age Up", group: "How it works", text: "Lives one year. Events happen and some ask you to choose. You can use any tab before aging up." },
++  { id: "skip", emoji: "⏩", term: "Skip 10 years", group: "How it works", text: "Autopilot lives the next decade for you and makes sensible choices. It stops for death, a trial or prison, and everything is written into your Life Story." },
++  { id: "heirs", emoji: "👶", term: "Heirs", group: "How it works", text: "When you die, a living child can carry on the family with a share of your wealth. You can also hand your life over to a child while you are still alive." },
++];
++
++export const HOW_TO_PLAY: { emoji: string; title: string; text: string }[] = [
++  { emoji: "⏳", title: "Age Up to live a year", text: "The big green button. Events will appear and some ask you to decide." },
++  { emoji: "🧭", title: "Check \"This year\" on the Life tab", text: "It suggests the most useful things to do right now for your age and situation." },
++  { emoji: "🗂️", title: "Use the tabs", text: "People for family and love, Activities for health and fun, Career for school and work, Assets for money." },
++  { emoji: "⏩", title: "Skip quiet decades", text: "Skip 10 years hands the wheel to autopilot. It stops when something big happens." },
++  { emoji: "💾", title: "Everything saves itself", text: "Close the tab any time. Export a backup from Settings to move to another device." },
++];
+diff --git a/src/lib/guide.ts b/src/lib/guide.ts
+new file mode 100644
+index 0000000..da3089b
+--- /dev/null
++++ b/src/lib/guide.ts
+@@ -0,0 +1,172 @@
++import type { PlayerState, TabId } from "@/types/game.types";
++import { getPartner } from "@/engine/state";
++import { INTERACTION_CAP } from "@/engine/social";
++import { suggestTips } from "./tips";
++
++export type GuideKind = "urgent" | "chance" | "routine";
++
++export interface GuideItem {
++  id: string;
++  emoji: string;
++  title: string;
++  /** One line on why, or what it does. */
++  detail: string;
++  kind: GuideKind;
++  /** Higher sorts first. */
++  priority: number;
++  tab: TabId;
++  /** Section chip to open inside the tab (see lib/nav.ts). */
++  section?: string;
++}
++
++export interface LifeStage {
++  label: string;
++  blurb: string;
++}
++
++export function lifeStage(p: PlayerState): LifeStage {
++  const a = p.age;
++  if (a < 3) return { label: "Infant", blurb: "Nothing to decide yet. Your parents shape these years." };
++  if (a < 6) return { label: "Little kid", blurb: "Play, learn and grow. School starts soon." };
++  if (a < 13) return { label: "Child", blurb: "Schoolwork, friends and finding what you love." };
++  if (a < 18) return { label: "Teenager", blurb: "Grades, first jobs, first loves and the choices that stick." };
++  if (a < 30) return { label: "Young adult", blurb: "Build your career, your money and your people." };
++  if (a < 50) return { label: "Adult", blurb: "Peak earning years. Family, wealth and health all need tending." };
++  if (a < 65) return { label: "Midlife", blurb: "Consolidate, protect your health and plan the exit." };
++  return { label: "Later life", blurb: "Health, family and what you leave behind." };
++}
++
++const done = (p: PlayerState, key: string) => (p.annual[key] ?? 0) >= 1;
++
++/**
++ * The most useful things to do right now, in order. Pure and cheap, so the Life tab can recompute it on every render.
++ * Deliberately conservative: it only mentions actions that are available this year and that help the current state.
++ */
++export function yearGuide(p: PlayerState): GuideItem[] {
++  if (!p.alive || p.isInPrison || p.pendingTrial) return [];
++  const out: GuideItem[] = [];
++  const add = (i: GuideItem) => out.push(i);
++  const a = p.age;
++  const studying = p.education.yearsLeft > 0 && p.education.stage !== "None";
++  const partner = getPartner(p);
++  const invested = Object.values(p.investments).reduce((s, h) => s + h.value, 0);
++  const kids = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18);
++  const rel = (r: { id: string }) => p.annual[`rel:${r.id}`] ?? 0;
++
++  // ---- Urgent: things that get worse if ignored ----
++  const sick = p.diseases.filter((d) => !done(p, `doctor:${d.id}`));
++  if (sick.length > 0) {
++    const fatal = sick.find((d) => d.severity === "fatal");
++    add({
++      id: "treat",
++      emoji: "🩺",
++      title: fatal ? `See a doctor about ${fatal.name}` : `Treat ${sick[0].name}`,
++      detail: fatal ? "A fatal condition has a countdown. Treatment is your best chance." : "Untreated illness drains health and happiness every year.",
++      kind: "urgent",
++      priority: fatal ? 100 : 80,
++      tab: "activities",
++      section: "medical",
++    });
++  } else if (p.health < 45) {
++    add({ id: "health-low", emoji: "❤️", title: "Your health is low", detail: "A check-up, the gym or a better diet will help.", kind: "urgent", priority: 78, tab: "activities", section: "wellness" });
++  }
++  const vice = (Object.entries(p.vices) as [string, number][]).sort((x, y) => y[1] - x[1])[0];
++  if (vice && vice[1] >= 50) {
++    add({ id: "vice", emoji: "🚬", title: `${vice[0][0].toUpperCase()}${vice[0].slice(1)} has a hold on you`, detail: "Try to quit or enter rehab before it costs more than money.", kind: "urgent", priority: 76, tab: "activities", section: "medical" });
++  }
++  if (p.bankBalance < 0) {
++    add({ id: "overdrawn", emoji: "📉", title: "You're overdrawn", detail: p.currentJob ? "Ask for a raise or cut your living costs." : "You need income. Look for work.", kind: "urgent", priority: 90, tab: "career", section: "work" });
++  }
++  if (p.outstandingLoans > 0 && p.bankBalance > p.outstandingLoans * 1.2) {
++    add({ id: "debt", emoji: "🏦", title: "Pay off your loan", detail: "You can clear it from savings and stop the interest.", kind: "chance", priority: 62, tab: "assets", section: "bank" });
++  }
++  if (p.happiness < 35) {
++    add({ id: "mood", emoji: "🫂", title: "You're struggling emotionally", detail: "Therapy, a holiday, time with people you love, or a hobby.", kind: "urgent", priority: 74, tab: "activities", section: "leisure" });
++  }
++
++  // ---- Childhood ----
++  if (a < 6) {
++    add({ id: "tot", emoji: "🧸", title: "Just grow up for now", detail: "Tap Age Up. Events will come to you.", kind: "routine", priority: 10, tab: "dashboard" });
++  }
++  if (a >= 6 && a < 18 && studying && !done(p, "study")) {
++    add({ id: "study", emoji: "📖", title: "Hit the books", detail: "Good grades open university, scholarships and better jobs.", kind: "chance", priority: 55, tab: "career", section: "school" });
++  }
++  if (a >= 6 && Object.keys(p.hobbies).length === 0 && a < 40) {
++    add({ id: "hobby", emoji: "🎨", title: "Pick up a hobby", detail: "Skills build slowly and can become a career or side income.", kind: "chance", priority: 45, tab: "activities", section: "hobbies" });
++  }
++  if (a >= 6 && !done(p, "wellness:library") && p.smarts < 90) {
++    add({ id: "library", emoji: "📚", title: "Visit the library", detail: "+4 Smarts. Free, once a year.", kind: "routine", priority: 30, tab: "activities", section: "wellness" });
++  }
++
++  // ---- Work and study ----
++  if (a >= 15 && a < 65 && !p.currentJob && !studying && !p.business && !p.isFugitive && p.specialCareerPath === "none" && p.royalRank === "none") {
++    add({ id: "job", emoji: "💼", title: a < 18 ? "Get a part-time job" : "Find a job", detail: "No income means savings only go one way.", kind: "chance", priority: 66, tab: "career", section: "work" });
++  }
++  if (a >= 16 && a <= 22 && p.education.stage === "HighSchool" && p.education.yearsLeft === 0) {
++    add({ id: "next", emoji: "🎓", title: "School's done. What's next?", detail: "University, a trade, a job, or something wilder.", kind: "chance", priority: 70, tab: "career", section: "school" });
++  }
++  if (p.currentJob && !done(p, "work") && !p.currentJob.partTime) {
++    add({ id: "work", emoji: "🛠️", title: "Work harder this year", detail: "Better performance means raises and promotions.", kind: "routine", priority: 40, tab: "career", section: "work" });
++  }
++  if (p.currentJob && !done(p, "raise") && p.currentJob.performance >= 65) {
++    add({ id: "raise", emoji: "💵", title: "Ask for a raise", detail: `Your performance (${Math.round(p.currentJob.performance)}) gives you a fair shot.`, kind: "chance", priority: 52, tab: "career", section: "work" });
++  }
++  if (a >= 60 && p.currentJob) {
++    add({ id: "retire", emoji: "🏖️", title: "You can retire", detail: "Your pension and savings pay out whenever you stop working.", kind: "chance", priority: 35, tab: "career", section: "work" });
++  }
++  if (p.business) {
++    add({ id: "biz", emoji: "🏢", title: `Check on ${p.business.name}`, detail: "Businesses need a hand on the wheel each year.", kind: "routine", priority: 48, tab: "career", section: "business" });
++  }
++
++  // ---- People ----
++  if (kids.length > 0) {
++    const k = [...kids].sort((x, y) => x.relationshipBar - y.relationshipBar)[0];
++    if (rel(k) < INTERACTION_CAP) {
++      add({ id: "kid", emoji: "👨‍👧", title: `Spend time with ${k.name.split(" ")[0]}`, detail: k.relationshipBar < 50 ? "Your bond is thin. Neglected kids act out." : "Childhood only happens once. Parenting options live on their page.", kind: k.relationshipBar < 50 ? "chance" : "routine", priority: k.relationshipBar < 50 ? 58 : 36, tab: "relationships" });
++    }
++  }
++  if (partner && partner.relationshipBar < 55 && rel(partner) < INTERACTION_CAP) {
++    add({ id: "partner", emoji: "💞", title: `Invest in ${partner.name.split(" ")[0]}`, detail: "Your relationship is cooling. Time together protects it.", kind: "chance", priority: 57, tab: "relationships" });
++  } else if (partner && !done(p, "date") && partner.relationshipBar < 85 && a >= 16) {
++    add({ id: "date", emoji: "🌹", title: "Plan a date night", detail: "A small, regular investment keeps a relationship healthy.", kind: "routine", priority: 28, tab: "relationships" });
++  }
++  if (a >= 18 && !partner && a < 70) {
++    add({ id: "meet", emoji: "💘", title: "Meet someone", detail: "Dating, friends and family all live in People.", kind: "routine", priority: 32, tab: "relationships" });
++  }
++  const parent = p.relatives.find((r) => (r.relation === "Parent" || r.relation === "Grandparent") && r.alive && r.age >= 70 && r.relationshipBar < 60);
++  if (parent && rel(parent) < INTERACTION_CAP) {
++    add({ id: "elder", emoji: "🧓", title: `Call ${parent.name.split(" ")[0]}`, detail: "They won't be around forever.", kind: "routine", priority: 34, tab: "relationships" });
++  }
++
++  // ---- Money ----
++  if (a >= 20 && p.properties.length === 0 && p.bankBalance > 60_000) {
++    add({ id: "home", emoji: "🏠", title: "Think about buying a home", detail: "Property tends to grow and replaces rent.", kind: "chance", priority: 44, tab: "assets", section: "homes" });
++  }
++  if (p.bankBalance > 150_000 && invested === 0) {
++    add({ id: "invest", emoji: "📈", title: "Put idle cash to work", detail: "Cash loses to inflation. Even a cautious portfolio beats it.", kind: "chance", priority: 46, tab: "assets", section: "invest" });
++  }
++  if (a >= 16 && p.vehicles.length === 0 && p.bankBalance > 20_000 && !p.isFugitive) {
++    add({ id: "car", emoji: "🚗", title: "Buy a car", detail: "Wheels make work and life easier.", kind: "routine", priority: 20, tab: "assets", section: "cars" });
++  }
++
++  // ---- Body and mind ----
++  if (a >= 12 && !done(p, "wellness:gym") && (p.health < 85 || p.looks < 70)) {
++    add({ id: "gym", emoji: "🏋️", title: "Hit the gym", detail: "+3 Health, +2 Looks. Once a year.", kind: "routine", priority: 38, tab: "activities", section: "wellness" });
++  }
++  if (a >= 12 && !done(p, "wellness:meditate") && p.happiness < 70) {
++    add({ id: "meditate", emoji: "🧘", title: "Take a quiet moment", detail: "+5 Happiness, free.", kind: "routine", priority: 37, tab: "activities", section: "wellness" });
++  }
++  if (a >= 40 && !p.flags.includes(`checkup_${p.year}`) && p.diseases.length === 0) {
++    add({ id: "checkup", emoji: "🩻", title: "Get a check-up", detail: "Catching illness early is cheaper than treating it late.", kind: "routine", priority: 26, tab: "activities", section: "medical" });
++  }
++
++  // Anything the older tip engine knows that isn't covered above.
++  for (const t of suggestTips(p)) {
++    if (!out.some((i) => i.tab === t.tab && i.emoji === t.emoji)) {
++      add({ id: `tip:${t.text}`, emoji: t.emoji, title: t.text, detail: "", kind: "routine", priority: 25, tab: t.tab });
++    }
++  }
++
++  out.sort((x, y) => y.priority - x.priority);
++  return out;
++}
+diff --git a/src/lib/journal.ts b/src/lib/journal.ts
+new file mode 100644
+index 0000000..4365282
+--- /dev/null
++++ b/src/lib/journal.ts
+@@ -0,0 +1,61 @@
++/** Turns the flat life log ("## Age 12 · 2038" headers followed by lines) into something searchable and filterable. */
++
++export type JournalFilter = "all" | "milestones" | "money" | "people" | "health";
++
++export interface JournalEntry {
++  text: string;
++  milestone: boolean;
++  tags: Exclude<JournalFilter, "all" | "milestones">[];
++}
++
++export interface JournalYear {
++  header: string;
++  entries: JournalEntry[];
++}
++
++const MILESTONE =
++  /🏆|you were born|was born into|you started (school|high school)|you graduated|you are now an adult|you are now (dating|married|engaged)|\bmarried\b|\bdivorce|\bproposed\b|engaged to|got hired|you were hired|new job|promoted|you retired|retire[sd]?\b|passed away|you died|was diagnosed|you were diagnosed|arrested|convicted|sentenced|released from|elected|inherit|you moved|emigrat|you bought|you sold|founded|you started a (business|company)|won the|crowned|coronat|abdicat|first word|driver'?s licence|you were fired|you lost your job/i;
++const MONEY = /^finances:|\$\s?[\d,]{3,}|\bsalary\b|\bloan\b|\bmortgage\b|\binherit|\bbankrupt|\bbought\b|\bsold\b|\btaxes?\b/i;
++const PEOPLE = /\bfriend\b|\bdating\b|\bpartner\b|\bmarried\b|\bdivorc|\bchild\b|\bbaby\b|\bsibling\b|\bparent\b|\bgrandparent\b|passed away|\bwedding\b|\bbreak ?up\b|\bbreakup\b|\bborn into your family\b/i;
++const HEALTH = /\bdiagnosed\b|\brecovered\b|\bsurgery\b|\bdoctor\b|\bdisease\b|\billness\b|\brehab\b|\bhospital\b|\btherapy\b|\baddict/i;
++
++export function classify(text: string): JournalEntry {
++  const tags: JournalEntry["tags"] = [];
++  if (MONEY.test(text)) tags.push("money");
++  if (PEOPLE.test(text)) tags.push("people");
++  if (HEALTH.test(text)) tags.push("health");
++  // Yearly finance summaries and market news are context, not milestones.
++  const milestone = !/^finances:|^📰/i.test(text) && MILESTONE.test(text);
++  return { text, milestone, tags };
++}
++
++/** Newest year first. Lines before the first header are kept under "Prologue". */
++export function groupJournal(log: string[]): JournalYear[] {
++  const years: JournalYear[] = [];
++  for (const line of log) {
++    if (line.startsWith("## ")) years.push({ header: line.slice(3), entries: [] });
++    else {
++      if (years.length === 0) years.push({ header: "Prologue", entries: [] });
++      years[years.length - 1].entries.push(classify(line));
++    }
++  }
++  return years.reverse();
++}
++
++export function filterJournal(years: JournalYear[], query: string, filter: JournalFilter): JournalYear[] {
++  const q = query.trim().toLowerCase();
++  if (!q && filter === "all") return years;
++  const out: JournalYear[] = [];
++  for (const y of years) {
++    const headerHit = q.length > 0 && y.header.toLowerCase().includes(q);
++    const entries = y.entries.filter((e) => {
++      const byFilter = filter === "all" || (filter === "milestones" ? e.milestone : e.tags.includes(filter));
++      if (!byFilter) return false;
++      return !q || headerHit || e.text.toLowerCase().includes(q);
++    });
++    if (entries.length > 0) out.push({ header: y.header, entries });
++  }
++  return out;
++}
++
++export const countEntries = (years: JournalYear[]) => years.reduce((n, y) => n + y.entries.length, 0);
+diff --git a/src/lib/nav.ts b/src/lib/nav.ts
+new file mode 100644
+index 0000000..dc88c02
+--- /dev/null
++++ b/src/lib/nav.ts
+@@ -0,0 +1,51 @@
++"use client";
++
++import { useCallback, useState } from "react";
++import type { TabId } from "@/types/game.types";
++
++/**
++ * Tiny navigation memory shared by the tab screens.
++ *  - `requestSection` lets any screen (e.g. the "This year" guide) deep-link into a section of another tab.
++ *  - `useSection` is a drop-in for the `useState` each tab used for its section chips; it honours a pending
++ *    request, otherwise remembers the section you were last on so switching tabs doesn't reset your place.
++ * Pure module state: nothing here is saved, and an unknown or stale section id always falls back safely.
++ */
++const pending: Partial<Record<TabId, string>> = {};
++const lastSeen: Partial<Record<TabId, string>> = {};
++
++export function requestSection(tab: TabId, section: string | undefined) {
++  if (section) pending[tab] = section;
++}
++
++/** Forget remembered sections (a new life starts from each tab's default). */
++export function resetSections() {
++  for (const k of Object.keys(pending)) delete pending[k as TabId];
++  for (const k of Object.keys(lastSeen)) delete lastSeen[k as TabId];
++}
++
++export function pickSection<T extends string>(tab: TabId, valid: readonly T[], fallback: T): T {
++  const want = pending[tab];
++  if (want !== undefined) {
++    delete pending[tab];
++    // Remember it so a second call (React strict-mode double init) lands on the same section.
++    if ((valid as readonly string[]).includes(want)) {
++      lastSeen[tab] = want;
++      return want as T;
++    }
++  }
++  const last = lastSeen[tab];
++  if (last !== undefined && (valid as readonly string[]).includes(last)) return last as T;
++  return fallback;
++}
++
++export function useSection<T extends string>(tab: TabId, valid: readonly T[], fallback: T): [T, (s: T) => void] {
++  const [section, set] = useState<T>(() => pickSection(tab, valid, fallback));
++  const setSection = useCallback(
++    (s: T) => {
++      lastSeen[tab] = s;
++      set(s);
++    },
++    [tab],
++  );
++  return [section, setSection];
++}
+diff --git a/src/lib/preview.ts b/src/lib/preview.ts
+new file mode 100644
+index 0000000..ebd06e0
+--- /dev/null
++++ b/src/lib/preview.ts
+@@ -0,0 +1,30 @@
++import type { ChoiceEffects, ChoiceOption } from "@/data/lifeEventsEngine";
++
++export interface OptionPreview {
++  /** Certain up-front cost in dollars (0 if free). */
++  cost: number;
++  /** How likely the good branch is, when the outcome is a gamble. */
++  odds: "likely" | "toss-up" | "long shot" | null;
++  /** Short warnings about serious consequences, without giving the outcome away. */
++  warnings: string[];
++}
++
++const serious = (fx: ChoiceEffects, out: Set<string>) => {
++  if (fx.die) out.add("☠️ Could be fatal");
++  if (fx.arrest || fx.kill) out.add("⚖️ Legal risk");
++  if (fx.loseJob) out.add("💼 Job at risk");
++  if (fx.endRelationship) out.add("💔 Could end a relationship");
++  if (fx.emigrate) out.add("✈️ Moves you abroad");
++  if (fx.pregnancy) out.add("🍼 Could lead to a baby");
++};
++
++/** What the player can fairly be told about a choice before making it. Pure and cheap. */
++export function previewOption(opt: ChoiceOption): OptionPreview {
++  const warnings = new Set<string>();
++  serious(opt.effects, warnings);
++  if (opt.chance) serious(opt.chance.failure, warnings);
++  const cost = Math.max(0, -(opt.effects.bankBalanceDelta ?? 0));
++  const p = opt.chance?.p;
++  const odds = p === undefined ? null : p >= 0.7 ? "likely" : p >= 0.4 ? "toss-up" : "long shot";
++  return { cost, odds, warnings: [...warnings] };
++}

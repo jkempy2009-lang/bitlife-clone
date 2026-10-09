@@ -1,0 +1,2876 @@
+diff --git a/src/components/BondsPanels.tsx b/src/components/BondsPanels.tsx
+new file mode 100644
+index 0000000..3b3c66a
+--- /dev/null
++++ b/src/components/BondsPanels.tsx
+@@ -0,0 +1,241 @@
++"use client";
++
++import { useGame } from "@/context/GameStateContext";
++import type { Relative } from "@/types/game.types";
++import { VALUE_BY_ID, compatibility, myValues, relationshipHealth, timeline, valuesOf, yearsKnown } from "@/engine/bonds";
++import { COUNSELLING_COST, GOALS_COST, backTheirGoals, clearTheAir, counselling, giveSpace, reconcile, separate, setCustody, talkAboutUs, type Approach, type Custody } from "@/engine/partnership";
++import { HOLIDAY_COST, askInLawsForHelp, hostHoliday, visitInLaws } from "@/engine/inlaws";
++import { reachOut } from "@/engine/circle";
++import { STYLES, TEMPERAMENTS, setParentingStyle, temperamentOf } from "@/engine/parenting";
++import { money } from "@/lib/format";
++import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
++
++const MEMORY_ICON: Record<string, string> = { met: "✨", milestone: "⭐", joy: "😊", hardship: "🌧️", conflict: "⚡", betrayal: "💔", kindness: "🤝", loss: "🕯️" };
++
++const barColor = (v: number) => (v >= 70 ? "bg-emerald-500" : v >= 40 ? "bg-amber-400" : "bg-rose-500");
++
++/** How this relationship is going, what's unresolved, and what you've been through together. */
++export function RelationshipCard({ rel }: { rel: Relative }) {
++  const { player: p, act } = useGame();
++  const health = relationshipHealth(p, rel);
++  const years = yearsKnown(p, rel);
++  const isPartner = rel.relation === "Partner";
++  const fit = isPartner ? compatibility(p, rel) : null;
++  const wounds = [...(rel.grievances ?? [])].sort((a, b) => b.weight - a.weight);
++  const airedThisYear = (p.annual[`air:${rel.id}`] ?? 0) >= 1;
++  const memories = timeline(rel, 12);
++  const n = rel.name.split(" ")[0];
++  const run = (a: Approach) => act((pl, rng) => clearTheAir(pl, rel.id, a, rng));
++  const worst = wounds[0];
++  const giftCost = worst ? 300 * worst.weight : 0;
++  if (rel.relation === "Pet") return null;
++  return (
++    <>
++      <Card className="p-3">
++        <div className="flex flex-wrap items-center gap-1.5">
++          <Pill tone={health.tone}>{health.label}</Pill>
++          {fit && <Pill tone={fit.label === "Natural fit" ? "green" : fit.label === "Opposites" ? "amber" : "slate"}>{fit.label}</Pill>}
++          {rel.friendKind && rel.relation === "Friend" && <Pill tone={rel.friendKind === "Fallen out" ? "red" : rel.friendKind === "Best friend" ? "green" : "blue"}>{rel.friendKind}</Pill>}
++          {years !== null && years > 0 && <Pill>{years} year{years === 1 ? "" : "s"} known</Pill>}
++          {rel.separatedYear && <Pill tone="red">Living apart</Pill>}
++          {rel.custody && <Pill tone="blue">{rel.custody === "you" ? "Lives with you" : rel.custody === "them" ? `Lives with ${rel.otherParent?.split(" ")[0] ?? "other parent"}` : "Shared custody"}</Pill>}
++          {rel.relation === "Child" && <Pill tone="slate">{temperamentOf(rel).label}</Pill>}
++        </div>
++        {rel.relation === "Child" && <p className="mt-1 text-xs text-slate-500">{temperamentOf(rel).blurb}</p>}
++        {isPartner && (
++          <div className="mt-3">
++            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">What {n} needs from you</div>
++            <ul className="flex flex-col gap-1 text-sm">
++              {valuesOf(rel).map((v) => {
++                const def = VALUE_BY_ID[v];
++                const known = rel.knownValues?.includes(v);
++                const unmet = rel.unmet?.[v] ?? 0;
++                return (
++                  <li key={v} className="flex items-start gap-2">
++                    <span>{known ? def.emoji : "❔"}</span>
++                    <span className="min-w-0 flex-1 text-slate-300">
++                      {known ? <><span className="font-semibold">{def.label}</span> <span className="text-xs text-slate-500">· {def.hint}</span></> : <span className="text-slate-500">Something you haven&apos;t worked out yet. Talk about it.</span>}
++                      {known && unmet > 0 && <span className="block text-xs text-amber-300">Unmet {unmet} year{unmet === 1 ? "" : "s"} running</span>}
++                    </span>
++                  </li>
++                );
++              })}
++            </ul>
++            <p className="mt-1 text-xs text-slate-500">You value {myValues(p).map((v) => VALUE_BY_ID[v].label.toLowerCase()).join(" and ")}. Needs are met by what you do each year, not by luck.</p>
++          </div>
++        )}
++        {wounds.length > 0 && (
++          <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-950/20 p-2.5">
++            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-rose-300">Unresolved</div>
++            <ul className="flex flex-col gap-1 text-sm text-rose-100">
++              {wounds.map((g) => (
++                <li key={g.id} className="flex items-start gap-2">
++                  <span className="shrink-0 text-xs tracking-tighter text-rose-300">{"●".repeat(g.weight)}{"○".repeat(3 - g.weight)}</span>
++                  <span>{g.text.charAt(0).toUpperCase() + g.text.slice(1)} <span className="text-xs text-rose-300/70">({g.year})</span></span>
++                </li>
++              ))}
++            </ul>
++            <p className="mt-1 text-xs text-slate-400">These come back when you least want them, and they stay with you if {n} dies before you fix them. Start with the heaviest.</p>
++            <div className="mt-2 grid grid-cols-3 gap-1.5">
++              <Button variant="secondary" className="px-1 py-2 text-xs" disabled={airedThisYear} onClick={() => run("apologise")}>🙏 Apologise</Button>
++              <Button variant="secondary" className="px-1 py-2 text-xs" disabled={airedThisYear} onClick={() => run("talk")}>💬 Talk it out</Button>
++              <Button variant="secondary" className="px-1 py-2 text-xs" disabled={airedThisYear || p.bankBalance < giftCost} onClick={() => run("gift")}>🎁 Gesture ({money(giftCost)})</Button>
++            </div>
++            {airedThisYear && <p className="mt-1 text-xs text-slate-500">You&apos;ve already tried this year. Let it settle.</p>}
++          </div>
++        )}
++      </Card>
++      {memories.length > 0 && (
++        <details className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-3">
++          <summary className="cursor-pointer text-sm font-semibold text-slate-300">📖 Shared history ({rel.memories?.length ?? 0})</summary>
++          <ul className="mt-2 flex flex-col gap-1.5 text-sm text-slate-300">
++            {memories.map((m, i) => (
++              <li key={`${m.year}-${i}`} className="flex gap-2">
++                <span>{MEMORY_ICON[m.kind] ?? "•"}</span>
++                <span className="min-w-0 flex-1">{m.text} <span className="text-xs text-slate-500">· age {m.age}</span></span>
++              </li>
++            ))}
++          </ul>
++        </details>
++      )}
++    </>
++  );
++}
++
++/** Actions that tend a marriage or partnership. */
++export function PartnerCare({ rel }: { rel: Relative }) {
++  const { player: p, act } = useGame();
++  const married = rel.partnerStatus === "married";
++  const n = rel.name.split(" ")[0];
++  const done = (k: string) => (p.annual[`${k}:${rel.id}`] ?? 0) >= 1;
++  return (
++    <>
++      <SectionTitle hint="meeting what they need">Keep It Alive</SectionTitle>
++      <div className="grid grid-cols-2 gap-2">
++        <Button variant="secondary" disabled={done("us")} onClick={() => act((pl) => talkAboutUs(pl, rel.id))}>💭 Talk About Us</Button>
++        <Button variant="secondary" disabled={done("goals") || p.bankBalance < GOALS_COST} onClick={() => act((pl, rng) => backTheirGoals(pl, rel.id, rng))}>🚀 Back Their Goals ({money(GOALS_COST)})</Button>
++        <Button variant="secondary" disabled={done("space")} onClick={() => act((pl) => giveSpace(pl, rel.id))}>🕊️ Give Them Space</Button>
++        <Button variant="secondary" disabled={done("counsel") || p.bankBalance < COUNSELLING_COST} onClick={() => act((pl, rng) => counselling(pl, rel.id, rng))}>🛋️ Counselling ({money(COUNSELLING_COST)})</Button>
++        {married && !rel.separatedYear && (
++          <Button variant="ghost" className="col-span-2" onClick={() => act((pl) => separate(pl, rel.id))}>🧳 Trial Separation</Button>
++        )}
++        {rel.separatedYear && (
++          <Button variant="gold" className="col-span-2" disabled={done("reconcile")} onClick={() => act((pl, rng) => reconcile(pl, rel.id, rng))}>💌 Try to Win {n} Back</Button>
++        )}
++      </div>
++    </>
++  );
++}
++
++export function InLawsCard({ rel }: { rel: Relative }) {
++  const { player: p, act } = useGame();
++  if (!rel.inLaws || rel.inLaws.length === 0) return null;
++  const alive = rel.inLaws.filter((l) => l.alive);
++  const done = (k: string) => (p.annual[`inlaw:${k}:${rel.id}`] ?? 0) >= 1;
++  return (
++    <>
++      <SectionTitle hint={`${alive.length} living`}>{rel.name.split(" ")[0]}&apos;s Family</SectionTitle>
++      <Card className="p-3">
++        <ul className="flex flex-col gap-2">
++          {rel.inLaws.map((l) => (
++            <li key={l.name} className={l.alive ? "" : "opacity-50"}>
++              <div className="flex items-baseline justify-between gap-2 text-sm">
++                <span className="truncate font-semibold">{l.name}</span>
++                <span className="shrink-0 text-xs text-slate-400">{l.role} · {l.alive ? l.age : "died"}</span>
++              </div>
++              {l.alive && <div className="mt-1"><MiniBar value={l.warmth} color={barColor(l.warmth)} /></div>}
++            </li>
++          ))}
++        </ul>
++        {alive.length > 0 && rel.partnerStatus === "married" && (
++          <div className="mt-3 grid grid-cols-3 gap-1.5">
++            <Button variant="secondary" className="px-1 py-2 text-xs" disabled={done("visit")} onClick={() => act((pl, rng) => visitInLaws(pl, rel.id, rng))}>🚗 Visit</Button>
++            <Button variant="secondary" className="px-1 py-2 text-xs" disabled={done("host") || p.bankBalance < HOLIDAY_COST} onClick={() => act((pl) => hostHoliday(pl, rel.id))}>🍽️ Host ({money(HOLIDAY_COST)})</Button>
++            <Button variant="secondary" className="px-1 py-2 text-xs" disabled={done("ask")} onClick={() => act((pl, rng) => askInLawsForHelp(pl, rel.id, rng))}>🙏 Ask Help</Button>
++          </div>
++        )}
++        <p className="mt-2 text-xs text-slate-500">The bar shows how warmly they feel about you. Ignore them and it fades; wear them down and they interfere.</p>
++      </Card>
++    </>
++  );
++}
++
++export function ParentingCard() {
++  const { player: p, act } = useGame();
++  const kids = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age >= 3 && r.age < 18 && !r.custody);
++  if (kids.length === 0) return null;
++  const cur = STYLES.find((s) => s.id === p.parentingStyle) ?? STYLES[1];
++  return (
++    <div>
++      <SectionTitle hint="how you raise them">Parenting Style</SectionTitle>
++      <Card className="p-3">
++        <div className="grid grid-cols-2 gap-1.5">
++          {STYLES.map((s) => (
++            <button
++              key={s.id}
++              type="button"
++              onClick={() => act((pl) => setParentingStyle(pl, s.id))}
++              className={`rounded-xl px-2 py-2 text-sm font-semibold transition-colors ${p.parentingStyle === s.id ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
++            >
++              {s.emoji} {s.label}
++            </button>
++          ))}
++        </div>
++        <p className="mt-2 text-xs text-slate-400">{cur.blurb}</p>
++        <p className="mt-1 text-xs text-slate-500">Each child is different ({TEMPERAMENTS.slice(0, 4).map((t) => t.label.toLowerCase()).join(", ")}, and more). The same rules suit one child and crush another.</p>
++      </Card>
++    </div>
++  );
++}
++
++export function CustodyPicker({ kid }: { kid: Relative }) {
++  const { player: p, act } = useGame();
++  if (!kid.custody || kid.age >= 18) return null;
++  const done = (p.annual[`custody:${kid.id}`] ?? 0) >= 1;
++  const opts: { id: Custody; label: string }[] = [
++    { id: "you", label: "Lives with me" },
++    { id: "shared", label: "Shared" },
++    { id: "them", label: "Lives with them" },
++  ];
++  return (
++    <>
++      <SectionTitle hint="your ex and you">Custody</SectionTitle>
++      <div className="grid grid-cols-3 gap-1.5">
++        {opts.map((o) => (
++          <Button key={o.id} variant={kid.custody === o.id ? "primary" : "secondary"} className="px-1 py-2 text-xs" disabled={kid.custody === o.id || done} onClick={() => act((pl, rng) => setCustody(pl, kid.id, o.id, rng))}>
++            {o.label}
++          </Button>
++        ))}
++      </div>
++      <p className="text-xs text-slate-500">Changing it costs legal fees and needs your ex to agree (unless you step back). Children who live elsewhere drift unless you keep spending time with them. Support is paid on your income unless they live with you.</p>
++    </>
++  );
++}
++
++/** People who are gone from your day-to-day: exes, lost friends, and the dead. */
++export function PastPeople({ past, labelOf }: { past: Relative[]; labelOf: (r: Relative) => string }) {
++  const { act } = useGame();
++  if (past.length === 0) return null;
++  return (
++    <details className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-3">
++      <summary className="cursor-pointer text-sm font-semibold text-slate-400">In memory & past relationships ({past.length})</summary>
++      <ul className="mt-2 space-y-2 text-sm text-slate-400">
++        {past.map((r) => {
++          const lostFriend = r.relation === "Friend" && r.alive;
++          const years = r.lostYear;
++          return (
++            <li key={r.id} className="flex items-center gap-2">
++              <span className="min-w-0 flex-1">
++                {r.alive ? (lostFriend ? "👋" : "💔") : "🕯️"} {r.name} — {r.alive ? (lostFriend ? `Lost touch${years ? ` (${years})` : ""}` : `Ex (${r.age})`) : `${labelOf(r)}, died at ${r.deathAge ?? r.age}`}
++                {r.memories && r.memories.length > 0 && r.alive && <span className="block text-xs text-slate-500">{r.memories[r.memories.length - 1].text}</span>}
++              </span>
++              {lostFriend && (
++                <Button variant="ghost" className="shrink-0 px-2 py-1 text-xs" onClick={() => act((pl, rng) => reachOut(pl, r.id, rng))}>Reach out</Button>
++              )}
++            </li>
++          );
++        })}
++      </ul>
++    </details>
++  );
++}
+diff --git a/src/components/RelationshipsTab.tsx b/src/components/RelationshipsTab.tsx
+index c318f38..fff2f2b 100644
+--- a/src/components/RelationshipsTab.tsx
++++ b/src/components/RelationshipsTab.tsx
+@@ -45,6 +45,8 @@ import { money } from "@/lib/format";
+ import { HANDOVER_CASH_SHARE, handoverBlocker } from "@/engine/legacy";
+ import { spouseIncome } from "@/engine/household";
+ import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
++import { CustodyPicker, InLawsCard, ParentingCard, PartnerCare, PastPeople, RelationshipCard } from "./BondsPanels";
++import { relationshipHealth } from "@/engine/bonds";
+ 
+ const RELATION_ORDER = ["Partner", "Lover", "Parent", "Child", "Grandchild", "Sibling", "Nephew", "Grandparent", "Friend", "Pet"] as const;
+ const ICONS: Record<string, string> = {
+@@ -106,7 +108,7 @@ export default function RelationshipsTab() {
+       <div>
+         <SectionTitle hint={`${living.length} living`}>Family & Friends</SectionTitle>
+         <div className="flex flex-col gap-2">
+-          {RELATION_ORDER.flatMap((rel) => living.filter((r) => r.relation === rel)).map((r) => (
++          {RELATION_ORDER.flatMap((rel) => living.filter((r) => r.relation === rel).sort((a, b) => (rel === "Child" || rel === "Sibling" ? b.age - a.age : 0))).map((r) => (
+             <button
+               key={r.id}
+               type="button"
+@@ -118,8 +120,13 @@ export default function RelationshipsTab() {
+                 <div className="min-w-0 flex-1">
+                   <div className="flex items-baseline justify-between gap-2">
+                     <span className="truncate font-semibold">{r.name}</span>
+-                    <span className="shrink-0 text-xs text-slate-400">{label(r)}{r.royalTitle ? ` · ${r.royalTitle}` : ""} · {r.age}</span>
++                    <span className="shrink-0 text-xs text-slate-400">{r.relation === "Friend" && r.friendKind ? r.friendKind : label(r)}{r.royalTitle ? ` · ${r.royalTitle}` : ""} · {r.age}</span>
+                   </div>
++                  {(r.grievances?.length ?? 0) > 0 || r.separatedYear || r.riftYear ? (
++                    <div className="mt-0.5 text-xs text-rose-300">{r.separatedYear ? "Living apart" : r.riftYear ? "Fallen out" : "⚠ Something unresolved"}</div>
++                  ) : r.relation === "Partner" ? (
++                    <div className="mt-0.5 text-xs text-slate-500">{relationshipHealth(p, r).label}</div>
++                  ) : null}
+                   <div className="mt-1.5">
+                     <MiniBar value={r.relationshipBar} color={barColor(r.relationshipBar)} />
+                   </div>
+@@ -131,6 +138,8 @@ export default function RelationshipsTab() {
+         </div>
+       </div>
+ 
++      <ParentingCard />
++
+       <div>
+         <SectionTitle>Meet People</SectionTitle>
+         <div className="grid grid-cols-2 gap-2">
+@@ -212,18 +221,7 @@ export default function RelationshipsTab() {
+         </div>
+       )}
+ 
+-      {past.length > 0 && (
+-        <details className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-3">
+-          <summary className="cursor-pointer text-sm font-semibold text-slate-400">In memory & past relationships ({past.length})</summary>
+-          <ul className="mt-2 space-y-1.5 text-sm text-slate-400">
+-            {past.map((r) => (
+-              <li key={r.id}>
+-                {r.alive ? "💔" : "🕯️"} {r.name} — {r.alive ? `Ex (${r.age})` : `${label(r)}, died at ${r.deathAge ?? r.age}`}
+-              </li>
+-            ))}
+-          </ul>
+-        </details>
+-      )}
++      <PastPeople past={past} labelOf={label} />
+     </div>
+   );
+ }
+@@ -492,6 +490,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
+           {(rel.relation === "Partner" || rel.relation === "Lover" || rel.relation === "Friend") && rel.traits?.map((t) => <Pill key={t} tone="slate">{t}</Pill>)}
+         </div>
+       </Card>
++      <RelationshipCard rel={rel} />
+ 
+       <SectionTitle hint={capped ? "Take a breather until next year" : `${INTERACTION_CAP - used} left this year`}>Interact</SectionTitle>
+       <div className="grid grid-cols-2 gap-2">
+@@ -546,6 +545,8 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
+         </>
+       )}
+ 
++      {rel.relation === "Child" && rel.age < 18 && <CustodyPicker kid={rel} />}
++
+       {rel.relation === "Child" && rel.alive && <HandOver rel={rel} />}
+ 
+       {rel.relation === "Partner" && (
+@@ -566,15 +567,18 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
+                 onBack();
+               }}
+             >
+-              {rel.partnerStatus === "married" ? "⚖️ Divorce (−30% cash)" : "💔 Break Up"}
++              {rel.partnerStatus === "married" ? `⚖️ Divorce (settlement ≈ ${Math.round(Math.min(0.5, 0.1 + 0.04 * (rel.marriedYear ? Math.max(0, p.year - rel.marriedYear) : 5)) * 100)}% of assets)` : "💔 Break Up"}
+             </Button>
+           </div>
++          <PartnerCare rel={rel} />
++          <InLawsCard rel={rel} />
+         </>
+       )}
+ 
+       {mature && (rel.relation === "Partner" || rel.relation === "Lover") && (
+-        <>
+-          <SectionTitle hint="18+ · consent matters">Intimacy</SectionTitle>
++        <details className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-3">
++          <summary className="cursor-pointer text-sm font-semibold text-slate-200">🔞 Intimacy · 18+, consent matters</summary>
++          <div className="mt-3 flex flex-col gap-3">
+           <Card className="p-3">
+             <label className="flex items-center gap-2 text-sm text-slate-300">
+               <input type="checkbox" checked={safe} onChange={(e) => setSafe(e.target.checked)} className="h-4 w-4 accent-emerald-500" />
+@@ -606,7 +610,8 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
+           {rel.relation === "Partner" && (
+             <p className="text-xs text-slate-500">Your partner's personality ({rel.traits?.join(", ") ?? "unknown"}) shapes how they'll react. Asking is always their choice, and no means no.</p>
+           )}
+-        </>
++          </div>
++        </details>
+       )}
+ 
+       {rel.relation === "Lover" && (
+diff --git a/src/data/events/relationships.ts b/src/data/events/relationships.ts
+new file mode 100644
+index 0000000..99b8abe
+--- /dev/null
++++ b/src/data/events/relationships.ts
+@@ -0,0 +1,355 @@
++/**
++ * Choices inside the family and the circle around you: teenagers who test you, grown children who need you,
++ * friends in crisis, in-laws, an ex you still have to co-parent with. Who the person is (their temperament, how
++ * warm they are, how close you've been) decides how a choice lands, and every choice leaves a memory behind.
++ */
++import { ev, opt, risk } from "../eventBuilders";
++import type { LifeEvent } from "../lifeEventsEngine";
++import type { PlayerState, Relative } from "@/types/game.types";
++import { clamp } from "@/lib/format";
++import { getPartner } from "@/engine/state";
++import { bestFriendOf, coParentOf, grownOf, inLawOf, littleOf, teenOf } from "@/engine/cast";
++import { addGrievance, remember } from "@/engine/bonds";
++import { temperamentOf } from "@/engine/parenting";
++
++const bump = (r: Relative | undefined, d: number) => {
++  if (r) r.relationshipBar = clamp(r.relationshipBar + d);
++};
++const first = (r: Relative) => r.name.split(" ")[0];
++const DEFIANT = ["bold", "stubborn", "mischievous"];
++const TENDER = ["shy", "sensitive", "gentle"];
++const temper = (k: Relative) => temperamentOf(k).id;
++const trouble = (k: Relative, n = 1) => {
++  k.trouble = (k.trouble ?? 0) + n;
++};
++
++
++
++const bestOk = (p: PlayerState) => {
++  const b = bestFriendOf(p);
++  return !!b && b.relationshipBar >= 50;
++};
++
++// ===========================================================================
++// Teenagers
++// ===========================================================================
++const TEENS: LifeEvent[] = [
++  ev("rel_teen_curfew", "family", 26, 75, "Home by Midnight",
++    "{teen} wants to go to a party across town that finishes well after midnight. Everyone else is going, apparently. Everyone else's parents are apparently fine with it.", [
++      {
++        text: "Say no, firmly",
++        effects: {
++          logText: "You said no, and meant it. The discussion did not end there.",
++          bizEffect: (p) => {
++            const k = teenOf(p);
++            if (!k) return;
++            const t = temper(k);
++            if (DEFIANT.includes(t)) { bump(k, -10); trouble(k); return `${first(k)} slammed the door, and at midnight a window opened quietly. You found out in the morning.`; }
++            if (TENDER.includes(t)) { bump(k, -3); return `${first(k)} went quiet and obeyed, and the silence at dinner lasted a week.`; }
++            bump(k, -4);
++            return `${first(k)} grumbled, then drew up a case for a later curfew next year.`;
++          },
++        },
++      },
++      {
++        text: "Negotiate: home by eleven, a text on arrival",
++        effects: {
++          logText: "You haggled it down to eleven and a text from the door. It felt like a treaty.",
++          bizEffect: (p, rng) => {
++            const k = teenOf(p);
++            if (!k) return;
++            const ok = rng.chance(DEFIANT.includes(temper(k)) ? 0.55 : 0.82);
++            if (ok) { bump(k, 6); remember(p, k, "joy", `${first(k)} kept to the deal you made about the party.`); return `${first(k)} was home at 10:55 and texted from the doorstep. Trust, it turns out, is built in small deliveries.`; }
++            bump(k, -3); trouble(k);
++            return `${first(k)} turned up at 1am, apologetic, with a very good excuse. You believed about half of it.`;
++          },
++        },
++      },
++      {
++        text: "Let them go, no conditions",
++        effects: {
++          logText: "You said yes and tried not to watch the clock.",
++          bizEffect: (p, rng) => {
++            const k = teenOf(p);
++            if (!k) return;
++            bump(k, 8);
++            if (rng.chance(DEFIANT.includes(temper(k)) ? 0.5 : 0.18)) { trouble(k); p.bankBalance = Math.max(0, p.bankBalance - 400); return `It went badly: a broken window, an angry neighbour, and ${first(k)} sheepish at 3am. It cost $400 to smooth over.`; }
++            return `${first(k)} had the best night of their year and told you the whole thing at breakfast.`;
++          },
++        },
++      },
++    ], { requires: { custom: (p) => !!teenOf(p) && teenOf(p)!.age >= 14 }, cooldown: 4 }),
++
++  ev("rel_teen_phone", "family", 26, 75, "The Glowing Rectangle",
++    "{teen} hasn't looked up from a phone since Tuesday. Grades are slipping, and the one time you asked a question you got a shrug and a sigh.", [
++      opt("Confiscate it for a month", "You took the phone. The house became very quiet and very tense.", {
++        bizEffect: (p) => {
++          const k = teenOf(p);
++          if (!k) return;
++          if (DEFIANT.includes(temper(k))) { bump(k, -9); return `${first(k)} stopped speaking to you for days, then found ways round it on a friend's phone.`; }
++          bump(k, -4); k.smarts = clamp(k.smarts + 3);
++          return `${first(k)} sulked, then, astonishingly, picked up a book. Marks improved.`;
++        },
++      }),
++      opt("Agree rules together: no phones at dinner or after ten", "You wrote the rules together, you included. It was oddly fair.", {
++        bizEffect: (p) => { const k = teenOf(p); if (!k) return; bump(k, 4); k.smarts = clamp(k.smarts + 1); return `${first(k)} stuck to it, mostly, and you stuck to it too, which was the harder part.`; },
++      }),
++      opt("Leave them to it", "You let it go. Everyone's life is on that screen now, you told yourself.", {
++        happinessDelta: 1,
++        bizEffect: (p) => { const k = teenOf(p); if (!k) return; k.smarts = clamp(k.smarts - 3); bump(k, -2); return `${first(k)}'s marks slid, and you felt the distance grow.`; },
++      }),
++    ], { requires: { custom: (p) => !!teenOf(p) && teenOf(p)!.age <= 16 }, cooldown: 5 }),
++
++  ev("rel_teen_grades", "family", 26, 75, "A Bad Report",
++    "{teen}'s school report arrives in a plain brown envelope. Two Fs, a note about 'potential', and a teacher's request to come in.", [
++      {
++        text: "Hire a tutor ($1,200)",
++        effects: { logText: "You booked a tutor and cleared the kitchen table.", bankBalanceDelta: -1200, bizEffect: (p) => { const k = teenOf(p); if (!k) return; k.smarts = clamp(k.smarts + 5); bump(k, TENDER.includes(temper(k)) ? 4 : 1); return `${first(k)} improved steadily, and a bit of confidence came back with the grades.`; } },
++      },
++      {
++        text: "Lay down the law: no fun until grades are up",
++        effects: {
++          logText: "You said no social life until the marks improved.",
++          bizEffect: (p) => {
++            const k = teenOf(p);
++            if (!k) return;
++            const t = temper(k);
++            if (t === "driven") { k.smarts = clamp(k.smarts + 4); bump(k, -2); return `${first(k)} took it as a challenge and was top of the class by spring.`; }
++            if (TENDER.includes(t)) { bump(k, -12); k.smarts = clamp(k.smarts + 1); return `${first(k)} cried in their room and stopped talking to you. The marks barely moved.`; }
++            bump(k, -8); trouble(k);
++            return `${first(k)} stopped trying and started skipping lessons. You won the argument and lost the child, a little.`;
++          },
++        },
++      },
++      {
++        text: "Sit with them and ask what's really going on",
++        effects: {
++          logText: "You asked what was going on, and waited.",
++          bizEffect: (p, rng) => {
++            const k = teenOf(p);
++            if (!k) return;
++            bump(k, 7);
++            if (rng.chance(0.55)) { k.smarts = clamp(k.smarts + 3); k.trouble = Math.max(0, (k.trouble ?? 0) - 1); remember(p, k, "kindness", `${first(k)} finally told you what was wrong at school.`); return `It came out slowly: a friendship that ended, a teacher who frightened them. Naming it helped more than any lecture.`; }
++            return `${first(k)} shrugged and said "nothing", but pulled you into a hug on the way out. A start.`;
++          },
++        },
++      },
++    ], { requires: { custom: (p) => !!teenOf(p) && teenOf(p)!.age >= 13 }, cooldown: 5 }),
++
++  ev("rel_teen_coming_out", "family", 35, 75, "I Need to Tell You Something",
++    "{teen} has been rehearsing this on the stairs for ten minutes. Then, quickly, as if pulling off a plaster: they're gay. They're watching your face very carefully.", [
++      {
++        text: "Hold them. \"Nothing changes. I love you.\"",
++        effects: {
++          logText: "You pulled them into a hug and said the only true thing: nothing changes.",
++          happinessDelta: 3,
++          karmaDelta: 3,
++          bizEffect: (p) => { const k = teenOf(p); if (!k) return; bump(k, 15); remember(p, k, "milestone", `${first(k)} told you who they are, and you held them.`); return `${first(k)} cried with relief. They'd been terrified for years. It will be one of the moments they tell their own children about.`; },
++        },
++      },
++      {
++        text: "Say you need time to take it in",
++        effects: {
++          logText: "You said you needed time. It was honest, and it landed badly.",
++          happinessDelta: -3,
++          bizEffect: (p) => { const k = teenOf(p); if (!k) return; bump(k, -5); addGrievance(p, k, "fight", 1, "the way you reacted when they came out"); return `${first(k)} nodded and went to their room. You can still make this right, but they will remember how long it took you to say the words.`; },
++        },
++      },
++      {
++        text: "Tell them it's probably a phase",
++        effects: {
++          logText: "You said it was probably a phase. The look on their face said it all.",
++          happinessDelta: -5,
++          karmaDelta: -3,
++          bizEffect: (p) => { const k = teenOf(p); if (!k) return; bump(k, -22); addGrievance(p, k, "betrayal", 3, "what you said when they came out"); remember(p, k, "betrayal", `${first(k)} trusted you with the truth, and you dismissed it.`); return `${first(k)} stopped confiding in you that night. Mending this will take real work, and an honest apology.`; },
++        },
++      },
++    ], { requires: { custom: (p) => !!teenOf(p) && teenOf(p)!.age >= 14 }, once: true, weight: 0.5 }),
++
++  ev("rel_teen_college", "family", 36, 60, "Who Pays for University?",
++    "{teen} has an offer from a good university. The tuition letter is on the fridge. So is a very hopeful drawing of the campus.", [
++      {
++        text: "Cover it all ($25,000)",
++        effects: { logText: "You wrote the cheque and called it an investment.", bankBalanceDelta: -25000, karmaDelta: 2, bizEffect: (p) => { const k = teenOf(p); if (!k) return; bump(k, 9); k.traits = [...(k.traits ?? []), "College fund"]; remember(p, k, "kindness", `You paid for ${first(k)}'s university.`); return `${first(k)} hugged you hard and didn't say anything, which is how you knew.`; } },
++      },
++      {
++        text: "Pay half; they work for the rest ($12,000)",
++        effects: { logText: "You split it: half from you, half from summer jobs.", bankBalanceDelta: -12000, bizEffect: (p) => { const k = teenOf(p); if (!k) return; bump(k, 4); k.traits = [...(k.traits ?? []), "College fund"]; return `${first(k)} took it seriously and kept every receipt.`; } },
++      },
++      {
++        text: "They'll have to find their own way",
++        effects: { logText: "You told them it was theirs to work out.", happinessDelta: 1, bizEffect: (p) => { const k = teenOf(p); if (!k) return; bump(k, TENDER.includes(temper(k)) ? -9 : -4); k.smarts = clamp(k.smarts + 1); return `${first(k)} nodded politely. They'll manage, but a door closed a little.`; } },
++      },
++    ], { requires: { custom: (p) => !!teenOf(p) && teenOf(p)!.age >= 16 && teenOf(p)!.smarts >= 45 && !(teenOf(p)!.traits ?? []).includes("College fund") }, once: true }),
++
++  ev("rel_kid_bullied", "family", 26, 75, "A Quiet Child",
++    "{kid} has stopped talking about school. Tonight they won't eat, and a lunchbox came home untouched for the third day.", [
++      {
++        text: "Go to the school and demand action",
++        effects: { logText: "You marched into the head's office. Things were done.", bizEffect: (p, rng) => { const k = littleOf(p); if (!k) return; bump(k, 6); if (rng.chance(0.6)) return `The bullying stopped within the month. ${first(k)} walked taller.`; trouble(k); return `The school promised a lot and did little. ${first(k)} felt exposed by the fuss.`; } },
++      },
++      {
++        text: "Teach them to stand up for themselves",
++        effects: { logText: "You practised what to say, over and over, until it sounded natural.", bizEffect: (p) => { const k = littleOf(p); if (!k) return; const t = temper(k); if (t === "bold" || t === "stubborn" || t === "driven") { bump(k, 5); return `${first(k)} stood up to the bully on Thursday. It worked, which surprised everyone.`; } bump(k, 2); return `${first(k)} tried, but it was never their way. It helped a little.`; } },
++      },
++      {
++        text: "Move them to a new school ($3,000)",
++        effects: { logText: "You moved them to a new school and a fresh start.", bankBalanceDelta: -3000, bizEffect: (p) => { const k = littleOf(p); if (!k) return; bump(k, 8); k.smarts = clamp(k.smarts + 2); return `${first(k)} made two friends in the first week and laughed out loud at dinner. You'd forgotten the sound.`; } },
++      },
++    ], { requires: { custom: (p) => !!littleOf(p) && littleOf(p)!.age >= 7 }, cooldown: 6 }),
++];
++
++// ===========================================================================
++// Grown children
++// ===========================================================================
++const GROWN: LifeEvent[] = [
++  ev("rel_grown_broke", "family", 42, 80, "Can You Help?",
++    "{grownchild} is calling, which is how you know it's about money. A job fell through, the rent is due, and the pride in their voice is clearly costing them.", [
++      {
++        text: "Give them $4,000, no strings",
++        effects: { logText: "You sent $4,000 and told them not to mention it again.", bankBalanceDelta: -4000, karmaDelta: 3, bizEffect: (p) => { const k = grownOf(p); if (!k) return; bump(k, 10); remember(p, k, "kindness", `You helped ${first(k)} when they were at their lowest.`); return `${first(k)} was too choked up to say much.`; } },
++      },
++      {
++        text: "Lend $4,000 and agree a plan to repay it",
++        effects: { logText: "You lent them $4,000 on a handshake and a spreadsheet.", bankBalanceDelta: -4000, bizEffect: (p) => { const k = grownOf(p); if (!k) return; bump(k, 5); p.flags.push(`lent:${k.id}:4000:${p.year}`); return `${first(k)} promised to pay it back, and sounded like they meant it.`; } },
++      },
++      {
++        text: "Let them move back for a while",
++        effects: { logText: "You cleared the spare room and put a duvet on the bed.", happinessDelta: -3, bizEffect: (p) => { const k = grownOf(p); if (!k) return; bump(k, 12); remember(p, k, "kindness", `${first(k)} moved back home for a while.`); return `The house is louder, the fridge is emptier, and ${first(k)} laughs in the kitchen again. A year of this will test you both.`; } },
++      },
++      {
++        text: "Say no. They have to stand on their own",
++        effects: { logText: "You said no, gently. It was one of the hardest things you've said.", happinessDelta: -2, bizEffect: (p) => { const k = grownOf(p); if (!k) return; bump(k, -12); addGrievance(p, k, "neglect", 1, "the time you said no when they asked for help"); return `${first(k)} said "I understand" in the tone of someone who didn't.`; } },
++      },
++    ], { requires: { custom: (p) => !!grownOf(p) && grownOf(p)!.age <= 38 }, cooldown: 7 }),
++
++  ev("rel_grown_distance", "family", 40, 90, "A Long Silence",
++    "It's been months since {grownchild} called. You've drafted three texts and deleted them all. The last conversation ended with a pause that went on for a very long time.", [
++      {
++        text: "Write the letter you should have written years ago",
++        effects: { logText: "You wrote it by hand, and it took four tries to be honest.", bizEffect: (p, rng) => { const k = grownOf(p); if (!k) return; const g = (k.grievances ?? []).length; if (rng.chance(0.62)) { bump(k, 20); k.grievances = []; remember(p, k, "milestone", `${first(k)} answered your letter, and you began again.`); return `${first(k)} called the day it arrived. You both talked for three hours.`; } bump(k, 4); return `${first(k)} sent a short, polite reply. It's a door, slightly ajar.${g ? "" : ""}`; } },
++      },
++      {
++        text: "Keep sending small messages and no demands",
++        effects: { logText: "You sent photos of the garden and a joke every week. No pressure.", bizEffect: (p) => { const k = grownOf(p); if (!k) return; bump(k, 8); return `By autumn ${first(k)} was replying with jokes of their own.`; } },
++      },
++      {
++        text: "Wait. They know where to find you",
++        effects: { logText: "You decided not to chase. It was easier to be proud than hurt.", happinessDelta: -3, bizEffect: (p) => { const k = grownOf(p); if (!k) return; bump(k, -8); return `The silence stretched on, and neither of you moved first.`; } },
++      },
++    ], { requires: { custom: (p) => !!grownOf(p) && grownOf(p)!.relationshipBar < 38 }, cooldown: 5 }),
++];
++
++// ===========================================================================
++// Friends
++// ===========================================================================
++const FRIENDS: LifeEvent[] = [
++  ev("rel_friend_crisis", "family", 20, 85, "The 2am Call",
++    "{bestie} is on the phone at 2am, crying. A marriage that isn't working out, a loss at work, or just everything arriving at once. They don't know who else to call.", [
++      {
++        text: "Drive over. Stay as long as it takes",
++        effects: { logText: "You drove over in your coat and stayed until sunrise.", happinessDelta: -2, karmaDelta: 3, bizEffect: (p) => { const f = bestFriendOf(p); if (!f) return; bump(f, 15); remember(p, f, "kindness", `You were there for ${first(f)} at 2am when it mattered.`); return `${first(f)} said later it was the night they knew who their real friends were.`; } },
++      },
++      {
++        text: "Lend them $2,000 and listen",
++        effects: { logText: "You listened, and quietly lent them what they needed.", bankBalanceDelta: -2000, bizEffect: (p) => { const f = bestFriendOf(p); if (!f) return; bump(f, 9); p.flags.push(`lent:${f.id}:2000:${p.year}`); return `${first(f)} swore to pay it back.`; } },
++      },
++      {
++        text: "Say you're swamped; talk tomorrow",
++        effects: { logText: "You said you'd call in the morning. It was true, and it wasn't enough.", bizEffect: (p) => { const f = bestFriendOf(p); if (!f) return; bump(f, -14); addGrievance(p, f, "neglect", 1, "the night you weren't there"); return `You did call in the morning. ${first(f)} was polite. Something had changed.`; } },
++      },
++    ], { requires: { custom: (p) => bestOk(p) }, cooldown: 6 }),
++
++  ev("rel_friend_vs_partner", "romance", 22, 70, "Them or Us",
++    "{bestie} and {partner} don't get along, and tonight it finally came out. Two people you love in the same room, both pretending not to be furious.", [
++      {
++        text: "Stand by {partner}",
++        effects: { logText: "You told your friend you'd stand by your partner, and meant it.", bizEffect: (p) => { const f = bestFriendOf(p); const pa = getPartner(p); bump(f, -14); bump(pa, 5); return f ? `${first(f)} went home early and quiet.` : undefined; } },
++      },
++      {
++        text: "Stand by {bestie}",
++        effects: { logText: "You took your friend's side, and your partner noticed.", bizEffect: (p) => { const f = bestFriendOf(p); const pa = getPartner(p); bump(f, 8); bump(pa, -9); if (pa) addGrievance(p, pa, "fight", 1, "the night you took your friend's side"); return undefined; } },
++      },
++      risk("Sit them both down and make them talk", 0.5, ["You made them meet halfway, a negotiation worthy of diplomats. A truce, with grudging respect on both sides.", { happinessDelta: 4, bizEffect: (p) => { bump(bestFriendOf(p), 5); bump(getPartner(p), 5); } }], ["It turned into a second row, with you in the middle.", { happinessDelta: -4, bizEffect: (p) => { bump(bestFriendOf(p), -5); bump(getPartner(p), -5); } }], "happiness"),
++    ], { requires: { hasPartner: true, custom: (p) => bestOk(p) }, cooldown: 8 }),
++];
++
++// ===========================================================================
++// In-laws, exes and the shape of a household
++// ===========================================================================
++const INLAW_WARMTH = (p: PlayerState, d: number) => {
++  const pa = getPartner(p);
++  for (const l of pa?.inLaws ?? []) if (l.alive) l.warmth = clamp(l.warmth + d);
++};
++
++const HOUSEHOLD: LifeEvent[] = [
++  ev("rel_inlaw_holiday", "family", 24, 80, "Whose Christmas Is It?",
++    "Both families want you for the holidays, and both have gone quiet in the particular way that means they're offended. {inlaw} has already mentioned the empty chair twice.", [
++      opt("Alternate every year, fairly", "You made a rota and stuck it on the fridge. It's almost fair.", { happinessDelta: 1, bizEffect: (p) => { INLAW_WARMTH(p, 3); bump(getPartner(p), 3); } }),
++      opt("Spend it at {inlaw}'s, and win them over", "You turned up with wine and your best manners and washed every dish.", { happinessDelta: -1, bizEffect: (p) => { INLAW_WARMTH(p, 10); bump(getPartner(p), 4); } }),
++      opt("Go away, just the two of you", "You booked a cabin and turned your phones off. Both families sulked.", { happinessDelta: 5, bizEffect: (p) => { INLAW_WARMTH(p, -8); bump(getPartner(p), 6); } }),
++    ], { requires: { married: true, custom: (p) => !!inLawOf(p) }, cooldown: 6 }),
++
++  ev("rel_inlaw_care", "family", 38, 90, "Who Looks After Them?",
++    "{inlaw} can't manage alone any more. A fall, a hospital stay, and a social worker with a clipboard. {partner} looks at you across the kitchen table and doesn't ask. They don't have to.", [
++      {
++        text: "Take them in",
++        effects: { logText: "You cleared the study, installed a grab rail, and braced yourselves.", happinessDelta: -5, healthDelta: -2, bizEffect: (p) => { INLAW_WARMTH(p, 25); const pa = getPartner(p); bump(pa, 12); if (pa) remember(p, pa, "kindness", `You took in ${inLawOf(p)?.name.split(" ")[0] ?? "their parent"} when it counted.`); return "It was hard. It was also the kind of thing a marriage is built on."; } },
++      },
++      {
++        text: "Pay for a good care home ($14,000)",
++        effects: { logText: "You found a good place nearby, and paid for it.", bankBalanceDelta: -14000, bizEffect: (p) => { INLAW_WARMTH(p, 8); bump(getPartner(p), 4); } },
++      },
++      {
++        text: "Leave it to the rest of the family",
++        effects: { logText: "You said it wasn't your place. It was technically true.", happinessDelta: 1, bizEffect: (p) => { INLAW_WARMTH(p, -18); const pa = getPartner(p); bump(pa, -10); if (pa) addGrievance(p, pa, "neglect", 2, "how you handled their parent's care"); } },
++      },
++    ], { requires: { married: true, custom: (p) => { const l = inLawOf(p); return !!l && l.age >= 75; } }, once: true }),
++
++  ev("rel_coparent_dispute", "family", 25, 70, "A Question of Weekends",
++    "{coparent} wants to change the custody arrangement: the children's weekends, the summer holidays, a possible move across the country. The email came at 11pm, in capital letters.", [
++      {
++        text: "Agree to the changes, for the children's sake",
++        effects: { logText: "You said yes to most of it, swallowing a lot.", happinessDelta: -2, bizEffect: (p) => { const x = coParentOf(p); bump(x, 8); for (const k of p.relatives) if (k.relation === "Child" && k.custody && k.age < 18) bump(k, 3); } },
++      },
++      {
++        text: "Refuse, and say why",
++        effects: { logText: "You refused. The email back was longer than the first one.", happinessDelta: -3, bizEffect: (p) => { const x = coParentOf(p); bump(x, -10); if (x) addGrievance(p, x, "fight", 1, "the custody dispute"); } },
++      },
++      risk("Propose mediation ($2,500)", 0.62, ["A mediator found something both of you could live with, and the children noticed that you were no longer fighting.", { bankBalanceDelta: -2500, happinessDelta: 4, bizEffect: (p) => { bump(coParentOf(p), 6); for (const k of p.relatives) if (k.relation === "Child" && k.custody && k.age < 18) bump(k, 5); } }], ["Mediation went nowhere. Two hours of pleasantries, and $2,500 on the clock.", { bankBalanceDelta: -2500, happinessDelta: -3 }]),
++    ], { requires: { custom: (p) => !!coParentOf(p) }, cooldown: 6 }),
++
++  ev("rel_blended_family", "family", 24, 60, "Meeting the Children",
++    "{partner} has been in your life for a while now, and the children don't know. You've been rehearsing the conversation in the shower.", [
++      {
++        text: "Introduce them slowly: a park, then a pizza",
++        effects: { logText: "You introduced them slowly, on neutral ground.", happinessDelta: 2, bizEffect: (p, rng) => { const pa = getPartner(p); for (const k of p.relatives) if (k.relation === "Child" && k.alive && k.age < 18) bump(k, DEFIANT.includes(temper(k)) ? rng.int(-3, 2) : 3); bump(pa, 4); return "It was awkward and fine. Awkward and fine is a good start."; } },
++      },
++      {
++        text: "Introduce them now: no more hiding",
++        effects: { logText: "You told the children, and brought {partner} to dinner that night.", bizEffect: (p, rng) => { for (const k of p.relatives) if (k.relation === "Child" && k.alive && k.age < 18) bump(k, TENDER.includes(temper(k)) || rng.chance(0.4) ? -7 : 2); bump(getPartner(p), 2); return "Some of the children took it better than others."; } },
++      },
++      {
++        text: "Wait another year",
++        effects: { logText: "You decided the children weren't ready. Maybe you weren't either.", bizEffect: (p) => { bump(getPartner(p), -8); const pa = getPartner(p); if (pa) addGrievance(p, pa, "neglect", 1, "being kept a secret from the children"); } },
++      },
++    ], { requires: { hasPartnerStatus: "dating", hasChildren: true, custom: (p) => p.relatives.some((r) => r.relation === "Child" && r.alive && r.age < 18) }, once: true }),
++
++  ev("rel_empty_nest", "romance", 44, 68, "The Quiet House",
++    "The last of the children has gone. You and {partner} sit across the kitchen table in a house that suddenly echoes. Neither of you quite knows how to start the conversation, or whether to.", [
++      {
++        text: "Plan something new together ($3,000)",
++        effects: { logText: "You booked a trip you'd both talked about for twenty years.", bankBalanceDelta: -3000, happinessDelta: 6, bizEffect: (p) => { const pa = getPartner(p); bump(pa, 10); if (pa) { pa.unmet = {}; remember(p, pa, "joy", "You rediscovered each other once the house emptied."); } } },
++      },
++      {
++        text: "Get a hobby each and give each other room",
++        effects: { logText: "You each took up something of your own, and met for dinner.", happinessDelta: 3, bizEffect: (p) => { bump(getPartner(p), 4); } },
++      },
++      {
++        text: "Say nothing and drift",
++        effects: { logText: "You let the quiet become the new normal.", happinessDelta: -4, bizEffect: (p) => { const pa = getPartner(p); bump(pa, -9); if (pa) addGrievance(p, pa, "neglect", 1, "the silence you both let grow"); } },
++      },
++    ], { requires: { married: true, hasChildren: true, custom: (p) => !p.relatives.some((r) => r.relation === "Child" && r.alive && r.age < 20) }, once: true }),
++];
++
++export const RELATIONSHIP_EVENTS: LifeEvent[] = [...TEENS, ...GROWN, ...FRIENDS, ...HOUSEHOLD];
+diff --git a/src/data/lifeEventsEngine.ts b/src/data/lifeEventsEngine.ts
+index 3773841..f0c0eab 100644
+--- a/src/data/lifeEventsEngine.ts
++++ b/src/data/lifeEventsEngine.ts
+@@ -30,6 +30,7 @@ import { JUSTICE_EVENTS } from "./events/justice";
+ import { POLITICS_EVENTS } from "./events/politics";
+ import { ARC_EVENTS } from "./events/arcs";
+ import { COURT_EVENTS } from "./events/court";
++import { RELATIONSHIP_EVENTS } from "./events/relationships";
+ 
+ export type EventCategory =
+   | "general"
+@@ -228,6 +229,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
+   ...POLITICS_EVENTS,
+   ...ARC_EVENTS,
+   ...COURT_EVENTS,
++  ...RELATIONSHIP_EVENTS,
+ ];
+ 
+ export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(
+diff --git a/src/engine/__tests__/_scratch_play.test.ts b/src/engine/__tests__/_scratch_play.test.ts
+new file mode 100644
+index 0000000..6560299
+--- /dev/null
++++ b/src/engine/__tests__/_scratch_play.test.ts
+@@ -0,0 +1,181 @@
++// @ts-nocheck
++// SCRATCH (not committed): plays many lives through relationships with different strategies.
++import { describe, it } from "vitest";
++import fs from "node:fs";
++import { makeRng, type Rng } from "@/lib/rng";
++import { ageUp, finalize } from "../ageUp";
++import { createNewPlayer, getPartner } from "../state";
++import { resolveEvent } from "../events";
++import { resolveTrial } from "../crime";
++import { applyForJob } from "../career";
++import { adoptChild, dateNight, interact, leavePartner, meetSomeone, propose, tryForBaby } from "../social";
++import { closeRelationship, hookUp, makeLove, proposeOpenRelationship, seduce, SEDUCE_TARGETS } from "../intimacy";
++import { supportAction } from "../friends";
++import { childAction } from "../parenting";
++import type { Notice, PlayerState } from "@/types/game.types";
++import { NEUTRAL } from "./helpers/neutral";
++
++const OUT = "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/play.txt";
++type Strategy = "mono" | "serial" | "poly" | "single" | "parent" | "divorcee" | "phobe";
++const STRATS: Strategy[] = ["mono", "serial", "poly", "single", "parent", "divorcee", "phobe"];
++
++const issues: Record<string, { count: number; sample: string }> = {};
++const flag = (k: string, sample: string) => {
++  const e = issues[k] ?? (issues[k] = { count: 0, sample });
++  e.count++;
++};
++
++function settle(p: PlayerState, res: { player: PlayerState }): PlayerState {
++  if (res.player !== p) finalize(res.player, []);
++  return res.player;
++}
++
++function invariants(p: PlayerState, tag: string) {
++  const partners = p.relatives.filter((r) => r.relation === "Partner" && r.alive && r.partnerStatus !== "ex");
++  if (partners.length > 1) flag("multiple active partners", `${tag} age ${p.age}: ${partners.map((x) => x.name + x.partnerStatus).join(",")}`);
++  for (const r of p.relatives) {
++    if (typeof r.age !== "number" || Number.isNaN(r.age)) flag("relative without age", `${tag} ${r.name} ${r.relation}`);
++    if ((r.relation === "Partner" || r.relation === "Lover") && r.alive && r.partnerStatus !== "ex" && r.age < 18 && p.age >= 18) flag("minor partner of adult", `${tag} p.age ${p.age} ${r.name} ${r.age}`);
++    if ((r.relation === "Partner" || r.relation === "Lover") && r.alive && r.partnerStatus !== "ex" && r.age < 18 && p.age < 16) flag("partner for under 16", `${tag}`);
++    if (r.relation === "Partner" && r.partnerStatus === "married" && !r.marriedYear) flag("married without marriedYear", `${tag} ${r.name}`);
++    if (r.relationshipBar < 0 || r.relationshipBar > 100) flag("bar out of range", `${tag}`);
++    if (r.relation === "Child" && r.alive && r.age < 0) flag("child neg age", tag);
++    if (r.relation === "Partner" && !r.alive && r.partnerStatus !== "ex" && r.partnerStatus === "married") { /* widow */ }
++  }
++  if (p.pregnancy && p.pregnancy.carrier !== "self" && !p.relatives.some((r) => r.id === p.pregnancy!.carrier)) flag("pregnancy carrier missing", tag);
++  if (p.flags.includes("child_support") && !p.relatives.some((r) => r.relation === "Child" && r.alive && r.age < 18)) { /* cleaned in processing */ }
++  const names = p.relatives.filter((r) => r.alive && r.relation !== "Pet").map((r) => r.name);
++  const dupes = names.filter((n, i) => names.indexOf(n) !== i);
++  if (dupes.length) flag("duplicate names among living relatives", `${tag}: ${dupes[0]}`);
++}
++
++function playLife(seed: number, strat: Strategy, log: string[]): PlayerState {
++  const rng = makeRng(seed);
++  let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
++  p.matureContent = true;
++  const tag = `${strat}#${seed}`;
++  let children = 0;
++  for (let guard = 0; guard < 110 && p.alive; guard++) {
++    if (p.pendingTrial) p = settle(p, resolveTrial(p, "public", rng));
++    p = act(p, rng, strat, log);
++    const before = p.relatives.filter((r) => r.relation === "Partner" && r.alive && r.partnerStatus !== "ex").map((r) => r.name);
++    const logStart = p.lifeLog.length;
++    const res = ageUp(p, rng);
++    p = res.player;
++    for (const n of (res.notices ?? []) as Notice[]) {
++      if (n.kind === "event" && p.alive) {
++        const ev = n.event;
++        const idx = chooseOption(p, ev, rng, strat);
++        const out = resolveEvent(p, ev, idx, rng);
++        p = settle(p, out);
++        if (ev.category === "romance" || ev.category === "family" || /partner|spouse|marri|child/i.test(ev.description)) {
++          log.push(`[${tag} age ${p.age}] EVENT ${ev.id} -> ${out.notices?.[0] && out.notices[0].kind === "info" ? out.notices[0].body.slice(0, 160) : ""}`);
++        }
++      }
++      if (n.kind === "info" && /divorce|breakup|affair|baby|pregnan|passed away|Caught|Strain|Teenage|grown|drift/i.test(n.title + n.body)) log.push(`[${tag} age ${p.age}] ${n.title}: ${n.body.slice(0, 200)}`);
++    }
++    void logStart; void before;
++    invariants(p, tag);
++    children = p.stats.childrenBorn;
++  }
++  log.push(`[${tag}] END age ${p.age} children ${children} cause ${p.causeOfDeath}`);
++  return p;
++}
++
++function chooseOption(p: PlayerState, ev: { options: unknown[]; id: string }, rng: Rng, strat: Strategy): number {
++  void strat; void p;
++  return rng.int(0, ev.options.length - 1);
++}
++
++function act(p: PlayerState, rng: Rng, strat: Strategy, log: string[]): PlayerState {
++  const partner = getPartner(p);
++  const friends = p.relatives.filter((r) => r.relation === "Friend" && r.alive);
++  if (p.age >= 6 && friends.length < 3 && rng.chance(0.4)) p = settle(p, meetSomeone(p, "friend", rng));
++  if (p.age >= 16 && !p.currentJob && p.education.stage === "None" && rng.chance(0.5)) p = settle(p, applyForJob(p, rng.pick(["retail", "fast_food", "teacher", "nurse", "software"]), rng));
++  // friend/family upkeep
++  if (p.age >= 6) {
++    for (const r of p.relatives.filter((x) => x.alive && ["Friend", "Parent", "Sibling"].includes(x.relation)).slice(0, 3)) {
++      if (rng.chance(0.5)) p = settle(p, interact(p, r.id, "spend", rng));
++      if (p.age >= 18 && rng.chance(0.08)) p = settle(p, supportAction(p, r.id, "lend", rng, 1000));
++    }
++  }
++  const pa = getPartner(p);
++  // Meeting events resolve as event notices: simulate by taking them
++  const take = (res: { player: PlayerState; notices?: Notice[] }) => {
++    let q = res.player;
++    for (const n of res.notices ?? []) if (n.kind === "event") q = settle(q, resolveEvent(q, n.event, 0, rng));
++    return q;
++  };
++  switch (strat) {
++    case "mono":
++    case "divorcee":
++    case "parent": {
++      if (p.age >= 18 && !pa && rng.chance(0.35)) p = take(meetSomeone(p, "date", rng) as never);
++      if (pa && pa.partnerStatus === "dating" && pa.relationshipBar > 55 && rng.chance(0.4)) p = settle(p, propose(p, rng));
++      const m = getPartner(p);
++      if (m) {
++        if (rng.chance(0.5)) p = settle(p, dateNight(p));
++        if (rng.chance(0.4)) p = settle(p, interact(p, m.id, "spend", rng));
++        if (p.matureContent && p.age >= 18 && rng.chance(0.5)) p = settle(p, makeLove(p, m.id, rng.chance(0.5), rng));
++        if (m.partnerStatus === "married" && p.age >= 24 && p.age < 42 && rng.chance(strat === "parent" ? 0.7 : 0.3)) p = settle(p, tryForBaby(p, rng));
++        if (strat === "divorcee" && m.partnerStatus === "married" && rng.chance(0.08)) p = settle(p, leavePartner(p));
++      }
++      if (strat === "parent" && p.age >= 26 && rng.chance(0.15)) p = settle(p, adoptChild(p, rng));
++      break;
++    }
++    case "serial": {
++      if (p.age >= 18 && !pa && rng.chance(0.5)) p = take(meetSomeone(p, "date", rng) as never);
++      if (pa && rng.chance(0.25)) p = settle(p, leavePartner(p));
++      if (p.age >= 18) p = settle(p, hookUp(p, rng.pick(["bar", "app", "party", "gym", "club"] as const), rng.chance(0.6), rng, "casual"));
++      if (p.age >= 18) p = settle(p, seduce(p, rng.pick(SEDUCE_TARGETS).id, rng.chance(0.6), rng));
++      break;
++    }
++    case "poly": {
++      if (p.age >= 18 && !pa && rng.chance(0.5)) p = take(meetSomeone(p, "date", rng) as never);
++      if (pa && p.age >= 18) {
++        p = settle(p, proposeOpenRelationship(p, rng, "poly"));
++        if (p.age >= 18) p = settle(p, hookUp(p, "scene" as never, true, rng, "relationship"));
++        p = settle(p, hookUp(p, rng.pick(["bar", "app", "singles"] as const), true, rng, "casual"));
++        for (const l of p.relatives.filter((r) => r.relation === "Lover" && r.alive && r.partnerStatus !== "ex")) p = settle(p, makeLove(p, l.id, true, rng));
++      }
++      break;
++    }
++    case "phobe": {
++      if (p.age >= 18 && !pa && rng.chance(0.4)) p = take(meetSomeone(p, "date", rng) as never);
++      if (pa && rng.chance(0.5)) p = settle(p, leavePartner(p));
++      if (p.age >= 18 && rng.chance(0.3)) p = settle(p, hookUp(p, "app", true, rng, "casual"));
++      break;
++    }
++    case "single":
++      break;
++  }
++  // parenting
++  for (const k of p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18)) {
++    if (rng.chance(0.5)) p = settle(p, childAction(p, k.id, "talk", rng));
++    if (rng.chance(0.3)) p = settle(p, childAction(p, k.id, "family", rng));
++  }
++  void closeRelationship; void log;
++  return p;
++}
++
++describe("scratch play", () => {
++  it("plays lives", () => {
++    const log: string[] = [];
++    const stats: Record<string, { lives: number; married: number; divorced: number; kids: number; affairs: number; avgAge: number }> = {};
++    for (const strat of STRATS) {
++      stats[strat] = { lives: 0, married: 0, divorced: 0, kids: 0, affairs: 0, avgAge: 0 };
++      for (let s = 1; s <= 40; s++) {
++        const p = playLife(s * 7 + strat.length, strat, log);
++        const st = stats[strat];
++        st.lives++;
++        if (p.relatives.some((r) => r.relation === "Partner" && r.partnerStatus === "married") || p.flags.includes("was_divorced")) st.married++;
++        if (p.flags.includes("was_divorced")) st.divorced++;
++        st.kids += p.stats.childrenBorn;
++        st.affairs += p.stats.affairs;
++        st.avgAge += p.age;
++      }
++      stats[strat].avgAge = Math.round(stats[strat].avgAge / stats[strat].lives);
++    }
++    fs.writeFileSync(OUT, JSON.stringify({ stats, issues }, null, 2) + "\n\n" + log.join("\n"));
++  });
++});
+diff --git a/src/engine/__tests__/_scratch_save.test.ts b/src/engine/__tests__/_scratch_save.test.ts
+new file mode 100644
+index 0000000..66751c7
+--- /dev/null
++++ b/src/engine/__tests__/_scratch_save.test.ts
+@@ -0,0 +1,40 @@
++// @ts-nocheck
++// SCRATCH (not committed): builds a rich mid-life save for the UI play-through.
++import { it } from "vitest";
++import fs from "node:fs";
++import { makeRng } from "@/lib/rng";
++import { ageUp, finalize } from "../ageUp";
++import { createNewPlayer, getPartner } from "../state";
++import { resolveEvent } from "../events";
++import { meetSomeone, propose, tryForBaby } from "../social";
++import { exportSave } from "../save";
++import type { Notice, PlayerState } from "@/types/game.types";
++import { NEUTRAL } from "./helpers/neutral";
++
++it("builds save", () => {
++  const rng = makeRng(4242);
++  let p: PlayerState = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
++  const settle = (r: { player: PlayerState }) => { if (r.player !== p) finalize(r.player, []); p = r.player; };
++  for (let i = 0; i < 60 && p.alive; i++) {
++    if (p.age >= 6 && p.relatives.filter((r) => r.relation === "Friend" && r.alive).length < 3) {
++      const res = meetSomeone(p, "friend", rng);
++      settle(res);
++      for (const n of (res.notices ?? []) as Notice[]) if (n.kind === "event") settle(resolveEvent(p, n.event, 0, rng));
++    }
++    if (p.age >= 20 && !getPartner(p)) {
++      const res = meetSomeone(p, "date", rng);
++      settle(res);
++      for (const n of (res.notices ?? []) as Notice[]) if (n.kind === "event") settle(resolveEvent(p, n.event, 0, rng));
++    }
++    const pa = getPartner(p);
++    if (pa && pa.partnerStatus === "dating" && pa.relationshipBar > 50) settle(propose(p, rng));
++    if (pa && pa.partnerStatus === "married" && p.age < 38) settle(tryForBaby(p, rng));
++    const res = ageUp(p, rng);
++    p = res.player;
++    for (const n of (res.notices ?? []) as Notice[]) if (n.kind === "event" && p.alive) settle(resolveEvent(p, n.event, 0, rng));
++    if (p.age >= Number(process.env.SAVE_AGE ?? 44)) break;
++  }
++  p.bankBalance = 200000;
++  fs.writeFileSync(process.env.SAVE_OUT ?? "/tmp/claude-0/-home-user-bitlife-clone/9286e593-ea74-5b82-bd58-1dff269f48ec/scratchpad/save1.json", exportSave(p, rng.state()));
++  console.log(p.age, p.relatives.map((r) => `${r.relation}:${r.name}:${r.age}:${r.partnerStatus ?? ""}`).join(" | "));
++});
+diff --git a/src/engine/ageUp.ts b/src/engine/ageUp.ts
+index d4ae3ab..8bc64c5 100644
+--- a/src/engine/ageUp.ts
++++ b/src/engine/ageUp.ts
+@@ -25,6 +25,8 @@ import {
+ import { deathChance, killPlayer, naturalCause } from "./mortality";
+ import { endRelationship, maybeGrandchild } from "./social";
+ import { processFriendLoans } from "./friends";
++import { processRelationships } from "./relations";
++import { remember } from "./bonds";
+ import { processTemper } from "./talentEffects";
+ import { processChildren, schoolCosts } from "./parenting";
+ import { processLaterLife } from "./later";
+@@ -154,13 +156,15 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
+     changeStat(p, "happiness", -10);
+     notices.push(info(married ? "Divorce" : "Breakup", body, "bad"));
+   }
+-  p.relatives = p.relatives.filter((r) => {
+-    if (r.relation === "Friend" && r.alive && r.relationshipBar <= 0) {
++  // Friends you stop caring for drift away, but they stay findable: you can reach out again later (see circle.ts).
++  for (const r of p.relatives) {
++    if (r.relation === "Friend" && r.alive && r.partnerStatus !== "ex" && r.relationshipBar <= 0) {
++      r.partnerStatus = "ex";
++      r.lostYear = p.year;
++      remember(p, r, "loss", `You and ${r.name.split(" ")[0]} drifted apart.`);
+       addLog(p, `You and ${r.name} drifted apart.`);
+-      return false;
+     }
+-    return true;
+-  });
++  }
+   if (p.age < 18 && !hasFlag(p, "orphan") && livingRelatives(p, "Parent").length === 0) {
+     p.flags.push("orphan");
+     changeStat(p, "happiness", -12);
+@@ -606,6 +610,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
+   processTemper(p, rng, notices);
+   processChildren(p, rng, notices);
+   processIntimacy(p, prevAnnual, rng, notices);
++  processRelationships(p, prevAnnual, rng, notices);
+   processAssets(p, rng); // 3. asset economics
+   processFinance(p, rng, notices); // 4. financial balance sheet
+   processHobbies(p, prevAnnual, notices);
+diff --git a/src/engine/bonds.ts b/src/engine/bonds.ts
+new file mode 100644
+index 0000000..cbc28c7
+--- /dev/null
++++ b/src/engine/bonds.ts
+@@ -0,0 +1,208 @@
++/**
++ * What gives a relationship a past and a character: shared memories, unresolved grievances that come
++ * back to bite, and the two things each person needs (their values), which decide how well you fit.
++ * Pure helpers: nothing here rolls dice unless handed an rng.
++ */
++import type { Grievance, GrievanceKind, Memory, MemoryKind, PlayerState, Relative } from "@/types/game.types";
++import { clamp } from "@/lib/format";
++import { hash01 } from "./people";
++
++const first = (r: Relative) => r.name.split(" ")[0];
++
++// ---------------------------------------------------------------------------
++// Memories
++// ---------------------------------------------------------------------------
++
++export const MAX_MEMORIES = 16;
++/** Kinds that are never the first to be forgotten. */
++const KEEPERS: MemoryKind[] = ["met", "milestone", "betrayal", "loss"];
++
++export function remember(p: PlayerState, rel: Relative, kind: MemoryKind, text: string) {
++  const list = (rel.memories = rel.memories ?? []);
++  if (list.some((m) => m.year === p.year && m.text === text)) return;
++  list.push({ year: p.year, age: p.age, kind, text });
++  while (list.length > MAX_MEMORIES) {
++    const i = list.findIndex((m) => !KEEPERS.includes(m.kind));
++    list.splice(i >= 0 ? i : 0, 1);
++  }
++}
++
++/** Marks when you met someone and files the first memory. Safe to call twice. */
++export function introduce(p: PlayerState, rel: Relative, text?: string) {
++  if (rel.metYear === undefined) rel.metYear = p.year;
++  if (!rel.memories?.some((m) => m.kind === "met")) remember(p, rel, "met", text ?? `You met ${first(rel)}.`);
++}
++
++/** Years you've known someone, when it can be told (family are known from birth or marriage). */
++export function yearsKnown(p: PlayerState, rel: Relative): number | null {
++  if (rel.metYear !== undefined) return Math.max(0, p.year - rel.metYear);
++  if (rel.relation === "Parent" || rel.relation === "Sibling" || rel.relation === "Grandparent") return p.age;
++  if (rel.relation === "Child" || rel.relation === "Grandchild" || rel.relation === "Nephew") return rel.age;
++  return null;
++}
++
++// ---------------------------------------------------------------------------
++// Grievances
++// ---------------------------------------------------------------------------
++
++/** Adds (or deepens) an unresolved hurt. Repeating the same kind of hurt makes the existing one worse. */
++export function addGrievance(p: PlayerState, rel: Relative, kind: GrievanceKind, weight: number, text: string): Grievance {
++  const list = (rel.grievances = rel.grievances ?? []);
++  const same = list.find((g) => g.kind === kind && g.text === text) ?? (kind === "betrayal" ? list.find((g) => g.kind === kind) : undefined);
++  if (same) {
++    same.weight = Math.min(3, same.weight + (weight >= same.weight ? 1 : 0));
++    same.year = p.year;
++    return same;
++  }
++  let n = 0;
++  while (list.some((x) => x.id === `g${p.year}${kind[0]}${n}`)) n++;
++  const g: Grievance = { id: `g${p.year}${kind[0]}${n}`, year: p.year, kind, weight: clamp(weight, 1, 3), text };
++  list.push(g);
++  return g;
++}
++
++export const grievanceLoad = (rel: Relative) => (rel.grievances ?? []).reduce((s, g) => s + g.weight, 0);
++
++/** The one that hurts most (oldest breaks a tie). */
++export function worstGrievance(rel: Relative): Grievance | undefined {
++  return [...(rel.grievances ?? [])].sort((a, b) => b.weight - a.weight || a.year - b.year)[0];
++}
++
++/** Eases a grievance by `by` steps; it's gone at zero. Returns true if it was removed. */
++export function soften(rel: Relative, id: string, by = 1): boolean {
++  const g = rel.grievances?.find((x) => x.id === id);
++  if (!g) return false;
++  g.weight -= by;
++  if (g.weight <= 0) {
++    rel.grievances = rel.grievances!.filter((x) => x.id !== id);
++    return true;
++  }
++  return false;
++}
++
++// ---------------------------------------------------------------------------
++// Values and fit
++// ---------------------------------------------------------------------------
++
++export interface ValueDef {
++  id: string;
++  label: string;
++  emoji: string;
++  /** What it looks like when this need goes unmet. */
++  lack: string;
++  /** What meets it, for the UI. */
++  hint: string;
++}
++
++export const VALUES: ValueDef[] = [
++  { id: "affection", label: "Affection", emoji: "💞", lack: "feels taken for granted", hint: "Date nights, time together, love" },
++  { id: "adventure", label: "Adventure", emoji: "🧭", lack: "is bored and restless", hint: "Getaways, trying new things" },
++  { id: "security", label: "Security", emoji: "🏡", lack: "worries about where this is going", hint: "Planning the future, helping with money" },
++  { id: "independence", label: "Space", emoji: "🕊️", lack: "feels smothered", hint: "Time apart, trust, not hovering" },
++  { id: "ambition", label: "Drive", emoji: "🚀", lack: "feels their goals don't matter to you", hint: "Backing their goals" },
++  { id: "family", label: "Family", emoji: "👨‍👩‍👧", lack: "wants more family life", hint: "Family weekends, in-laws, kids" },
++];
++export const VALUE_BY_ID: Record<string, ValueDef> = Object.fromEntries(VALUES.map((v) => [v.id, v]));
++
++const TRAIT_VALUES: Record<string, string[]> = {
++  Loyal: ["security", "family"],
++  Adventurous: ["adventure"],
++  Jealous: ["affection"],
++  Romantic: ["affection"],
++  Ambitious: ["ambition"],
++  Easygoing: ["independence"],
++  Wild: ["adventure", "independence"],
++  Reserved: ["independence", "security"],
++  Kind: ["family", "affection"],
++  "Hot-tempered": ["ambition", "independence"],
++};
++
++/** The two things this person needs. Follows their personality; stable for the life of the relationship. */
++export function valuesOf(rel: Relative): [string, string] {
++  if (rel.values && rel.values.length >= 2) return [rel.values[0], rel.values[1]];
++  const picks: string[] = [];
++  for (const t of rel.traits ?? []) for (const v of TRAIT_VALUES[t] ?? []) if (!picks.includes(v)) picks.push(v);
++  let i = 0;
++  while (picks.length < 2) {
++    const v = VALUES[Math.floor(hash01(`${rel.id}:v${i++}`) * VALUES.length)].id;
++    if (!picks.includes(v)) picks.push(v);
++  }
++  return [picks[0], picks[1]];
++}
++
++/** What matters to you, from your hidden gifts. */
++export function myValues(p: PlayerState): [string, string] {
++  const t = p.talents;
++  const score: Record<string, number> = {
++    affection: (t.romance + t.empathy) / 2,
++    adventure: (t.courage + t.athletic) / 2,
++    security: (t.moneySense + t.discipline) / 2,
++    independence: (t.resilience + t.cunning) / 2,
++    ambition: (t.leadership + t.business) / 2,
++    family: (t.empathy + t.fertility) / 2,
++  };
++  const ranked = VALUES.map((v) => ({ id: v.id, s: score[v.id] + hash01(`${p.id}:${v.id}`) * 8 })).sort((a, b) => b.s - a.s);
++  return [ranked[0].id, ranked[1].id];
++}
++
++const CLASH: [string, string][] = [["adventure", "security"], ["independence", "affection"], ["independence", "family"]];
++
++export interface Fit {
++  score: number;
++  label: "Natural fit" | "Workable" | "Opposites";
++  shared: string[];
++  clashes: number;
++}
++
++/** How well your two sets of needs sit together (0-100). */
++export function compatibility(p: PlayerState, rel: Relative): Fit {
++  const mine = myValues(p);
++  const theirs = valuesOf(rel);
++  const shared = mine.filter((v) => theirs.includes(v));
++  let clashes = 0;
++  for (const m of mine) for (const t of theirs) if (CLASH.some(([a, b]) => (a === m && b === t) || (a === t && b === m))) clashes++;
++  const openness = 1 - Math.abs((rel.openness ?? 40) - (p.intimacy.interests.length * 12 + 20)) / 120;
++  const score = clamp(Math.round(48 + shared.length * 20 - clashes * 14 + openness * 12));
++  return { score, label: score >= 66 ? "Natural fit" : score >= 42 ? "Workable" : "Opposites", shared, clashes };
++}
++
++/** Learn one of their needs. Returns the value learned, or undefined if you know them both. */
++export function learnValue(rel: Relative): ValueDef | undefined {
++  const known = (rel.knownValues = rel.knownValues ?? []);
++  const next = valuesOf(rel).find((v) => !known.includes(v));
++  if (!next) return undefined;
++  known.push(next);
++  return VALUE_BY_ID[next];
++}
++
++/** Record that something you did met one of their needs this year. */
++export function meet(p: PlayerState, rel: Relative, ...values: string[]) {
++  for (const v of values) p.annual[`need:${rel.id}:${v}`] = 1;
++}
++
++export const needMet = (annual: Record<string, number>, rel: Relative, v: string) => !!annual[`need:${rel.id}:${v}`];
++
++// ---------------------------------------------------------------------------
++// How the relationship is going
++// ---------------------------------------------------------------------------
++
++export interface Health {
++  score: number;
++  label: "Thriving" | "Steady" | "Strained" | "On the rocks";
++  tone: "green" | "blue" | "amber" | "red";
++}
++
++export function relationshipHealth(p: PlayerState, rel: Relative): Health {
++  const fit = compatibility(p, rel);
++  const years = Math.min(10, yearsKnown(p, rel) ?? 0);
++  const score = Math.round(rel.relationshipBar * 0.65 + (fit.score - 50) * 0.25 + years * 0.8 - grievanceLoad(rel) * 7 - (rel.separatedYear ? 15 : 0));
++  if (score >= 72) return { score, label: "Thriving", tone: "green" };
++  if (score >= 50) return { score, label: "Steady", tone: "blue" };
++  if (score >= 30) return { score, label: "Strained", tone: "amber" };
++  return { score, label: "On the rocks", tone: "red" };
++}
++
++/** Short timeline lines for the UI, newest last. */
++export function timeline(rel: Relative, n = 8): Memory[] {
++  return (rel.memories ?? []).slice(-n);
++}
+diff --git a/src/engine/cast.ts b/src/engine/cast.ts
+new file mode 100644
+index 0000000..5908433
+--- /dev/null
++++ b/src/engine/cast.ts
+@@ -0,0 +1,39 @@
++/**
++ * Picks the specific person an event is about ("the teenager", "your best friend", "your ex") so event
++ * text and event effects always agree on who that is.
++ */
++import type { PlayerState, Relative } from "@/types/game.types";
++
++const alive = (r: Relative) => r.alive && r.partnerStatus !== "ex";
++const kids = (p: PlayerState) => p.relatives.filter((r) => r.relation === "Child" && r.alive).sort((a, b) => b.age - a.age);
++
++export const teenOf = (p: PlayerState): Relative | undefined => kids(p).find((k) => k.age >= 12 && k.age < 18);
++export const littleOf = (p: PlayerState): Relative | undefined => kids(p).find((k) => k.age >= 3 && k.age < 12);
++export const grownOf = (p: PlayerState): Relative | undefined => kids(p).find((k) => k.age >= 20);
++export const bestFriendOf = (p: PlayerState): Relative | undefined =>
++  p.relatives.filter((r) => r.relation === "Friend" && alive(r)).sort((a, b) => b.relationshipBar - a.relationshipBar)[0];
++export const exOf = (p: PlayerState): Relative | undefined =>
++  p.relatives.filter((r) => r.relation === "Partner" && r.partnerStatus === "ex" && r.alive).sort((a, b) => (b.lostYear ?? 0) - (a.lostYear ?? 0))[0];
++export const coParentOf = (p: PlayerState): Relative | undefined => {
++  const kid = kids(p).find((k) => k.age < 18 && k.custody);
++  return kid ? p.relatives.find((r) => r.relation !== "Child" && r.partnerStatus === "ex" && r.alive && r.name === kid.otherParent) : undefined;
++};
++export const inLawOf = (p: PlayerState) => {
++  const partner = p.relatives.find((r) => r.relation === "Partner" && r.alive && r.partnerStatus === "married");
++  return partner?.inLaws?.find((l) => l.alive);
++};
++
++const first = (r: { name: string } | undefined, fallback: string) => (r ? r.name.split(" ")[0] : fallback);
++
++/** {teen} {kid} {grownchild} {bestie} {ex} {coparent} {inlaw} */
++export function fillFamilyTokens(text: string, p: PlayerState): string {
++  if (!text.includes("{")) return text;
++  return text
++    .replaceAll("{teen}", first(teenOf(p), "your teenager"))
++    .replaceAll("{kid}", first(littleOf(p), "your little one"))
++    .replaceAll("{grownchild}", first(grownOf(p), "your grown child"))
++    .replaceAll("{bestie}", first(bestFriendOf(p), "your friend"))
++    .replaceAll("{ex}", first(exOf(p), "your ex"))
++    .replaceAll("{coparent}", first(coParentOf(p), "your ex"))
++    .replaceAll("{inlaw}", inLawOf(p) ? inLawOf(p)!.name.split(" ")[0] : "your in-law");
++}
+diff --git a/src/engine/circle.ts b/src/engine/circle.ts
+new file mode 100644
+index 0000000..83e346f
+--- /dev/null
++++ b/src/engine/circle.ts
+@@ -0,0 +1,137 @@
++/**
++ * Friendship over a lifetime: who becomes a best friend, who you fall out with, who you lose touch with,
++ * and whether you can find your way back. Friends have lives of their own and need tending.
++ */
++import type { ActionResult, PlayerState, Relative } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp } from "@/lib/format";
++import { addLog, changeStat, clone } from "./state";
++import { addGrievance, remember, yearsKnown } from "./bonds";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
++  ({ kind: "info" as const, title, body, tone });
++const first = (r: Relative) => r.name.split(" ")[0];
++
++const activeFriends = (p: PlayerState) => p.relatives.filter((r) => r.relation === "Friend" && r.alive && r.partnerStatus !== "ex");
++
++/** What kind of friend someone is, from how long and how closely you've known them. */
++export function friendKindFor(p: PlayerState, rel: Relative, isBest: boolean): string {
++  if (rel.riftYear) return "Fallen out";
++  const years = yearsKnown(p, rel) ?? 0;
++  if (isBest && rel.relationshipBar >= 78 && years >= 3) return "Best friend";
++  if (years >= 12 && rel.relationshipBar >= 45) return "Old friend";
++  if (rel.relationshipBar >= 65) return "Close friend";
++  if (rel.relationshipBar < 30) return "Acquaintance";
++  return "Friend";
++}
++
++const RIFT_CAUSES = [
++  "a falling-out over money",
++  "something unforgivable said at a party",
++  "a birthday you forgot",
++  "taking the wrong side in someone else's argument",
++  "a partner they never liked",
++  "a secret that got repeated",
++];
++
++const MOMENTS: { text: (n: string) => string; bar?: number; happy?: number; mem: (n: string) => string }[] = [
++  { text: (n) => `${n} got married, and you were there, a bit teary, near the front.`, bar: 3, mem: (n) => `You were at ${n}'s wedding.` },
++  { text: (n) => `${n} had a baby and sent you the first photo before most of their family.`, bar: 3, mem: (n) => `${n} had a baby.` },
++  { text: (n) => `${n} moved to another city for work. The group chat is now your whole friendship.`, bar: -8, mem: (n) => `${n} moved away.` },
++  { text: (n) => `${n} lost their job and has been quiet. A text from you would mean a lot.`, bar: 0, mem: (n) => `${n} had a hard year.` },
++  { text: (n) => `${n} got a big promotion and treated everyone to dinner.`, bar: 2, happy: 1, mem: (n) => `You celebrated ${n}'s promotion.` },
++];
++
++export function processCircle(p: PlayerState, prev: Record<string, number>, rng: Rng, notices: Notices) {
++  const friends = activeFriends(p).sort((a, b) => b.relationshipBar - a.relationshipBar);
++  const bestId = friends[0]?.id;
++  for (const f of friends) {
++    const n = first(f);
++    f.friendKind = friendKindFor(p, f, f.id === bestId);
++
++    if (f.riftYear) {
++      if (p.year - f.riftYear >= 3) {
++        f.partnerStatus = "ex";
++        f.lostYear = p.year;
++        remember(p, f, "loss", `You and ${n} never made up.`);
++        const body = `${f.name} is out of your life for good now. Neither of you made the first move, and the silence set like concrete.`;
++        addLog(p, body);
++        notices.push(info("Estranged", body, "bad"));
++      } else {
++        f.relationshipBar = clamp(f.relationshipBar - 3);
++      }
++      continue;
++    }
++
++    // Falling out: likelier with a short fuse, a jealous streak, or a year of silence.
++    const silent = (prev[`rel:${f.id}`] ?? 0) === 0;
++    const risk =
++      0.025 +
++      ((f.traits ?? []).includes("Hot-tempered") ? 0.035 : 0) +
++      ((f.jealousy ?? 50) > 65 ? 0.025 : 0) +
++      (silent && f.relationshipBar >= 40 ? 0.045 : 0) -
++      (p.talents.empathy - 50) / 2000;
++    if (f.relationshipBar >= 35 && rng.chance(Math.max(0.01, risk))) {
++      const cause = rng.pick(RIFT_CAUSES);
++      f.riftYear = p.year;
++      f.relationshipBar = clamp(f.relationshipBar - 25);
++      addGrievance(p, f, "fight", 2, cause);
++      remember(p, f, "conflict", `You and ${n} fell out over ${cause}.`);
++      changeStat(p, "happiness", -3);
++      const body = `You and ${n} had a bitter falling-out over ${cause}. It could still be mended if somebody swallows their pride soon. Open ${n}'s page and clear the air.`;
++      addLog(p, body);
++      notices.push(info("A Falling-Out", body, "bad"));
++    }
++  }
++
++  // Friends have lives. One piece of news a year, at most.
++  const candidates = activeFriends(p).filter((f) => !f.riftYear && f.relationshipBar >= 35);
++  if (candidates.length > 0 && rng.chance(0.4)) {
++    const f = rng.pick(candidates);
++    const m = rng.pick(MOMENTS);
++    f.relationshipBar = clamp(f.relationshipBar + (m.bar ?? 0));
++    if (m.happy) changeStat(p, "happiness", m.happy);
++    remember(p, f, "milestone", m.mem(first(f)));
++    const body = m.text(first(f));
++    addLog(p, body);
++    notices.push(info("Friends' News", body, "neutral"));
++  }
++
++  // A big circle is thin: you can't keep everybody warm.
++  const rest = activeFriends(p);
++  if (rest.length > 6) {
++    const weakest = rest.sort((a, b) => a.relationshipBar - b.relationshipBar)[0];
++    weakest.relationshipBar = clamp(weakest.relationshipBar - 4);
++  }
++
++  // Lost friends fade from memory eventually.
++  p.relatives = p.relatives.filter((r) => !(r.relation === "Friend" && r.partnerStatus === "ex" && r.lostYear !== undefined && p.year - r.lostYear > 20));
++}
++
++export function reachOut(p0: PlayerState, relId: string, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const f = p.relatives.find((r) => r.id === relId && r.alive && r.relation === "Friend" && r.partnerStatus === "ex");
++  if (!f) return { player: p0 };
++  const n = first(f);
++  if ((p.annual[`reach:${f.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Wait a While", `You've already reached out to ${n} this year.`)] };
++  p.annual[`reach:${f.id}`] = 1;
++  const gone = p.year - (f.lostYear ?? p.year);
++  const chance = clamp(0.6 - gone * 0.03 + (p.talents.empathy - 50) / 300 - (f.grievances ?? []).reduce((s, g) => s + g.weight, 0) * 0.04, 0.12, 0.85);
++  if (rng.chance(chance)) {
++    f.partnerStatus = undefined;
++    f.lostYear = undefined;
++    f.riftYear = undefined;
++    f.grievances = [];
++    f.relationshipBar = clamp(40 + rng.int(0, 15));
++    remember(p, f, "milestone", `You and ${n} found each other again after ${gone || "a few"} years.`);
++    changeStat(p, "happiness", 5);
++    const body = `You sent ${n} a message that took you an hour to write. They replied within minutes: "I was just thinking about you." You talked until the phone died.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Back in Touch", body, "good")] };
++  }
++  changeStat(p, "happiness", -2);
++  const body = `You wrote to ${n}. The message was read, and nothing came back. Some doors only open from one side.`;
++  addLog(p, body);
++  return { player: p, notices: [info("No Reply", body, "bad")] };
++}
+diff --git a/src/engine/desire.ts b/src/engine/desire.ts
+index 55cca5b..da29dd0 100644
+--- a/src/engine/desire.ts
++++ b/src/engine/desire.ts
+@@ -8,7 +8,7 @@ import type { Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+ import { EXPERIENCE_BY_ID, INTERESTS, INTEREST_BY_ID } from "@/data/experiences";
+ import { addLog, changeStat, clone } from "./state";
+-import { encounter, fill, gate, isAdult, isOpen, recordCheating } from "./intimacy";
++import { declines, encounter, fill, gate, isAdult, isOpen, recordCheating } from "./intimacy";
+ import { firstName } from "./social";
+ import { MAX_PREF_AGE, MIN_ADULT_AGE, knows, tasteOf } from "./people";
+ 
+@@ -98,6 +98,8 @@ export function shareExperience(p0: PlayerState, relId: string, expId: string, p
+   const exp = EXPERIENCE_BY_ID[expId];
+   const rel = findPartnerLike(p, relId);
+   if (!exp || !rel || !isAdult(rel)) return { player: p0 };
++  const no = declines(rel);
++  if (no) return { player: p0, notices: [info("Not Tonight", `${firstName(rel)} ${no}. You respected that.`)] };
+   if (exp.partnerOnly && rel.relation !== "Partner") return { player: p0, notices: [info("Not Casual", "That needs the trust of a real relationship.")] };
+   if (!p.intimacy.interests.includes(exp.tag)) return { player: p0, notices: [info("Not On Your List", `Add "${INTEREST_BY_ID[exp.tag].label}" to your interests (Preferences) first.`)] };
+   if (rel.relationshipBar < exp.minBar) return { player: p0, notices: [info("Not There Yet", `${firstName(rel)} would want a stronger bond first (relationship ${exp.minBar}+).`)] };
+@@ -236,6 +238,8 @@ export function playScene(p0: PlayerState, relId: string, plan: ScenePlan, prote
+   const p = clone(p0);
+   const rel = findPartnerLike(p, relId);
+   if (!rel || !isAdult(rel)) return { player: p0 };
++  const no = declines(rel);
++  if (no) return { player: p0, notices: [info("Not Tonight", `${firstName(rel)} ${no}. You respected that.`)] };
+   const setting = pick(SCENE_SETTINGS, plan.setting);
+   const mood = pick(SCENE_MOODS, plan.mood);
+   const extra = pick(SCENE_EXTRAS, plan.extra) ?? SCENE_EXTRAS[0];
+diff --git a/src/engine/events.ts b/src/engine/events.ts
+index c850c52..869e3a1 100644
+--- a/src/engine/events.ts
++++ b/src/engine/events.ts
+@@ -30,6 +30,9 @@ import { exposeAffair } from "./intimacy";
+ import { promoteJob } from "./career";
+ import { cancelScheduled, emigrate, relativeDies, scheduleAll, takeDueEvents } from "./arcEffects";
+ import { fillNpcTokens } from "./npc";
++import { fillFamilyTokens } from "./cast";
++import { remember } from "./bonds";
++import { ensureInLaws } from "./inlaws";
+ 
+ // ---------------------------------------------------------------------------
+ // Token substitution: {mother}, {father}, {partner}, {sibling}, {friend}, {child}, {name}
+@@ -54,7 +57,7 @@ export function fillTokens(text: string, p: PlayerState): string {
+     .replaceAll("{child}", ch ? firstName(ch) : "your child")
+     .replaceAll("{biz}", p.business?.name ?? "your business")
+     .replaceAll("{name}", p.firstName);
+-  return fillNpcTokens(out, p);
++  return fillNpcTokens(fillFamilyTokens(out, p), p);
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -219,6 +222,8 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng): string
+       partner.partnerStatus = "married";
+       partner.marriedYear = p.year;
+       p.queuedEvents.push("wedding_day");
++      remember(p, partner, "milestone", `You and ${firstName(partner)} got married.`);
++      ensureInLaws(p, partner, rng);
+     }
+   }
+   if (e.endRelationship) endRelationship(p, e.endRelationship === "auto" ? (getPartner(p)?.partnerStatus === "married" ? "divorce" : "breakup") : e.endRelationship);
+diff --git a/src/engine/friends.ts b/src/engine/friends.ts
+index 70de6d8..1992d70 100644
+--- a/src/engine/friends.ts
++++ b/src/engine/friends.ts
+@@ -7,6 +7,7 @@ import type { Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+ import { addLog, changeStat, clone } from "./state";
+ import { firstName } from "./social";
++import { addGrievance, remember } from "./bonds";
+ 
+ type Notices = NonNullable<ActionResult["notices"]>;
+ const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
+@@ -49,6 +50,7 @@ export function supportAction(p0: PlayerState, relId: string, action: SupportAct
+     p.bankBalance -= amount;
+     p.flags.push(`lent:${rel.id}:${amount}:${p.year}`);
+     rel.relationshipBar = clamp(rel.relationshipBar + 8);
++    remember(p, rel, "kindness", `You lent ${n} ${money(amount)} when they needed it.`);
+     const body = `You lent ${n} ${money(amount)}. They promised to pay it back as soon as they can.`;
+     addLog(p, body);
+     return { player: p, notices: [info("A Loan Between Friends", body, "neutral")] };
+@@ -61,6 +63,7 @@ export function supportAction(p0: PlayerState, relId: string, action: SupportAct
+     if (warm) {
+       rel.relationshipBar = clamp(rel.relationshipBar + 6);
+       changeStat(p, "happiness", 4);
++      if (rel.relationshipBar >= 60) remember(p, rel, "kindness", `You opened up to ${n} when it mattered.`);
+       const body = `You told ${n} what's been weighing on you. They listened properly and didn't try to fix everything.`;
+       addLog(p, body);
+       return { player: p, notices: [info("Opening Up", body, "good")] };
+@@ -113,6 +116,8 @@ export function processFriendLoans(p: PlayerState, rng: Rng, notices: Notices) {
+       notices.push(info("Repaid", body, "good"));
+     } else if (p.year - year >= 3) {
+       rel.relationshipBar = clamp(rel.relationshipBar - 25);
++      addGrievance(p, rel, "debt", 2, `the ${money(amt)} they never paid back`);
++      remember(p, rel, "hardship", `${firstName(rel)} never repaid the ${money(amt)} you lent.`);
+       const body = `You've given up on ever seeing the ${money(amt)} ${firstName(rel)} borrowed. The friendship has cooled.`;
+       addLog(p, body);
+       notices.push(info("Never Repaid", body, "bad"));
+diff --git a/src/engine/household.ts b/src/engine/household.ts
+index f7886c5..f531ccd 100644
+--- a/src/engine/household.ts
++++ b/src/engine/household.ts
+@@ -5,6 +5,7 @@
+ import type { PlayerState, Relative } from "@/types/game.types";
+ import { money } from "@/lib/format";
+ import { addLog, changeStat, getPartner } from "./state";
++import { supportShare } from "./partnership";
+ 
+ /** Typical annual income by incomeTier 1-5. */
+ const TIER_INCOME = [0, 16_000, 34_000, 58_000, 95_000, 160_000];
+@@ -24,7 +25,8 @@ export const SHARED_LIVING_FACTOR = 0.55;
+ 
+ export function marriedPartner(p: PlayerState): Relative | undefined {
+   const partner = getPartner(p);
+-  return partner && partner.partnerStatus === "married" ? partner : undefined;
++  // A separated spouse is still legally married, but you no longer share a household budget.
++  return partner && partner.partnerStatus === "married" && !partner.separatedYear ? partner : undefined;
+ }
+ 
+ export function yearsMarried(p: PlayerState, partner: Relative): number {
+@@ -65,24 +67,24 @@ export function divorceSettlement(p: PlayerState, partner: Relative, atFault: bo
+ export function settleDivorce(p: PlayerState, partner: Relative, atFault = false): string {
+   const total = divorceSettlement(p, partner, atFault);
+   const kids = minorChildren(p).length;
+-  if (kids > 0) {
+-    if (!p.flags.includes("child_support")) p.flags.push("child_support");
+-  }
+   changeStat(p, "happiness", -4);
+-  return `Your divorce from ${partner.name} cost you ${money(total)} in the settlement${kids > 0 ? `, and you'll pay child support for ${kids} child${kids > 1 ? "ren" : ""} until they turn 18` : ""}.`;
++  return `Your divorce from ${partner.name} cost you ${money(total)} in the settlement${kids > 0 ? `, and there will be child support for ${kids} child${kids > 1 ? "ren" : ""} until they turn 18` : ""}.`;
+ }
+ 
+-/** Yearly maintenance for children after a divorce, as a share of your income. */
++/**
++ * Yearly maintenance for children of a couple that has split, as a share of your income. It depends on
++ * where the children live (see partnership.ts): none if they live with you, less if custody is shared.
++ */
+ export function childSupportDue(p: PlayerState, gross: number): number {
+   if (!p.flags.includes("child_support")) return 0;
+-  const kids = minorChildren(p).length;
+-  if (kids === 0) {
++  const kids = minorChildren(p);
++  if (kids.length === 0) {
+     p.flags = p.flags.filter((f) => f !== "child_support");
+     return 0;
+   }
+-  const married = marriedPartner(p);
+-  if (married) return 0;
+-  return Math.round(gross * Math.min(0.25, 0.08 * kids));
++  // Children from before custody existed have no record: treat them under the old flat rule.
++  const unsettled = kids.filter((k) => !k.custody).length;
++  return Math.round(gross * Math.min(0.25, supportShare(p) + (unsettled > 0 && !marriedPartner(p) ? 0.08 * unsettled : 0)));
+ }
+ 
+ /** Income a lender will count: wages, pensions, a share of a spouse's pay and of recent business profit. */
+diff --git a/src/engine/inlaws.ts b/src/engine/inlaws.ts
+new file mode 100644
+index 0000000..04395df
+--- /dev/null
++++ b/src/engine/inlaws.ts
+@@ -0,0 +1,168 @@
++/**
++ * Your partner's family: the people who come with a marriage. They have feelings about you, they age,
++ * they help or interfere, and when one dies how you showed up matters to your spouse.
++ */
++import type { ActionResult, InLaw, PlayerState, Relative } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { addLog, changeStat, clone, getPartner } from "./state";
++import { deathChance } from "./mortality";
++import { freshFirstName } from "./people";
++import { addGrievance, meet, remember } from "./bonds";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
++  ({ kind: "info" as const, title, body, tone });
++const first = (r: { name: string }) => r.name.split(" ")[0];
++
++export const HOLIDAY_COST = 400;
++
++/** Generates the family the first time it's needed (at the wedding). */
++export function ensureInLaws(p: PlayerState, partner: Relative, rng: Rng): InLaw[] {
++  if (partner.inLaws) return partner.inLaws;
++  const surname = partner.name.split(" ").slice(1).join(" ") || p.lastName;
++  const mk = (role: InLaw["role"], gender: string, age: number): InLaw => {
++    const parent = role === "Mother-in-law" || role === "Father-in-law";
++    const alive = rng.chance(clamp(1 - Math.max(0, age - 62) * 0.04, 0.1, 0.98));
++    const warmth = clamp(Math.round(46 + (partner.relationshipBar - 55) / 5 + (p.bankBalance > 100_000 ? 5 : 0) + rng.int(-16, 16) + (parent ? 0 : 6)));
++    return { name: `${freshFirstName(p, gender, rng)} ${surname}`, role, age, alive, warmth };
++  };
++  const list: InLaw[] = [
++    mk("Mother-in-law", "Female", partner.age + rng.int(21, 32)),
++    mk("Father-in-law", "Male", partner.age + rng.int(22, 34)),
++  ];
++  if (rng.chance(0.55)) {
++    const sister = rng.chance(0.5);
++    list.push(mk(sister ? "Sister-in-law" : "Brother-in-law", sister ? "Female" : "Male", Math.max(18, partner.age + rng.int(-6, 6))));
++  }
++  partner.inLaws = list;
++  const living = list.filter((l) => l.alive);
++  if (living.length > 0) remember(p, partner, "milestone", `You met ${first(partner)}'s family: ${living.map((l) => first(l)).join(", ")}.`);
++  return list;
++}
++
++const livingInLaws = (partner: Relative) => (partner.inLaws ?? []).filter((l) => l.alive);
++
++function marriedPartnerOf(p: PlayerState, relId: string): Relative | undefined {
++  const r = p.relatives.find((x) => x.id === relId && x.alive && x.relation === "Partner" && x.partnerStatus === "married");
++  return r && r.inLaws ? r : undefined;
++}
++
++export function visitInLaws(p0: PlayerState, relId: string, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const partner = marriedPartnerOf(p, relId);
++  if (!partner) return { player: p0 };
++  const family = livingInLaws(partner);
++  if (family.length === 0) return { player: p0, notices: [info("Nobody to Visit", `${first(partner)}'s family is gone now.`)] };
++  if ((p.annual[`inlaw:visit:${partner.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Just Visited", "You've already made the trip this year.")] };
++  p.annual[`inlaw:visit:${partner.id}`] = 1;
++  meet(p, partner, "family", "affection");
++  const mishap = rng.chance(0.22);
++  for (const l of family) l.warmth = clamp(l.warmth + (mishap ? 1 : 5));
++  partner.relationshipBar = clamp(partner.relationshipBar + (mishap ? 1 : 3));
++  const who = family.map(first).join(" and ");
++  const body = mishap
++    ? `You drove to see ${who}. The visit was long on small talk and short on warmth, and someone mentioned how you load the dishwasher. ${first(partner)} squeezed your hand under the table.`
++    : `A weekend with ${who}: board games, too much food, an old family story you hadn't heard. ${first(partner)} was visibly relieved that you made the effort.`;
++  addLog(p, body);
++  return { player: p, notices: [info(mishap ? "A Stiff Visit" : "Family Weekend", body, mishap ? "neutral" : "good")] };
++}
++
++export function hostHoliday(p0: PlayerState, relId: string): ActionResult {
++  const p = clone(p0);
++  const partner = marriedPartnerOf(p, relId);
++  if (!partner) return { player: p0 };
++  const family = livingInLaws(partner);
++  if (family.length === 0) return { player: p0, notices: [info("Nobody to Host", `${first(partner)}'s family is gone now.`)] };
++  if ((p.annual[`inlaw:host:${partner.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Once a Year", "Hosting the holiday once a year is quite enough.")] };
++  if (p.bankBalance < HOLIDAY_COST) return { player: p0, notices: [info("Insufficient Funds", `A proper holiday spread costs about ${money(HOLIDAY_COST)}.`, "bad")] };
++  p.annual[`inlaw:host:${partner.id}`] = 1;
++  p.bankBalance -= HOLIDAY_COST;
++  meet(p, partner, "family", "affection");
++  for (const l of family) l.warmth = clamp(l.warmth + 8);
++  partner.relationshipBar = clamp(partner.relationshipBar + 4);
++  changeStat(p, "happiness", 2);
++  const body = `You hosted the whole family. ${family.map(first).join(" and ")} ate everything, criticised nothing out loud, and left with leftovers. ${first(partner)} said it was the best holiday in years.`;
++  addLog(p, body);
++  remember(p, partner, "joy", `You hosted the family holiday.`);
++  return { player: p, notices: [info("Hosting the Family", body, "good")] };
++}
++
++export function askInLawsForHelp(p0: PlayerState, relId: string, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const partner = marriedPartnerOf(p, relId);
++  if (!partner) return { player: p0 };
++  const family = livingInLaws(partner);
++  if (family.length === 0) return { player: p0, notices: [info("Nobody to Ask", `${first(partner)}'s family is gone now.`)] };
++  if ((p.annual[`inlaw:ask:${partner.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Not Again", "You've already leaned on them this year.")] };
++  p.annual[`inlaw:ask:${partner.id}`] = 1;
++  const warm = family.reduce((s, l) => s + l.warmth, 0) / family.length;
++  if (rng.chance(clamp(warm / 110, 0.1, 0.9))) {
++    const kids = p.relatives.some((r) => r.relation === "Child" && r.alive && r.age < 12);
++    const saved = kids ? 2_400 : 1_000;
++    p.bankBalance += saved;
++    for (const l of family) l.warmth = clamp(l.warmth + 3);
++    changeStat(p, "happiness", 3);
++    const body = kids ? `${first(family[0])} took the children every Thursday for a year, and wouldn't hear of being thanked. That saved you ${money(saved)} in childcare.` : `${first(family[0])} quietly slipped you ${money(saved)} "for the house". They said it was only what they'd have spent on you at Christmas.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Family Helps", body, "good")] };
++  }
++  for (const l of family) l.warmth = clamp(l.warmth - 6);
++  partner.relationshipBar = clamp(partner.relationshipBar - 2);
++  const body = `You asked ${first(family[0])} for help and got a lecture about managing money instead. ${first(partner)} was mortified.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Not Welcome", body, "bad")] };
++}
++
++export function processInLaws(p: PlayerState, prev: Record<string, number>, rng: Rng, notices: Notices) {
++  for (const partner of p.relatives) {
++    if (!partner.inLaws || !partner.alive) continue;
++    const present = partner.partnerStatus === "married" && !partner.separatedYear;
++    for (const l of partner.inLaws) {
++      if (!l.alive) continue;
++      l.age += 1;
++      if (present) {
++        const visited = (prev[`inlaw:visit:${partner.id}`] ?? 0) + (prev[`inlaw:host:${partner.id}`] ?? 0) > 0;
++        l.warmth = clamp(l.warmth + (visited ? 0 : -3));
++      }
++      if (l.age > 55 && rng.chance(deathChance(l.age, 70))) {
++        l.alive = false;
++        if (!present) continue;
++        const closeness = l.warmth;
++        let body = `${l.name}, ${first(partner)}'s ${l.role.replace("-in-law", "").toLowerCase()}, passed away at ${l.age}.`;
++        if (closeness >= 50) {
++          partner.relationshipBar = clamp(partner.relationshipBar + 4);
++          changeStat(p, "happiness", -3);
++          body += ` You helped with the funeral and held ${first(partner)} together. They won't forget it.`;
++          remember(p, partner, "kindness", `You stood by ${first(partner)} when ${first(l)} died.`);
++        } else if (closeness < 30) {
++          partner.relationshipBar = clamp(partner.relationshipBar - 3);
++          body += ` You went because you had to. ${first(partner)} noticed how little you said.`;
++          addGrievance(p, partner, "neglect", 1, `how you handled ${first(l)}'s death`);
++        } else {
++          changeStat(p, "happiness", -1);
++        }
++        addLog(p, body);
++        notices.push(info("A Death in the Family", body, "bad"));
++      }
++    }
++    if (!present) continue;
++    const family = livingInLaws(partner);
++    if (family.length === 0) continue;
++    const avg = family.reduce((s, l) => s + l.warmth, 0) / family.length;
++    const lead = family[0];
++    if (avg < 28 && rng.chance(0.3)) {
++      partner.relationshipBar = clamp(partner.relationshipBar - 3);
++      addGrievance(p, partner, "fight", 1, `${first(lead)}'s constant comments`);
++      const body = `${first(lead)} criticised the way you live, again, and ${first(partner)} was caught in the middle. It ended in a row in the car park.`;
++      addLog(p, body);
++      notices.push(info("Interfering In-Laws", body, "bad"));
++    } else if (avg >= 68 && rng.chance(0.25)) {
++      changeStat(p, "happiness", 2);
++      partner.relationshipBar = clamp(partner.relationshipBar + 2);
++      const body = `${first(lead)} turned up with a casserole and an offer to help with the garden, and stayed for dinner. Marrying into this family has its perks.`;
++      addLog(p, body);
++      notices.push(info("A Warm Family", body, "good"));
++    }
++  }
++}
+diff --git a/src/engine/intimacy.ts b/src/engine/intimacy.ts
+index 17089c2..5ea67b2 100644
+--- a/src/engine/intimacy.ts
++++ b/src/engine/intimacy.ts
+@@ -10,9 +10,10 @@ import { addLog, changeStat, clone, getPartner } from "./state";
+ import { createRelative, endRelationship, firstName } from "./social";
+ import { addDisease } from "./events";
+ import { startTrial } from "./crime";
+-import { makeRelativeBase, randomGender, randomName } from "./state";
+-import { adultSpec, tasteOf } from "./people";
++import { makeRelativeBase, randomGender } from "./state";
++import { adultSpec, freshFirstName, tasteOf } from "./people";
+ import { royalStyleForChild } from "./royalty";
++import { addGrievance, introduce, meet, remember } from "./bonds";
+ 
+ type Notices = NonNullable<ActionResult["notices"]>;
+ const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
+@@ -107,7 +108,9 @@ export function exposeAffair(p: PlayerState, rng: Rng, notices: Notices) {
+   } else {
+     partner.relationshipBar = clamp(partner.relationshipBar - 25);
+     changeStat(p, "happiness", -8);
+-    const body = `${partner.name} found out and was devastated, but chose to stay (for now). Trust is shattered.`;
++    addGrievance(p, partner, "betrayal", 3, "the affair");
++    remember(p, partner, "betrayal", `${firstName(partner)} found out about the affair and stayed. Nothing has been quite the same since.`);
++    const body = `${partner.name} found out and was devastated, but chose to stay (for now). Trust is shattered. Counselling and honesty are the only way back.`;
+     addLog(p, body);
+     notices.push(info("Caught!", body, "bad"));
+   }
+@@ -142,6 +145,18 @@ export function encounter(p: PlayerState, other: Relative, protectedSex: boolean
+ 
+ export const LOVE_CAP = 6;
+ 
++/**
++ * Why someone isn't up for intimacy right now, or null if they are. A separated partner, one who feels
++ * betrayed or who has checked out, and anyone who barely knows you all say no, and that always stands.
++ */
++export function declines(other: Relative): string | null {
++  if (other.separatedYear) return "reminded you that you're living apart, and that this isn't what separation means";
++  if ((other.grievances ?? []).some((g) => g.kind === "betrayal" && g.weight >= 2)) return "said they can't be close to you while the betrayal is still raw";
++  if (other.relationshipBar < 20) return "said they weren't feeling close to you right now";
++  if ((other.grievances ?? []).reduce((s, g) => s + g.weight, 0) >= 4) return "said they needed the argument settled before anything else";
++  return null;
++}
++
+ export function makeLove(p0: PlayerState, relId: string, protectedSex: boolean, rng: Rng): ActionResult {
+   const blocked = gate(p0);
+   if (blocked) return { ...blocked, player: p0 };
+@@ -152,8 +167,15 @@ export function makeLove(p0: PlayerState, relId: string, protectedSex: boolean,
+   if ((p.annual[`love:${other.id}`] ?? 0) >= LOVE_CAP) {
+     return { player: p0, notices: [info("Pace Yourselves", `You and ${firstName(other)} have been busy enough this year.`)] };
+   }
+-  const notices: Notices = [];
+   const n = firstName(other);
++  // Wanting someone is never enough: they have to want you back, tonight. A no is a no, and nobody pushes.
++  const reason = declines(other);
++  if (reason) {
++    const body = `${n} ${reason}. You said you understood, and made tea instead.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Not Tonight", body, "neutral")] };
++  }
++  const notices: Notices = [];
+   const body = fill(rng.pick(LOVE_LINES), n);
+   const affair = other.relation === "Lover" && other.partnerStatus === "affair";
+   encounter(p, other, protectedSex, rng, notices, other.relation === "Partner" ? 0.004 : 0.12);
+@@ -200,6 +222,7 @@ export function romanticGetaway(p0: PlayerState, relId: string): ActionResult {
+   p.annual.getaway = 1;
+   p.bankBalance -= GETAWAY_COST;
+   other.relationshipBar = clamp(other.relationshipBar + 15);
++  meet(p, other, "adventure", "affection");
+   changeStat(p, "happiness", 7);
+   const body = `You whisked ${firstName(other)} away for a romantic weekend. Room service, sunsets, and no alarm clocks.`;
+   addLog(p, body);
+@@ -590,12 +613,14 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
+     const { carrier, other } = p.pregnancy;
+     p.pregnancy = null;
+     const gender = randomGender(rng);
+-    const first = randomName(p.residence.country, gender, rng).first;
++    const first = freshFirstName(p, gender, rng);
+     const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, 0, gender, 2, rng.int(70, 100));
+     kid.smarts = clamp(Math.round((p.smarts + 50) / 2 + rng.int(-15, 15)));
+     kid.looks = clamp(Math.round((p.looks + 50) / 2 + rng.int(-15, 15)));
+     kid.health = rng.int(78, 100);
+     kid.royalTitle = royalStyleForChild(p, gender);
++    if (other) kid.otherParent = other;
++    introduce(p, kid, `${first} was born.`);
+     p.relatives.push(kid);
+     p.stats.childrenBorn += 1;
+     changeStat(p, "happiness", 12);
+@@ -646,9 +671,14 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
+       const strain = Math.round(others * (0.5 + (partner.jealousy ?? 50) / 100) * rng.int(0, 3));
+       partner.relationshipBar = clamp(partner.relationshipBar - strain + (prevAnnual[`love:${partner.id}`] ?? 0) * 2);
+       if (strain >= 4) {
+-        const body = `${firstName(partner)} admitted that sharing your time is harder than they expected. A heart-to-heart is overdue.`;
+-        addLog(p, body);
+-        notices.push(info("Strain", body, "bad"));
++        const text = "how thinly your time is stretched";
++        const had = (partner.grievances ?? []).some((g) => g.text === text);
++        addGrievance(p, partner, "neglect", 1, text);
++        if (!had) {
++          const body = `${firstName(partner)} admitted that sharing your time is harder than they expected. It's on the list of things to clear the air about, and it won't fix itself.`;
++          addLog(p, body);
++          notices.push(info("Strain", body, "bad"));
++        }
+       }
+     }
+   }
+diff --git a/src/engine/parenting.ts b/src/engine/parenting.ts
+index e1e60fa..574e545 100644
+--- a/src/engine/parenting.ts
++++ b/src/engine/parenting.ts
+@@ -2,7 +2,9 @@
+ import type { ActionResult, PlayerState, Relative } from "@/types/game.types";
+ import type { Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+-import { addLog, changeStat, clone } from "./state";
++import { addLog, changeStat, clone, getPartner } from "./state";
++import { hash01 } from "./people";
++import { meet, remember } from "./bonds";
+ import { firstName } from "./social";
+ import { occupationFor } from "@/data/occupations";
+ 
+@@ -21,6 +23,53 @@ export const INTERESTS = [
+   { id: "science", label: "Science club", emoji: "🔬" },
+ ] as const;
+ 
++export const TEMPERAMENTS = [
++  { id: "bold", label: "Bold", blurb: "Fearless, pushes every boundary." },
++  { id: "shy", label: "Shy", blurb: "Watches first, speaks later." },
++  { id: "curious", label: "Curious", blurb: "Asks why about everything." },
++  { id: "stubborn", label: "Stubborn", blurb: "Has opinions, and keeps them." },
++  { id: "gentle", label: "Gentle", blurb: "Kind, easily hurt." },
++  { id: "mischievous", label: "Mischievous", blurb: "Always up to something." },
++  { id: "driven", label: "Driven", blurb: "Sets goals and chases them." },
++  { id: "sensitive", label: "Sensitive", blurb: "Feels everything deeply." },
++] as const;
++
++/** A child's nature. Stable for life; it decides how they respond to the way you raise them. */
++export function temperamentOf(kid: Relative): (typeof TEMPERAMENTS)[number] {
++  const found = TEMPERAMENTS.find((t) => t.id === kid.temperament);
++  return found ?? TEMPERAMENTS[Math.floor(hash01(`${kid.id}:temper`) * TEMPERAMENTS.length)];
++}
++
++export const STYLES: { id: PlayerState["parentingStyle"]; label: string; emoji: string; blurb: string }[] = [
++  { id: "strict", label: "Strict", emoji: "📏", blurb: "Clear rules and high expectations. Driven kids thrive; defiant ones rebel; sensitive ones withdraw." },
++  { id: "balanced", label: "Balanced", emoji: "⚖️", blurb: "Warm but firm. No big wins, no big risks." },
++  { id: "permissive", label: "Easy-going", emoji: "🌈", blurb: "Closer bonds and creativity; bold kids run wild." },
++  { id: "handsoff", label: "Hands-off", emoji: "🪁", blurb: "More time for you. Kids drift, and trouble finds them." },
++];
++
++export function setParentingStyle(p0: PlayerState, style: PlayerState["parentingStyle"]): ActionResult {
++  if (p0.parentingStyle === style) return { player: p0 };
++  const p = clone(p0);
++  p.parentingStyle = style;
++  return { player: p };
++}
++
++/** Yearly effect of your parenting style on one child: bond, smarts, and the chance of trouble. */
++export function styleEffect(style: PlayerState["parentingStyle"], temper: string): { bond: number; smarts: number; trouble: number } {
++  const defiant = temper === "bold" || temper === "stubborn" || temper === "mischievous";
++  const tender = temper === "shy" || temper === "sensitive" || temper === "gentle";
++  switch (style) {
++    case "strict":
++      return defiant ? { bond: -3, smarts: 0, trouble: 0.1 } : tender ? { bond: -2, smarts: 1, trouble: 0 } : temper === "driven" ? { bond: 0, smarts: 2, trouble: -0.04 } : { bond: -1, smarts: 1, trouble: -0.02 };
++    case "permissive":
++      return defiant ? { bond: 2, smarts: 0, trouble: 0.1 } : tender ? { bond: 3, smarts: 0, trouble: 0 } : { bond: 2, smarts: temper === "curious" ? 1 : 0, trouble: 0.01 };
++    case "handsoff":
++      return { bond: -3, smarts: -1, trouble: 0.08 };
++    default:
++      return { bond: 1, smarts: 0, trouble: 0 };
++  }
++}
++
+ export type ChildAction = "tutor" | "activity" | "family" | "school" | "talk";
+ 
+ const kidOf = (p: PlayerState, id: string): Relative | undefined => p.relatives.find((r) => r.id === id && r.alive && r.relation === "Child" && r.age < 18);
+@@ -70,6 +119,8 @@ export function childAction(p0: PlayerState, kidId: string, action: ChildAction,
+     p.annual[key] = 1;
+     kid.relationshipBar = clamp(kid.relationshipBar + 10);
+     changeStat(p, "happiness", 3);
++    const mate = getPartner(p);
++    if (mate) meet(p, mate, "family");
+     const body = `A whole weekend with ${n}, no phones. They talked about everything.`;
+     addLog(p, body);
+     return { player: p, notices: [info("Family Time", body, "good")] };
+@@ -101,7 +152,11 @@ export function processChildren(p: PlayerState, rng: Rng, notices: Notices) {
+     const n = firstName(kid);
+     if (kid.age < 18) {
+       kid.smarts = clamp(kid.smarts + rng.int(0, 2) + (kid.school === "private" ? 1 : 0));
+-      if (kid.age >= 12 && kid.relationshipBar < 40 && rng.chance(0.12 + (kid.trouble ?? 0) * 0.05)) {
++      // How you raise them, and who they are, shape the bond. (Kids who live mostly elsewhere are not shaped by your style.)
++      const fx = kid.age >= 3 && !kid.custody ? styleEffect(p.parentingStyle ?? "balanced", temperamentOf(kid).id) : { bond: 0, smarts: 0, trouble: 0 };
++      kid.relationshipBar = clamp(kid.relationshipBar + fx.bond);
++      kid.smarts = clamp(kid.smarts + fx.smarts);
++      if (kid.age >= 12 && (kid.relationshipBar < 40 || fx.trouble >= 0.08) && rng.chance(Math.max(0, 0.12 + (kid.trouble ?? 0) * 0.05 + fx.trouble))) {
+         kid.trouble = (kid.trouble ?? 0) + 1;
+         const cost = rng.int(300, 2_500);
+         p.bankBalance = Math.max(0, p.bankBalance - cost);
+@@ -112,12 +167,40 @@ export function processChildren(p: PlayerState, rng: Rng, notices: Notices) {
+       }
+     }
+     if (kid.age === 18) {
+-      const bonus = (kid.school === "private" ? 0.4 : 0) + (kid.interest === "science" ? 0.2 : 0);
++      const bonus = (kid.school === "private" ? 0.4 : 0) + (kid.interest === "science" ? 0.2 : 0) + (kid.traits?.includes("College fund") ? 0.5 : 0);
+       kid.incomeTier = Math.min(5, Math.max(1, Math.round(1 + (kid.smarts - 30) / 20 + bonus + (tier - 3) * 0.3 - (kid.trouble ?? 0) * 0.3)));
+       kid.occupation = kid.smarts >= 62 && (kid.trouble ?? 0) < 2 ? `University student (${occupationFor(kid.incomeTier, rng).toLowerCase()} in the making)` : occupationFor(Math.max(1, kid.incomeTier - 1), rng);
+       const body = `${n} turned 18 and set out on their own: ${kid.occupation}.`;
+       addLog(p, body);
++      remember(p, kid, "milestone", `${n} turned 18 and left home.`);
+       notices.push(info("All Grown Up", body, "good"));
+     }
+   }
++  const minorsNow = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18 && !r.custody).length;
++  if (minorsNow > 0 && p.parentingStyle === "handsoff") changeStat(p, "happiness", 1);
++  processAdultChildren(p, rng, notices);
++}
++
++/** Grown children have lives: partners, weddings, and the grandchildren that follow. */
++function processAdultChildren(p: PlayerState, rng: Rng, notices: Notices) {
++  for (const kid of p.relatives) {
++    if (kid.relation !== "Child" || !kid.alive || kid.age < 22 || kid.age > 45) continue;
++    const traits = (kid.traits = kid.traits ?? []);
++    const n = firstName(kid);
++    const close = kid.relationshipBar >= 45;
++    if (!traits.includes("Married") && !traits.includes("Partnered") && rng.chance(0.07)) {
++      traits.push("Partnered");
++      remember(p, kid, "milestone", `${n} brought someone home.`);
++      const body = close ? `${n} called to say they've met someone, and asked if they could bring them to Sunday lunch.` : `You heard through a cousin that ${n} is seeing someone. They hadn't told you.`;
++      addLog(p, body);
++      notices.push(info("Your Child Is in Love", body, close ? "good" : "bad"));
++    } else if (traits.includes("Partnered") && !traits.includes("Married") && kid.age >= 24 && rng.chance(0.18)) {
++      traits.splice(traits.indexOf("Partnered"), 1, "Married");
++      remember(p, kid, "milestone", `${n} got married.`);
++      changeStat(p, "happiness", close ? 4 : 1);
++      const body = close ? `${n} got married. You gave a toast, cried, and danced badly.` : `${n} got married. You were invited, but sat at the far end of the room, and it showed.`;
++      addLog(p, body);
++      notices.push(info("A Wedding in the Family", body, close ? "good" : "neutral"));
++    }
++  }
+ }
+diff --git a/src/engine/partnership.ts b/src/engine/partnership.ts
+new file mode 100644
+index 0000000..d05f7bf
+--- /dev/null
++++ b/src/engine/partnership.ts
+@@ -0,0 +1,482 @@
++/**
++ * Marriage and partnership over time: what each of you needs, hurts that resurface until you clear the
++ * air, counselling, trial separation, reconciliation, and what happens to the children when a couple
++ * splits (custody, co-parenting, support). Also keeps your exes in the world: they age, and they die.
++ */
++import type { ActionResult, PlayerState, Relative } from "@/types/game.types";
++import type { LifeEvent } from "@/data/lifeEventsEngine";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { addLog, changeStat, clone, getPartner } from "./state";
++import { deathChance } from "./mortality";
++import { endRelationship } from "./social";
++import { spouseIncome } from "./household";
++import {
++  VALUE_BY_ID, addGrievance, compatibility, grievanceLoad, learnValue, meet, needMet, relationshipHealth, remember,
++  soften, valuesOf, worstGrievance, yearsKnown,
++} from "./bonds";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
++  ({ kind: "info" as const, title, body, tone });
++const first = (r: Relative) => r.name.split(" ")[0];
++
++export const COUNSELLING_COST = 1_500;
++export const GOALS_COST = 800;
++export const LEGAL_COST = 2_500;
++
++const minors = (p: PlayerState) => p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18);
++const isExOf = (kid: Relative, ex: Relative) => kid.otherParent === ex.name || (!kid.otherParent && kid.relation === "Child");
++
++// ---------------------------------------------------------------------------
++// When a couple splits
++// ---------------------------------------------------------------------------
++
++/** Sets up custody for the children you shared. Returns a line for the log (or null if there are none). */
++export function splitFamily(p: PlayerState, ex: Relative): string | null {
++  const kids = minors(p).filter((k) => !k.custody && isExOf(k, ex));
++  if (kids.length === 0) return null;
++  for (const k of kids) {
++    k.custody = "shared";
++    k.otherParent = ex.name;
++    k.relationshipBar = clamp(k.relationshipBar - 4);
++    remember(p, k, "hardship", `Your split with ${first(ex)} turned ${first(k)}'s world upside down.`);
++  }
++  if (!p.flags.includes("child_support")) p.flags.push("child_support");
++  return `You and ${first(ex)} agreed to share custody of ${kids.length === 1 ? first(kids[0]) : `your ${kids.length} children`} for now. You can change that from ${kids.length === 1 ? "their" : "each child's"} page.`;
++}
++
++export type Custody = NonNullable<Relative["custody"]>;
++
++export function setCustody(p0: PlayerState, kidId: string, to: Custody, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const kid = p.relatives.find((r) => r.id === kidId && r.alive && r.relation === "Child" && r.age < 18 && r.custody);
++  if (!kid || kid.custody === to) return { player: p0 };
++  if ((p.annual[`custody:${kid.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Settled", "Custody has been looked at this year. Courts don't like constant change.")] };
++  const ex = p.relatives.find((r) => r.relation !== "Child" && r.partnerStatus === "ex" && r.name === kid.otherParent);
++  const n = first(kid);
++  p.annual[`custody:${kid.id}`] = 1;
++  if (to === "them") {
++    kid.custody = "them";
++    kid.relationshipBar = clamp(kid.relationshipBar - 6);
++    changeStat(p, "happiness", -4);
++    const body = `You agreed that ${n} will live mostly with ${ex ? first(ex) : "their other parent"}. You'll see them on weekends and pay support. It feels like a loss, whatever the reasons.`;
++    addLog(p, body);
++    remember(p, kid, "hardship", `${n} moved to live mostly with ${ex ? first(ex) : "their other parent"}.`);
++    return { player: p, notices: [info("Custody Changed", body, "bad")] };
++  }
++  if (p.bankBalance < LEGAL_COST) return { player: p0, notices: [info("Insufficient Funds", `Lawyers and a mediator cost ${money(LEGAL_COST)}.`, "bad")] };
++  p.bankBalance -= LEGAL_COST;
++  const exOk = ex ? ex.relationshipBar / 200 : 0.25;
++  const chance = clamp((to === "shared" ? 0.6 : 0.3) + exOk - (ex ? grievanceLoad(ex) * 0.04 : 0) + (p.currentJob || p.business ? 0.05 : -0.1), 0.1, 0.9);
++  if (rng.chance(chance)) {
++    kid.custody = to;
++    kid.relationshipBar = clamp(kid.relationshipBar + 5);
++    changeStat(p, "happiness", 4);
++    const body = to === "you" ? `The mediator agreed that ${n} will live with you, and spend time with ${ex ? first(ex) : "their other parent"}. ${money(LEGAL_COST)} in fees, but ${n} is home.` : `${n} will split their time evenly between your homes. The calendar is a nightmare, but ${n} has you both.`;
++    addLog(p, body);
++    remember(p, kid, "milestone", to === "you" ? `${n} came to live with you.` : `${n} now splits time between you and ${ex ? first(ex) : "their other parent"}.`);
++    return { player: p, notices: [info("Custody Agreed", body, "good")] };
++  }
++  if (ex) ex.relationshipBar = clamp(ex.relationshipBar - 8);
++  changeStat(p, "happiness", -4);
++  const body = `${ex ? first(ex) : "Their other parent"} wouldn't agree, and the mediator sided with the status quo. ${money(LEGAL_COST)} gone, and things are tenser than before.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Custody Refused", body, "bad")] };
++}
++
++/** Share of income paid as support. Shared custody pays a smaller share. */
++export function supportShare(p: PlayerState): number {
++  let s = 0;
++  for (const k of minors(p)) {
++    if (k.custody === "them") s += 0.08;
++    else if (k.custody === "shared") s += 0.045;
++  }
++  return Math.min(0.25, s);
++}
++
++// ---------------------------------------------------------------------------
++// Actions inside a relationship
++// ---------------------------------------------------------------------------
++
++const partnerOf = (p: PlayerState, id: string) => p.relatives.find((r) => r.id === id && r.alive && r.relation === "Partner" && r.partnerStatus !== "ex");
++
++export function talkAboutUs(p0: PlayerState, relId: string): ActionResult {
++  const p = clone(p0);
++  const rel = partnerOf(p, relId);
++  if (!rel) return { player: p0 };
++  const n = first(rel);
++  if ((p.annual[`us:${rel.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Talked", `You and ${n} have had that conversation this year.`)] };
++  if (rel.relationshipBar < 15) return { player: p0, notices: [info("Shut Out", `${n} isn't willing to talk about the future right now.`, "bad")] };
++  p.annual[`us:${rel.id}`] = 1;
++  meet(p, rel, "security");
++  rel.relationshipBar = clamp(rel.relationshipBar + 3);
++  const v = learnValue(rel);
++  const body = v ? `You asked ${n} what they really need from a relationship. They thought about it: "${v.label.toLowerCase()}". ${v.hint}.` : `You talked about money, plans and where you'll both be in ten years. There was nothing left to ask. You know each other.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Talking About Us", body, "good")] };
++}
++
++export function backTheirGoals(p0: PlayerState, relId: string, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const rel = partnerOf(p, relId);
++  if (!rel) return { player: p0 };
++  const n = first(rel);
++  if ((p.annual[`goals:${rel.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Backed", `You've already backed ${n}'s plans this year.`)] };
++  if (p.bankBalance < GOALS_COST) return { player: p0, notices: [info("Insufficient Funds", `A course, a business licence or a few shifts' cover costs about ${money(GOALS_COST)}.`, "bad")] };
++  p.annual[`goals:${rel.id}`] = 1;
++  p.bankBalance -= GOALS_COST;
++  meet(p, rel, "ambition");
++  rel.relationshipBar = clamp(rel.relationshipBar + 4);
++  let body = `You paid for ${n}'s course and covered the home front while they studied. They won't forget that you believed in them.`;
++  if (rel.age < 58 && rel.incomeTier < 5 && rng.chance(0.28)) {
++    rel.incomeTier += 1;
++    body += ` It paid off: ${n} landed a better job.`;
++  }
++  addLog(p, body);
++  remember(p, rel, "kindness", `You backed ${n}'s goals when it counted.`);
++  return { player: p, notices: [info("Backing Their Goals", body, "good")] };
++}
++
++export function giveSpace(p0: PlayerState, relId: string): ActionResult {
++  const p = clone(p0);
++  const rel = partnerOf(p, relId);
++  if (!rel) return { player: p0 };
++  const n = first(rel);
++  if ((p.annual[`space:${rel.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Done", `You've already given ${n} their space this year.`)] };
++  p.annual[`space:${rel.id}`] = 1;
++  meet(p, rel, "independence");
++  rel.relationshipBar = clamp(rel.relationshipBar + 1);
++  const body = `You told ${n} to take that trip with their friends, no questions asked, and spent the weekend on your own projects. They came back glowing.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Room to Breathe", body, "good")] };
++}
++
++/** Shared by the action and the crisis event. */
++function runCounselling(p: PlayerState, rel: Relative, rng: Rng): ActionResult["notices"] {
++  const n = first(rel);
++  p.annual[`counsel:${rel.id}`] = 1;
++  p.bankBalance -= COUNSELLING_COST;
++  rel.counselling = (rel.counselling ?? 0) + 1;
++  const fit = compatibility(p, rel);
++  const chance = clamp(0.42 + fit.score / 300 + (rel.counselling - 1) * 0.06 - grievanceLoad(rel) * 0.03 + (p.talents.empathy - 50) / 300, 0.15, 0.9);
++  const v1 = learnValue(rel);
++  const v2 = learnValue(rel);
++  const learned = [v1, v2].filter(Boolean).map((v) => v!.label.toLowerCase());
++  if (rng.chance(chance)) {
++    for (const g of [...(rel.grievances ?? [])]) soften(rel, g.id, 1);
++    rel.relationshipBar = clamp(rel.relationshipBar + 8);
++    changeStat(p, "happiness", 4);
++    const body = `The counsellor made you each say what you needed out loud, without interrupting. ${n} needs ${learned.length ? learned.join(" and ") : "what you already know"}. You left holding hands, and some of the old arguments felt smaller.`;
++    addLog(p, body);
++    if (rel.counselling === 1) remember(p, rel, "milestone", `You and ${n} started couples counselling.`);
++    return [info("Counselling Helped", body, "good")];
++  }
++  rel.relationshipBar = clamp(rel.relationshipBar - 2);
++  changeStat(p, "happiness", -2);
++  const body = `You both tried, but the sessions mostly circled the same arguments. At least you now understand that ${n} needs ${learned.length ? learned.join(" and ") : "different things from you"}.`;
++  addLog(p, body);
++  return [info("A Hard Session", body, "neutral")];
++}
++
++export function counselling(p0: PlayerState, relId: string, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const rel = partnerOf(p, relId);
++  if (!rel) return { player: p0 };
++  const n = first(rel);
++  if ((p.annual[`counsel:${rel.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Booked", "You've done your sessions for this year.")] };
++  if (p.bankBalance < COUNSELLING_COST) return { player: p0, notices: [info("Insufficient Funds", `Couples counselling costs about ${money(COUNSELLING_COST)} a year.`, "bad")] };
++  if (rel.relationshipBar < 12) return { player: p0, notices: [info("Too Late", `${n} says they've already checked out. They won't sit in a room with you and a counsellor.`, "bad")] };
++  return { player: p, notices: runCounselling(p, rel, rng) };
++}
++
++export function separate(p0: PlayerState, relId: string): ActionResult {
++  const p = clone(p0);
++  const rel = partnerOf(p, relId);
++  if (!rel || rel.partnerStatus !== "married" || rel.separatedYear) return { player: p0 };
++  const n = first(rel);
++  rel.separatedYear = p.year;
++  rel.relationshipBar = clamp(rel.relationshipBar - 4);
++  changeStat(p, "happiness", -4);
++  remember(p, rel, "hardship", `You and ${n} separated.`);
++  const body = `You moved out. ${n} and you agreed it's a trial, not a decision, but everyone knows what a trial separation usually means. Your finances are no longer shared.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Living Apart", body, "bad")] };
++}
++
++export function reconcile(p0: PlayerState, relId: string, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const rel = partnerOf(p, relId);
++  if (!rel || !rel.separatedYear) return { player: p0 };
++  const n = first(rel);
++  if ((p.annual[`reconcile:${rel.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Give It Time", `You've already tried to win ${n} back this year.`)] };
++  p.annual[`reconcile:${rel.id}`] = 1;
++  const chance = clamp(0.28 + rel.relationshipBar / 200 + (rel.counselling ?? 0) * 0.08 - grievanceLoad(rel) * 0.05, 0.08, 0.85);
++  if (rng.chance(chance)) {
++    rel.separatedYear = undefined;
++    rel.relationshipBar = clamp(rel.relationshipBar + 10);
++    changeStat(p, "happiness", 8);
++    remember(p, rel, "milestone", `You and ${n} got back together after living apart.`);
++    const body = `You turned up with nothing prepared and said what you should have said months ago. ${n} let you in. The first night was awkward; the second wasn't.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Back Together", body, "good")] };
++  }
++  rel.relationshipBar = clamp(rel.relationshipBar - 4);
++  changeStat(p, "happiness", -3);
++  const body = `${n} listened, then said they need more time. It wasn't a no. It wasn't a yes either.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Not Yet", body, "bad")] };
++}
++
++// ---------------------------------------------------------------------------
++// Clearing the air (any relationship)
++// ---------------------------------------------------------------------------
++
++export type Approach = "apologise" | "talk" | "gift";
++
++export function clearTheAir(p0: PlayerState, relId: string, approach: Approach, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const rel = p.relatives.find((r) => r.id === relId && r.alive && r.relation !== "Pet");
++  if (!rel) return { player: p0 };
++  const n = first(rel);
++  const g = worstGrievance(rel);
++  if (!g) return { player: p0, notices: [info("Nothing to Fix", `There's nothing unresolved between you and ${n}.`)] };
++  if ((p.annual[`air:${rel.id}`] ?? 0) >= 1) return { player: p0, notices: [info("Not Again", `You've already tried to clear the air with ${n} this year. Let it settle.`)] };
++  const cost = approach === "gift" ? 300 * g.weight : 0;
++  if (p.bankBalance < cost) return { player: p0, notices: [info("Insufficient Funds", `That gesture costs ${money(cost)}.`, "bad")] };
++  p.annual[`air:${rel.id}`] = 1;
++  p.bankBalance -= cost;
++  const heavy = g.weight - 1;
++  let chance: number;
++  if (approach === "apologise") chance = 0.58 + rel.relationshipBar / 260 + (p.talents.empathy - 50) / 300 - heavy * 0.1 - (g.kind === "betrayal" ? 0.06 : 0);
++  else if (approach === "talk") chance = 0.46 + rel.relationshipBar / 300 + (p.talents.empathy + p.talents.charisma - 100) / 400 - heavy * 0.08;
++  else chance = g.kind === "betrayal" ? 0.08 : 0.55 - heavy * 0.25;
++  chance = clamp(chance, 0.05, 0.92);
++  if (!rng.chance(chance)) {
++    rel.relationshipBar = clamp(rel.relationshipBar - 3);
++    changeStat(p, "happiness", -2);
++    const body =
++      approach === "gift" ? `${n} took one look at the gift and said "you can't buy this back". Some things need words.`
++      : approach === "apologise" ? `Your apology about ${g.text} came out wrong, and ${n} wasn't ready to hear it.`
++      : `The conversation about ${g.text} turned into a second argument.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Not Ready", body, "bad")] };
++  }
++  const gone = soften(rel, g.id, approach === "apologise" ? 2 : 1);
++  rel.relationshipBar = clamp(rel.relationshipBar + (approach === "talk" ? 6 : 4));
++  if (approach === "apologise") changeStat(p, "happiness", -1);
++  else changeStat(p, "happiness", 2);
++  let tail = "";
++  if (approach === "talk") {
++    const v = learnValue(rel);
++    if (v) tail = ` You also learned something: ${n} needs ${v.label.toLowerCase()}.`;
++  }
++  if (gone) {
++    remember(p, rel, "kindness", `You made peace with ${n} about ${g.text}.`);
++    if (rel.riftYear && !(rel.grievances ?? []).some((x) => x.kind === "fight" || x.kind === "betrayal")) {
++      rel.riftYear = undefined;
++      rel.relationshipBar = clamp(rel.relationshipBar + 8);
++      remember(p, rel, "milestone", `You and ${n} mended the friendship after falling out.`);
++      tail += " The friendship is back on, a bit stronger for having been tested.";
++    }
++  }
++  const body = gone
++    ? `You and ${n} finally put ${g.text} to rest.${tail}`
++    : `It helped. ${n} softened about ${g.text}, though it isn't entirely behind you.${tail}`;
++  addLog(p, body);
++  return { player: p, notices: [info(gone ? "Peace Made" : "A Step Forward", body, "good")] };
++}
++
++// ---------------------------------------------------------------------------
++// The yearly turn
++// ---------------------------------------------------------------------------
++
++const MILESTONE_YEARS = [1, 5, 10, 15, 20, 25, 30, 40, 50];
++const ANNIVERSARY_NAME: Record<number, string> = { 1: "paper", 5: "wood", 10: "tin", 15: "crystal", 20: "china", 25: "silver", 30: "pearl", 40: "ruby", 50: "golden" };
++
++/** Needs that are met simply by how you lived this year (not just by pressing a button). */
++function passivelyMet(p: PlayerState, rel: Relative, prev: Record<string, number>, v: string): boolean {
++  if (v === "independence") return (prev[`rel:${rel.id}`] ?? 0) <= 2;
++  if (v === "affection") return (prev[`love:${rel.id}`] ?? 0) >= 2;
++  if (v === "adventure") return Object.keys(prev).some((k) => (k.startsWith("exp:") && k.endsWith(`:${rel.id}`)) || k === `scene:${rel.id}`);
++  if (v === "security") return p.bankBalance >= 25_000 && !!(p.currentJob || p.business);
++  if (v === "family") return minors(p).length > 0 && Object.keys(prev).some((k) => k.startsWith("kid:family:"));
++  return false;
++}
++
++function crisisEvent(p: PlayerState, rel: Relative): LifeEvent {
++  const n = first(rel);
++  const married = rel.partnerStatus === "married";
++  const id = rel.id;
++  const worst = worstGrievance(rel);
++  return {
++    id: `rel_crisis_${id}_${p.year}`,
++    title: married ? "The Marriage Is in Trouble" : "Something Has Gone Wrong",
++    description: `${n} sat you down. ${worst ? `It started with ${worst.text}, but it's about more than that now.` : "It's not one thing; it's a hundred small things."} "I don't know if we can keep doing this the way we are," ${n} said. You've been together ${yearsKnown(p, rel) ?? "a few"} years.`,
++    minAge: 0,
++    maxAge: 200,
++    category: "romance",
++    options: [
++      {
++        text: `Suggest counselling (${money(COUNSELLING_COST)})`,
++        effects: {
++          logText: `You asked ${n} to try counselling before giving up.`,
++          bankBalanceDelta: -COUNSELLING_COST,
++          apply: (q, rng) => {
++            const r = q.relatives.find((x) => x.id === id);
++            if (r) for (const nn of runCounselling(q, r, rng) ?? []) addLog(q, "body" in nn ? nn.body : "");
++          },
++        },
++      },
++      {
++        text: "Promise to change, and mean it",
++        effects: { logText: `You promised ${n} things would be different. Now you have to keep that promise.`, happinessDelta: -2, apply: (q) => { const r = q.relatives.find((x) => x.id === id); if (r) { r.relationshipBar = clamp(r.relationshipBar + 8); r.unmet = {}; remember(q, r, "milestone", `You promised ${n} things would change.`); } } },
++        chance: { p: clamp(0.4 + rel.relationshipBar / 200, 0.2, 0.8), failure: { logText: `${n} wanted to believe you, but they'd heard it before.`, happinessDelta: -4, apply: (q) => { const r = q.relatives.find((x) => x.id === id); if (r) { r.relationshipBar = clamp(r.relationshipBar - 6); addGrievance(q, r, "neglect", 2, "a promise that wasn't kept"); } } } },
++      },
++      ...(married
++        ? [{
++            text: "Suggest a trial separation",
++            effects: { logText: `You and ${n} agreed to live apart for a while.`, happinessDelta: -4, apply: (q: PlayerState) => { const r = q.relatives.find((x) => x.id === id); if (r && r.partnerStatus === "married") { r.separatedYear = q.year; remember(q, r, "hardship", `You and ${n} separated.`); } } },
++          }]
++        : []),
++      {
++        text: married ? "End it: file for divorce" : "End it",
++        effects: { logText: married ? `You and ${n} agreed it was over.` : `You and ${n} ended things.`, happinessDelta: -6, apply: (q) => { if (getPartner(q)?.id === id) endRelationship(q, married ? "divorce" : "breakup"); } },
++      },
++    ],
++  };
++}
++
++export function processPartnership(p: PlayerState, prev: Record<string, number>, rng: Rng, notices: Notices) {
++  const partner = getPartner(p);
++  if (partner && partner.relation === "Partner" && partner.metYear !== p.year) {
++    const n = first(partner);
++    const fit = compatibility(p, partner);
++    const married = partner.partnerStatus === "married";
++
++    // Needs: each of them wants two things from you.
++    for (const v of valuesOf(partner)) {
++      const met = needMet(prev, partner, v) || passivelyMet(p, partner, prev, v);
++      const unmet = (partner.unmet = partner.unmet ?? {});
++      if (met) {
++        unmet[v] = 0;
++        partner.relationshipBar = clamp(partner.relationshipBar + 2);
++        continue;
++      }
++      unmet[v] = (unmet[v] ?? 0) + 1;
++      partner.relationshipBar = clamp(partner.relationshipBar - (unmet[v] === 1 ? 1 : 3));
++      if (unmet[v] >= 2) {
++        const def = VALUE_BY_ID[v];
++        const had = (partner.grievances ?? []).some((g) => g.kind === "neglect" && g.text === `how little you've made room for ${def.label.toLowerCase()}`);
++        addGrievance(p, partner, "neglect", unmet[v] >= 3 ? 2 : 1, `how little you've made room for ${def.label.toLowerCase()}`);
++        partner.knownValues = Array.from(new Set([...(partner.knownValues ?? []), v]));
++        if (!had) {
++          const body = `${n} never said it outright, but it's clear: ${n} ${def.lack}. ${def.hint}.`;
++          addLog(p, body);
++          notices.push(info("Something Is Missing", body, "bad"));
++        }
++      }
++    }
++    partner.relationshipBar = clamp(partner.relationshipBar + (fit.score >= 66 ? 1 : fit.score < 42 ? -2 : 0));
++
++    // Old hurts come back.
++    const wounds = partner.grievances ?? [];
++    if (wounds.length > 0) {
++      const worst = worstGrievance(partner)!;
++      if (rng.chance(0.18 + worst.weight * 0.12)) {
++        partner.relationshipBar = clamp(partner.relationshipBar - 2 * worst.weight);
++        changeStat(p, "happiness", -worst.weight);
++        const body = `${n} brought up ${worst.text} again, in the middle of an unrelated argument. It was never really over.`;
++        addLog(p, body);
++        notices.push(info("Old Wounds", body, "bad"));
++      }
++      for (const g of [...wounds]) if (g.weight === 1 && g.kind !== "betrayal" && rng.chance(0.14)) soften(partner, g.id, 1);
++    }
++
++    // Anniversaries
++    const years = married && partner.marriedYear !== undefined ? p.year - partner.marriedYear : null;
++    if (married && !partner.separatedYear && years !== null && MILESTONE_YEARS.includes(years)) {
++      const health = relationshipHealth(p, partner);
++      const name = ANNIVERSARY_NAME[years] ?? "";
++      if (health.score >= 45) {
++        partner.relationshipBar = clamp(partner.relationshipBar + 3);
++        changeStat(p, "happiness", 3);
++        const body = `${years} year${years === 1 ? "" : "s"} married${name ? ` (${name})` : ""}. You and ${n} looked back through old photographs and laughed at who you used to be.`;
++        remember(p, partner, "joy", `Your ${years}${years === 1 ? "st" : "th"} anniversary.`);
++        addLog(p, body);
++        notices.push(info("Anniversary", body, "good"));
++      } else {
++        const body = `${years} year${years === 1 ? "" : "s"} married. The card said all the right things. Neither of you quite believed them.`;
++        remember(p, partner, "hardship", `An anniversary that felt hollow.`);
++        addLog(p, body);
++        notices.push(info("A Quiet Anniversary", body, "bad"));
++      }
++    }
++
++    // Separation hardens or the relationship hits a crisis.
++    if (partner.separatedYear) {
++      partner.relationshipBar = clamp(partner.relationshipBar - 2);
++      if (p.year - partner.separatedYear >= 2 && rng.chance(0.45)) {
++        const name = partner.name;
++        endRelationship(p, "divorce");
++        const body = `After ${p.year - partner.separatedYear} years apart, ${name} filed for divorce. The separation became permanent.`;
++        addLog(p, body);
++        changeStat(p, "happiness", -8);
++        notices.push(info("Divorce", body, "bad"));
++      }
++    } else {
++      const health = relationshipHealth(p, partner);
++      if (health.score < 30 && rng.chance(0.4)) notices.push({ kind: "event", event: crisisEvent(p, partner) });
++    }
++  }
++
++  // Exes: still in the world.
++  for (const x of p.relatives) {
++    if (!x.alive || x.partnerStatus !== "ex") continue;
++    x.health = clamp(x.health + rng.int(x.age > 60 ? -4 : -1, 1));
++    if (x.age > 40 && rng.chance(deathChance(x.age, x.health))) {
++      x.alive = false;
++      x.deathAge = x.age;
++      x.deathYear = p.year;
++      if (x.relation !== "Friend") {
++        const kids = minors(p).filter((k) => k.otherParent === x.name);
++        for (const k of kids) {
++          k.custody = "you";
++          k.relationshipBar = clamp(k.relationshipBar - 6);
++          remember(p, k, "loss", `${first(k)} lost ${first(x)}, and came to live with you.`);
++        }
++        const body = `${x.name}, your ex, died at ${x.age}.${kids.length ? ` ${kids.length === 1 ? first(kids[0]) : "Your children"} will live with you now, and so will the grief.` : ""}`;
++        addLog(p, body);
++        changeStat(p, "happiness", kids.length ? -6 : -3);
++        notices.push(info("An Ex Has Died", body, "bad"));
++      }
++    }
++  }
++
++  // Children of a split couple.
++  const kids = minors(p).filter((k) => k.custody);
++  if (kids.length > 0) {
++    let received = 0;
++    for (const k of kids) {
++      const ex = p.relatives.find((r) => r.relation !== "Child" && r.partnerStatus === "ex" && r.name === k.otherParent && r.alive);
++      if (k.custody === "them") k.relationshipBar = clamp(k.relationshipBar - ((prev[`rel:${k.id}`] ?? 0) >= 2 ? 1 : 3));
++      if (k.custody === "you" && ex) received += Math.round(spouseIncome(ex) * 0.05);
++    }
++    if (received > 0) {
++      p.bankBalance += received;
++      addLog(p, `Child support from your ex came to ${money(received)} this year.`);
++    }
++  }
++
++  // Anyone who died this year while something was left unsaid.
++  for (const r of p.relatives) {
++    if (r.alive || r.deathYear !== p.year || r.relation === "Pet" || r.partnerStatus === "ex") continue;
++    const load = grievanceLoad(r);
++    if (load >= 2) {
++      const body = `You never did clear the air with ${first(r)} about ${worstGrievance(r)?.text ?? "what happened between you"}. Now you never will.`;
++      changeStat(p, "happiness", -Math.min(8, load * 2));
++      addLog(p, body);
++      notices.push(info("Unfinished Business", body, "bad"));
++    }
++  }
++}
+diff --git a/src/engine/people.ts b/src/engine/people.ts
+index 2e6412c..4d493bb 100644
+--- a/src/engine/people.ts
++++ b/src/engine/people.ts
+@@ -6,7 +6,7 @@ import type { PlayerState, Relative } from "@/types/game.types";
+ import type { Rng } from "@/lib/rng";
+ import { INTEREST_BY_ID } from "@/data/experiences";
+ import { clamp } from "@/lib/format";
+-import { partnerGenderFor } from "./state";
++import { partnerGenderFor, randomName } from "./state";
+ 
+ export const MIN_ADULT_AGE = 18;
+ export const MAX_PREF_AGE = 99;
+@@ -39,7 +39,7 @@ export function sampleAge(p: PlayerState, rng: Rng, shift = 0): number {
+ }
+ 
+ /** Deterministic 0-1 hash so tastes never need storing or re-rolling. */
+-function hash01(text: string): number {
++export function hash01(text: string): number {
+   let h = 2166136261;
+   for (let i = 0; i < text.length; i++) {
+     h ^= text.charCodeAt(i);
+@@ -72,3 +72,15 @@ export function adultSpec(p: PlayerState, rng: Rng, shift = 0): { gender: string
+   const age = sampleAge(p, rng, shift);
+   return { gender: candidateGender(p, rng), ageRange: [age, age], age };
+ }
++
++/**
++ * A first name nobody in your life already has, so "Anna" always means one person. Re-rolls a few
++ * times and only gives up (accepting a repeat) in a small name pool.
++ */
++export function freshFirstName(p: PlayerState, gender: string, rng: Rng, country = p.residence.country): string {
++  const used = new Set(p.relatives.map((r) => r.name.split(" ")[0]));
++  used.add(p.firstName);
++  let first = randomName(country, gender, rng).first;
++  for (let i = 0; i < 8 && used.has(first); i++) first = randomName(country, gender, rng).first;
++  return first;
++}
+diff --git a/src/engine/relations.ts b/src/engine/relations.ts
+new file mode 100644
+index 0000000..d01eb82
+--- /dev/null
++++ b/src/engine/relations.ts
+@@ -0,0 +1,40 @@
++/** The yearly pass over everyone you're close to: partner, in-laws, friends. See bonds.ts for the model. */
++import type { ActionResult, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { addLog, changeStat } from "./state";
++import { endRelationship } from "./social";
++import { processPartnership } from "./partnership";
++import { processInLaws } from "./inlaws";
++import { processCircle } from "./circle";
++import { remember } from "./bonds";
++
++type Notices = NonNullable<ActionResult["notices"]>;
++
++/**
++ * Romance is only ever between two adults or two teenagers of the same age. If a gap opens up (a
++ * birthday, or an older save), the relationship ends rather than continuing across it.
++ */
++function closeAgeGaps(p: PlayerState, notices: Notices) {
++  for (const r of p.relatives) {
++    if (!r.alive || r.partnerStatus === "ex" || (r.relation !== "Partner" && r.relation !== "Lover")) continue;
++    if ((p.age >= 18) === (r.age >= 18)) continue;
++    const n = r.name.split(" ")[0];
++    if (r.relation === "Partner") endRelationship(p, r.partnerStatus === "married" ? "divorce" : "breakup");
++    else {
++      r.partnerStatus = "ex";
++      r.lostYear = p.year;
++    }
++    remember(p, r, "loss", `It ended because of the gap between where you each were in life.`);
++    const body = `You and ${n} are at different stages of life now, and you both knew it couldn't carry on. It ended kindly.`;
++    addLog(p, body);
++    changeStat(p, "happiness", -3);
++    notices.push({ kind: "info", title: "Growing Apart", body, tone: "neutral" });
++  }
++}
++
++export function processRelationships(p: PlayerState, prev: Record<string, number>, rng: Rng, notices: Notices) {
++  closeAgeGaps(p, notices);
++  processPartnership(p, prev, rng, notices);
++  processInLaws(p, prev, rng, notices);
++  processCircle(p, prev, rng, notices);
++}
+diff --git a/src/engine/save.ts b/src/engine/save.ts
+index 1358544..9aaadb9 100644
+--- a/src/engine/save.ts
++++ b/src/engine/save.ts
+@@ -95,6 +95,7 @@ export function hydrate(p: PlayerState): PlayerState {
+     blackjack: p.blackjack ?? null,
+     careerYears: p.careerYears ?? (p.currentJob ? { [p.currentJob.lineId]: Math.round(p.stats?.yearsWorked ?? 0) } : {}),
+     intimacy: p.intimacy ?? { ageAuto: true, ageMin: 18, ageMax: 60, genders: [], interests: ["sensual", "playful"] },
++    parentingStyle: p.parentingStyle ?? "balanced",
+     retirementSavings: p.retirementSavings ?? 0,
+     savingsLevel: p.savingsLevel ?? 1,
+     royal: p.royal ?? (p.royalRank === "none" ? null : { crown: p.royalRank === "King" || p.royalRank === "Queen" ? "self" : "parent", hrh: true, peerage: null, line: p.royalRank === "King" || p.royalRank === "Queen" ? 0 : 1 }),
+diff --git a/src/engine/social.ts b/src/engine/social.ts
+index fac53ad..e116392 100644
+--- a/src/engine/social.ts
++++ b/src/engine/social.ts
+@@ -13,23 +13,35 @@ import {
+   netWorth,
+   partnerGenderFor,
+   randomGender,
+-  randomName,
+ } from "./state";
+ import { settleDivorce } from "./household";
+-import { adultSpec } from "./people";
++import { adultSpec, freshFirstName } from "./people";
+ import { royalStyleForChild } from "./royalty";
++import { addGrievance, introduce, meet, remember } from "./bonds";
++import { splitFamily } from "./partnership";
++import { ensureInLaws } from "./inlaws";
+ 
+ export function firstName(r: Relative) {
+   return r.name.split(" ")[0];
+ }
+ 
++/**
++ * How old a new partner is. Adults only ever get adult partners; a teenager's partner is a classmate
++ * their own age (so neither of them is ever the adult in the pairing).
++ */
++export function partnerAge(p: PlayerState, range: [number, number] | undefined, offset: [number, number], rng: Rng): number {
++  if (p.age < 18) return Math.max(13, p.age);
++  if (range) return rng.int(Math.max(18, range[0]), Math.max(18, range[1]));
++  return Math.max(18, p.age + rng.int(offset[0], offset[1]));
++}
++
+ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Relative {
+   if (spec.prebuilt) return { ...spec.prebuilt, id: rng.id() };
+   const tier = Math.min(5, Math.max(1, Math.round(1 + netWorth(p) / 400_000)));
+   if (spec.relation === "Child") {
+     const gender = randomGender(rng);
+     const partner = getPartner(p);
+-    const first = randomName(p.residence.country, gender, rng).first;
++    const first = freshFirstName(p, gender, rng);
+     const named = spec.npc ? npcName(p, spec.npc).first : first; // storyline characters keep their name
+     const kid = makeRelativeBase(rng, "Child", `${named} ${p.lastName}`, spec.age ?? 0, gender, tier, rng.int(70, 100));
+     kid.smarts = clamp(Math.round((p.smarts + (partner?.smarts ?? 50)) / 2 + rng.int(-15, 15)));
+@@ -40,8 +52,8 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
+   if (spec.relation === "Partner") {
+     const gender = spec.gender ?? partnerGenderFor(p, rng);
+     const [lo, hi] = spec.ageOffset ?? [-4, 5];
+-    const age = spec.ageRange ? rng.int(Math.max(18, spec.ageRange[0]), Math.max(18, spec.ageRange[1])) : Math.max(14, p.age + rng.int(lo, hi));
+-    const first = randomName(p.residence.country, gender, rng).first;
++    const age = partnerAge(p, spec.ageRange, [lo, hi], rng);
++    const first = freshFirstName(p, gender, rng);
+     const rel = makeRelativeBase(rng, "Partner", `${first} ${lastNameFor(p.residence.country, rng)}`, age, gender, rng.int(1, 5), rng.int(55, 85));
+     rel.partnerStatus = spec.partnerStatus ?? "dating";
+     if (rel.partnerStatus === "married") rel.marriedYear = p.year;
+@@ -49,7 +61,7 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
+   }
+   const gender = rng.pick(["Male", "Female"]);
+   const [lo, hi] = spec.ageOffset ?? [-2, 3];
+-  const first = randomName(p.residence.country, gender, rng).first;
++  const first = freshFirstName(p, gender, rng);
+   const last = spec.relation === "Sibling" ? p.lastName : lastNameFor(p.residence.country, rng);
+   const age = spec.age ?? Math.max(3, p.age + rng.int(lo, hi));
+   return makeRelativeBase(rng, spec.relation, `${first} ${last}`, age, gender, rng.int(1, 4), rng.int(45, 80));
+@@ -60,6 +72,7 @@ export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Re
+   if (rel.relation === "Child") rel.royalTitle = royalStyleForChild(p, rel.gender);
+   else if (rel.relation === "Sibling" && p.royal?.crown === "parent") rel.royalTitle = rel.gender === "Male" ? "Prince" : "Princess";
+   p.relatives.push(rel);
++  introduce(p, rel, rel.relation === "Child" ? `${firstName(rel)} joined your family.` : rel.relation === "Partner" ? `You and ${firstName(rel)} got together.` : undefined);
+   if (rel.relation === "Child") {
+     p.stats.childrenBorn += 1;
+     addLog(p, rel.age >= 2 ? `${rel.name} joined your family as your child.` : `A child, ${rel.name}, was born into your family.`);
+@@ -75,10 +88,11 @@ export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Re
+ export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
+   if (livingGrandchildren(p) >= 8) return null;
+   const parents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age >= 22 && r.age <= 38);
+-  if (parents.length === 0 || !rng.chance(0.07 * parents.length)) return null;
++  const odds = parents.reduce((s, k) => s + (k.traits?.includes("Married") ? 0.13 : k.traits?.includes("Partnered") ? 0.07 : 0.04), 0);
++  if (parents.length === 0 || !rng.chance(odds)) return null;
+   const parent = rng.pick(parents);
+   const gender = randomGender(rng);
+-  const first = randomName(p.residence.country, gender, rng).first;
++  const first = freshFirstName(p, gender, rng);
+   const last = parent.name.split(" ").slice(1).join(" ") || p.lastName;
+   const kid = makeRelativeBase(rng, "Grandchild", `${first} ${last}`, 0, gender, parent.incomeTier, rng.int(60, 95));
+   kid.parentId = parent.id;
+@@ -87,6 +101,7 @@ export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
+   kid.smarts = clamp(Math.round((parent.smarts + 50) / 2 + rng.int(-12, 12)));
+   kid.looks = clamp(Math.round((parent.looks + 50) / 2 + rng.int(-12, 12)));
+   p.relatives.push(kid);
++  introduce(p, kid, `Born to ${parent.name.split(" ")[0]}.`);
+   addLog(p, `${parent.name} had a baby: your grandchild ${kid.name}!`);
+   return kid;
+ }
+@@ -133,9 +148,10 @@ export function adoptChild(p0: PlayerState, rng: Rng): ActionResult {
+   p.annual.adopt = 1;
+   p.bankBalance -= ADOPTION_COST;
+   const gender = randomGender(rng);
+-  const first = randomName(p.residence.country, gender, rng).first;
++  const first = freshFirstName(p, gender, rng);
+   const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, rng.int(0, 8), gender, 2, 65);
+   p.relatives.push(kid);
++  introduce(p, kid, `You adopted ${firstName(kid)} and brought them home.`);
+   p.stats.childrenBorn += 1;
+   if (!p.flags.includes("adopted")) p.flags.push("adopted");
+   changeStat(p, "happiness", 14);
+@@ -148,11 +164,17 @@ export function adoptChild(p0: PlayerState, rng: Rng): ActionResult {
+ export function endRelationship(p: PlayerState, how: "breakup" | "divorce", atFault = false) {
+   const partner = getPartner(p);
+   if (!partner) return;
++  const years = partner.metYear !== undefined ? p.year - partner.metYear : null;
+   partner.partnerStatus = "ex";
++  partner.lostYear = p.year;
++  partner.separatedYear = undefined;
++  remember(p, partner, "loss", how === "divorce" ? `The marriage ended in divorce${years ? ` after ${years} years together` : ""}.` : `You broke up${years ? ` after ${years} years` : ""}.`);
+   if (how === "divorce") {
+     if (!p.flags.includes("was_divorced")) p.flags.push("was_divorced");
+     addLog(p, settleDivorce(p, partner, atFault));
+   }
++  const line = splitFamily(p, partner);
++  if (line) addLog(p, line);
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -214,6 +236,7 @@ export function interact(p0: PlayerState, relId: string, action: SocialAction, r
+       body = fill(rng.pick(SPEND[rel.relation] ?? SPEND.Friend));
+       changeStat(p, "happiness", rng.int(1, 3));
+       p.annual[CAP_KEY(rel.id)] = used + 1;
++      meet(p, rel, "affection", ...(rel.relation === "Child" || rel.relation === "Parent" || rel.relation === "Grandchild" ? ["family"] : []));
+       outcome = "good";
+       break;
+     }
+@@ -223,6 +246,7 @@ export function interact(p0: PlayerState, relId: string, action: SocialAction, r
+       rel.relationshipBar = clamp(rel.relationshipBar + (good ? d : -d));
+       body = fill(rng.pick(CONVERSE[rel.relation] ?? CONVERSE.Friend)) + (good ? " It went well." : " It got awkward.");
+       p.annual[CAP_KEY(rel.id)] = used + 1;
++      if (good) meet(p, rel, "security");
+       outcome = good ? "good" : "bad";
+       break;
+     }
+@@ -243,6 +267,10 @@ export function interact(p0: PlayerState, relId: string, action: SocialAction, r
+       changeStat(p, "happiness", -5);
+       changeStat(p, "karma", -2);
+       body = fill(rng.pick(INSULT));
++      if (rel.relation !== "Pet") {
++        addGrievance(p, rel, "insult", 1, `a cruel thing you said to ${n}`);
++        remember(p, rel, "conflict", `You said something cruel and ${n} hasn't forgotten it.`);
++      }
+       outcome = "bad";
+       break;
+     }
+@@ -284,18 +312,27 @@ export function propose(p0: PlayerState, rng: Rng): ActionResult {
+   if (partner.age < 18 || p.age < 18) {
+     return { player: p0, notices: [{ kind: "info", title: "Too young", body: "You're both too young to marry.", tone: "neutral" }] };
+   }
+-  if (rng.chance(clamp(partner.relationshipBar / 110, 0.05, 0.95))) {
++  if ((p.annual.propose ?? 0) >= 1) {
++    return { player: p0, notices: [{ kind: "info", title: "Give Them Time", body: `You've already asked ${firstName(partner)} this year. Asking again so soon will only make them feel cornered.`, tone: "neutral" }] };
++  }
++  p.annual.propose = 1;
++  // A relationship with an open wound isn't ready to be a marriage.
++  const wounds = (partner.grievances ?? []).reduce((s, g) => s + g.weight, 0);
++  if (rng.chance(clamp(partner.relationshipBar / 110 - wounds * 0.06, 0.05, 0.95))) {
+     partner.partnerStatus = "married";
+     partner.marriedYear = p.year;
+     partner.relationshipBar = clamp(partner.relationshipBar + 15);
+     changeStat(p, "happiness", 12);
+     p.queuedEvents.push("wedding_day");
++    remember(p, partner, "milestone", `You proposed and ${firstName(partner)} said yes.`);
++    ensureInLaws(p, partner, rng);
+     const body = `${partner.name} said yes! Wedding planning begins.`;
+     addLog(p, body);
+     return { player: p, notices: [{ kind: "info", title: "Just Married!", body, tone: "good" }] };
+   }
+   partner.relationshipBar = clamp(partner.relationshipBar - 20);
+   changeStat(p, "happiness", -8);
++  remember(p, partner, "hardship", `You proposed and ${firstName(partner)} wasn't ready.`);
+   const body = `${partner.name} said they aren't ready. The silence was deafening.`;
+   addLog(p, body);
+   return { player: p, notices: [{ kind: "info", title: "Rejected", body, tone: "bad" }] };
+@@ -318,6 +355,7 @@ export function tryForBaby(p0: PlayerState, rng: Rng): ActionResult {
+   const p = clone(p0);
+   const partner = getPartner(p);
+   if (!partner) return { player: p0 };
++  if (partner.separatedYear) return { player: p0, notices: [{ kind: "info", title: "Not Now", body: `You and ${firstName(partner)} are living apart. This isn't the moment.`, tone: "neutral" }] };
+   if ((p.annual.baby ?? 0) >= 1) {
+     return { player: p0, notices: [{ kind: "info", title: "Patience", body: "You've already tried this year.", tone: "neutral" }] };
+   }
+@@ -357,6 +395,7 @@ export function dateNight(p0: PlayerState): ActionResult {
+   p.bankBalance -= 100;
+   partner.relationshipBar = clamp(partner.relationshipBar + 12);
+   changeStat(p, "happiness", 4);
++  meet(p, partner, "affection");
+   const body = `You took ${partner.name} out for a romantic evening.`;
+   addLog(p, body);
+   return { player: p, notices: [{ kind: "info", title: "Date Night", body, tone: "good" }] };
+@@ -387,6 +426,7 @@ export function meetSomeone(p0: PlayerState, kind: "friend" | "date", rng: Rng):
+   const candidate = createRelative(p, spec, rng);
+   const places = ["at a coffee shop", "at a friend's party", "at the gym", "at the library", "online", "at a concert"];
+   const place = rng.pick(places);
++  introduce(p, candidate, `You met ${firstName(candidate)} ${place}.`);
+   const event: LifeEvent = {
+     id: `meet_${candidate.id}`,
+     title: kind === "date" ? "A Spark?" : "New Face",
+diff --git a/src/engine/state.ts b/src/engine/state.ts
+index 4081df3..b337822 100644
+--- a/src/engine/state.ts
++++ b/src/engine/state.ts
+@@ -374,6 +374,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
+     pregnancy: null,
+     blackjack: null,
+     intimacy: { ageAuto: true, ageMin: 18, ageMax: 60, genders: [], interests: ["sensual", "playful"] },
++    parentingStyle: "balanced",
+     matureContent: true,
+     effort: "steady",
+     habits: { exercise: 1, diet: 1 },
+diff --git a/src/types/game.types.ts b/src/types/game.types.ts
+index d07187b..8a8a4ff 100644
+--- a/src/types/game.types.ts
++++ b/src/types/game.types.ts
+@@ -68,8 +68,73 @@ export interface Relative {
+   trouble?: number;
+   /** Royal children: how they are being raised for public life (see engine/courtFamily.ts). */
+   royalTraining?: RoyalTraining;
++
++  // ---- relationship depth (see engine/bonds.ts, partnership.ts, circle.ts, inlaws.ts) ----
++  /** Calendar year you met them (or they were born into your life). */
++  metYear?: number;
++  /** The moments worth remembering, oldest first (capped). */
++  memories?: Memory[];
++  /** Unresolved hurts that can resurface until you clear the air. */
++  grievances?: Grievance[];
++  /** What they need from a relationship (two of the VALUES in engine/bonds.ts). */
++  values?: string[];
++  /** Which of those you have worked out. */
++  knownValues?: string[];
++  /** Years in a row a particular need went unmet. */
++  unmet?: Record<string, number>;
++  /** Partners: living apart but not divorced. Calendar year it began. */
++  separatedYear?: number;
++  /** Partners: attended counselling together this many times. */
++  counselling?: number;
++  /** Partner's family, who you meet as the relationship deepens. */
++  inLaws?: InLaw[];
++  /** Children of a split couple: where they mostly live. */
++  custody?: "shared" | "you" | "them";
++  /** Name of the child's other parent when you are not together. */
++  otherParent?: string;
++  /** Children: what they are like (see engine/parenting.ts). */
++  temperament?: string;
++  /** Friends: how the friendship is labelled (best friend, old friend, work friend...). */
++  friendKind?: string;
++  /** Friends: calendar year of a falling-out that has not been mended. */
++  riftYear?: number;
++  /** Drifted away or estranged: calendar year it happened (used to offer a reunion). */
++  lostYear?: number;
++}
++
++export type MemoryKind = "met" | "milestone" | "joy" | "hardship" | "conflict" | "betrayal" | "kindness" | "loss";
++
++/** A moment you and someone shared, kept so the relationship has a past. */
++export interface Memory {
++  year: number;
++  age: number;
++  kind: MemoryKind;
++  text: string;
++}
++
++export type GrievanceKind = "fight" | "betrayal" | "neglect" | "debt" | "insult";
++
++/** Something unresolved between you and another person. */
++export interface Grievance {
++  id: string;
++  year: number;
++  kind: GrievanceKind;
++  /** 1 (a sore spot) to 3 (a wound). */
++  weight: number;
++  text: string;
+ }
+ 
++export interface InLaw {
++  name: string;
++  role: "Mother-in-law" | "Father-in-law" | "Sister-in-law" | "Brother-in-law";
++  age: number;
++  alive: boolean;
++  /** 0-100: how they feel about you. */
++  warmth: number;
++}
++
++export type ParentingStyle = "strict" | "balanced" | "permissive" | "handsoff";
++
+ /** How a royal child is being brought up. Carries into the next generation if they inherit. */
+ export interface RoyalTraining {
+   /** 0-100: sense of public duty. */
+@@ -1253,6 +1318,8 @@ export interface PlayerState {
+   blackjack: BlackjackHand | null;
+   /** Who you're looking for and what you're open to (adult content only). */
+   intimacy: IntimacyPrefs;
++  /** How you raise your children: a standing choice with trade-offs (see engine/parenting.ts). */
++  parentingStyle: ParentingStyle;
+   /** Mature (18+) content: sexual choices, adult careers, and graphic-ish crime options. */
+   matureContent: boolean;
+ 

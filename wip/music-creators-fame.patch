@@ -1,0 +1,1787 @@
+diff --git a/src/engine/__tests__/zz_play.test.ts b/src/engine/__tests__/zz_play.test.ts
+new file mode 100644
+index 0000000..38dc60d
+--- /dev/null
++++ b/src/engine/__tests__/zz_play.test.ts
+@@ -0,0 +1,255 @@
++import { NEUTRAL } from "./helpers/neutral";
++import { describe, it } from "vitest";
++import { makeRng, type Rng } from "@/lib/rng";
++import { ageUp } from "../ageUp";
++import { createNewPlayer } from "../state";
++import { resolveEvent } from "../events";
++import { resolveTrial } from "../crime";
++import { applyForJob, quitJob } from "../career";
++import * as inf from "../influencer";
++import * as mu from "../music";
++import { resolveScandal } from "../celebrity";
++import type { ActionResult, Notice, PlayerState } from "@/types/game.types";
++import { appendFileSync, writeFileSync } from "node:fs";
++
++const OUT = process.env.PLAY_OUT ?? "/tmp/play.txt";
++export const DEATHS: Record<string, Record<string, number>> = {};
++export const EVC: Record<string, Record<string, number>> = {};
++const logLine = (s: string) => appendFileSync(OUT, s + "\n");
++
++type Strategy = (p: PlayerState, rng: Rng) => PlayerState;
++const ap = (p: PlayerState, r: ActionResult) => r.player ?? p;
++
++function life(seed: number, name: string, strat: Strategy, trace: boolean, stopAge = 999) {
++  const rng = makeRng(seed);
++  const tal = { ...NEUTRAL, musical: Number(process.env.MUSICAL ?? 50) };
++  let p = createNewPlayer({ scenario: "average", startYear: 2026, talents: tal }, rng);
++  const rows: string[] = [];
++  const stats = { peakFans: 0, peakFollowers: 0, peakFame: 0, albums: 0, hits: 0, signedYears: 0, scandals: 0, died: p.age, endNet: 0, maxBank: 0, minBank: 1e12, music$: 0, inf$: 0 };
++  for (let guard = 0; guard < 120 && p.alive && p.age < stopAge; guard++) {
++    const res = ageUp(p, rng);
++    p = res.player;
++    const notices = (res.notices ?? []) as Notice[];
++    for (const n of notices) {
++      if (n.kind === "event" && p.alive) {
++        // choose first non-money-losing option at random
++        const idx = rng.int(0, n.event.options.length - 1);
++        (EVC[name] ??= {})[n.event.id] = ((EVC[name] ??= {})[n.event.id] ?? 0) + 1;
++        p = resolveEvent(p, n.event, idx, rng).player;
++        if (trace) rows.push(`   EVENT ${n.event.id}:`);
++      } else if (trace && (n.kind === "info") && p.age >= 14) {
++        rows.push(`   [${(n as { title: string }).title}] ${(n as { body: string }).body}`);
++      }
++    }
++    if (!p.alive) break;
++    if (p.pendingTrial) p = resolveTrial(p, "plea", rng).player;
++    if (p.age >= 12) p = strat(p, rng);
++    const m = p.music;
++    const i = p.influencer;
++    stats.peakFans = Math.max(stats.peakFans, m.fans);
++    stats.peakFollowers = Math.max(stats.peakFollowers, i.followers);
++    stats.peakFame = Math.max(stats.peakFame, p.fame);
++    stats.maxBank = Math.max(stats.maxBank, p.bankBalance);
++    if (m.signed) stats.signedYears++;
++    if (trace && p.age >= 12 && (m.status !== "none" || i.active)) {
++      rows.push(
++        `age ${p.age} fame ${Math.round(p.fame)} bank ${Math.round(p.bankBalance)} | music ${m.status}${m.signed ? "*" : ""} fans ${m.fans} lf ${Math.round(m.localFame)} rel ${Math.round(m.relevance)} burn ${Math.round(m.burnout)} skill ${p.skills.music} sw ${m.songwriting} albums ${m.albums.length} inc ${JSON.stringify(m.lastIncome)} unrec ${m.contract?.unrecouped ?? "-"} | inf ${i.active ? `${i.followers} eng ${i.engagement} auth ${i.authenticity} burn ${Math.round(i.burnout)} deals ${i.deals.length} inc ${JSON.stringify(i.income)}` : "-"} | priv ${p.celeb.privacy} stalk ${Math.round(p.celeb.stalker)}`,
++      );
++    }
++  }
++  stats.albums = p.music.albums.length;
++  stats.hits = p.music.hits;
++  stats.scandals = p.celeb.scandals;
++  stats.died = p.age;
++  (DEATHS[name] ??= {})[p.causeOfDeath ?? 'alive'] = ((DEATHS[name] ??= {})[p.causeOfDeath ?? 'alive'] ?? 0) + 1;
++  stats.endNet = Math.round(p.bankBalance);
++  stats.music$ = Math.round(p.music.earnings);
++  stats.inf$ = Math.round(p.influencer.lifetimeEarnings);
++  if (trace) logLine(`==== ${name} seed ${seed}\n` + rows.join("\n"));
++  return { p, stats };
++}
++
++const reply = (p: PlayerState, rng: Rng) => {
++  if (p.celeb.scandal) p = ap(p, resolveScandal(p, rng, "prFirm"));
++  return p;
++};
++
++// ----- strategies -----
++const busker: Strategy = (p, rng) => {
++  if (p.age >= 14 && p.music.status === "none") p = ap(p, mu.startSolo(p));
++  p = ap(p, mu.practiceMusic(p, rng));
++  p = ap(p, mu.writeSongs(p, rng));
++  if (!p.currentJob && p.age >= 18) p = ap(p, applyForJob(p, "retail", rng));
++  p.effort = "coast";
++  return p;
++};
++
++const labelPop: Strategy = (p, rng) => {
++  p = reply(p, rng);
++  if (p.age >= 14 && p.music.status === "none") p = ap(p, mu.startSolo(p));
++  p.effort = "grind";
++  p = ap(p, mu.practiceMusic(p, rng));
++  p = ap(p, mu.writeSongs(p, rng));
++  if (!p.music.signed) {
++    p = ap(p, mu.recordDemo(p, rng));
++    if (!p.music.manager) p = ap(p, mu.toggleManager(p));
++    if (p.age >= 18) p = ap(p, mu.auditionContract(p, "solo", 80, rng));
++    if (p.age >= 16 && !p.currentJob) p = ap(p, mu.recordAlbum(p, "Pop", "", { producer: p.bankBalance > 10_000 ? "local" : "self", direction: "commercial" }));
++  } else {
++    if (p.music.pendingAlbum == null) p = ap(p, mu.recordAlbum(p, "Pop", "", { producer: p.fame >= 30 ? "pro" : "local", direction: "commercial" }));
++    if ((p.annual.album ?? 0) === 0) {
++      const scale = [...mu.TOUR_SCALES].reverse().find((t) => p.music.fans >= t.minFans);
++      if (scale) p = ap(p, mu.goOnTour(p, rng, scale.id));
++    }
++    if (p.music.contract) p = ap(p, mu.renegotiateContract(p, rng));
++    if (p.music.burnout > 75) p = ap(p, mu.takeMusicBreak(p));
++  }
++  return p;
++};
++
++const indieGrinder: Strategy = (p, rng) => {
++  p = reply(p, rng);
++  if (p.age >= 14 && p.music.status === "none") p = ap(p, mu.startSolo(p));
++  if (p.age >= 14 && p.music.status === "solo" && p.skills.music > 25) p = ap(p, mu.formBand(p, 70, rng));
++  p.effort = "steady";
++  p = ap(p, mu.practiceMusic(p, rng));
++  p = ap(p, mu.writeSongs(p, rng));
++  p = ap(p, mu.recruitMember(p, rng));
++  p = ap(p, mu.teamNight(p));
++  if (p.bankBalance > 3000) p = ap(p, mu.recordDemo(p, rng));
++  if (p.age >= 18 && !p.currentJob && !p.music.signed) p = ap(p, applyForJob(p, "retail", rng));
++  if (p.year % 2 === 0 && p.age >= 16 && p.bankBalance > 12_000) p = ap(p, mu.recordAlbum(p, "Rock", "", { producer: "local", direction: "artistic" }));
++  else if (p.year % 2 === 0 && p.age >= 16 && p.bankBalance > 4_000 && !p.music.pendingAlbum) p = ap(p, mu.recordAlbum(p, "Rock", "", { producer: "self", direction: "artistic" }));
++  if (!p.music.signed && !p.music.pendingAlbum) {
++    const sc = [...mu.TOUR_SCALES].reverse().find((t) => p.music.fans >= t.minFans && p.bankBalance > t.fixed);
++    if (!mu.supportBlock(p) && (!sc || sc.id === "club")) p = ap(p, mu.goOnTour(p, rng, "club", { mode: "support" }));
++    else if (sc) p = ap(p, mu.goOnTour(p, rng, sc.id));
++  }
++  return p;
++};
++
++const indieAllIn: Strategy = (p, rng) => {
++  p = reply(p, rng);
++  if (p.age >= 14 && p.music.status === "none") p = ap(p, mu.startSolo(p));
++  if (p.age >= 14 && p.music.status === "solo" && p.skills.music > 25) p = ap(p, mu.formBand(p, 70, rng));
++  p.effort = "grind";
++  p = ap(p, mu.practiceMusic(p, rng));
++  p = ap(p, mu.writeSongs(p, rng));
++  p = ap(p, mu.recruitMember(p, rng));
++  for (const mem of p.music.members) { if (mem.grievance === "habit") p = ap(p, mu.sendToRehab(p, rng, mem.id)); else if (mem.grievance === "credit") p = ap(p, mu.shareCredit(p, mem.id)); else if (mem.grievance === "money") p = ap(p, mu.payRaise(p, mem.id)); else if (mem.grievance) p = ap(p, mu.talkToMember(p, rng, mem.id)); }
++  p = ap(p, mu.teamNight(p));
++  if (p.bankBalance > 3000) p = ap(p, mu.recordDemo(p, rng));
++  if (p.age >= 18 && p.currentJob) p = ap(p, quitJob(p));
++  if (p.age >= 17 && p.year % 2 === 0 && p.bankBalance > 4_000) p = ap(p, mu.recordAlbum(p, "Rock", "", { producer: p.bankBalance > 15_000 ? "local" : "self", direction: "balanced" }));
++  if (!p.music.signed && !p.music.pendingAlbum && p.age >= 17) {
++    const sc = [...mu.TOUR_SCALES].reverse().find((t) => p.music.fans >= t.minFans && p.bankBalance > t.fixed);
++    if (!mu.supportBlock(p) && (!sc || sc.id === "club")) p = ap(p, mu.goOnTour(p, rng, "club", { mode: "support" }));
++    else if (sc) p = ap(p, mu.goOnTour(p, rng, sc.id));
++  }
++  if (p.age >= 20 && !p.music.signed) p = ap(p, mu.auditionContract(p, p.music.status === "band" ? "band" : "solo", 80, rng));
++  if (p.music.signed) {
++    p = ap(p, mu.recordAlbum(p, "Rock", "", { producer: p.fame >= 30 ? "pro" : "local", direction: "balanced" }));
++    const scale = [...mu.TOUR_SCALES].reverse().find((t) => p.music.fans >= t.minFans);
++    if (scale && !p.music.pendingAlbum) p = ap(p, mu.goOnTour(p, rng, scale.id));
++  }
++  if (p.music.burnout > 80) p = ap(p, mu.takeMusicBreak(p));
++  return p;
++};
++
++const viralCreator: Strategy = (p, rng) => {
++  p = reply(p, rng);
++  if (p.age >= 13 && !p.influencer.active) p = ap(p, inf.startChannel(p, rng, { platform: "shorts", niche: "comedy" }));
++  if (!p.influencer.active) return p;
++  p.effort = "grind";
++  p = ap(p, inf.postContent(p, rng));
++  if (p.influencer.followers > 20_000 && p.age >= 16 && !p.influencer.fullTime) p = ap(p, inf.goFullTimeCreator(p, true));
++  for (const o of [...p.influencer.offers]) p = ap(p, inf.acceptDeal(p, o.id));
++  if (p.influencer.followers >= 10_000 && !p.influencer.premium) p = ap(p, inf.toggleMemberships(p));
++  if (p.influencer.followers >= 20_000 && !p.influencer.merch) p = ap(p, inf.launchMerch(p));
++  if (p.influencer.burnout > 80) p = ap(p, inf.takeBreak(p));
++  if (p.influencer.bannedYears > 0) p = ap(p, inf.appealBan(p, rng));
++  return p;
++};
++
++const brandChaser: Strategy = (p, rng) => {
++  p = reply(p, rng);
++  if (p.age >= 14 && !p.influencer.active) p = ap(p, inf.startChannel(p, rng, { platform: "photo", niche: "beauty" }));
++  if (!p.influencer.active) return p;
++  p.effort = "steady";
++  p = ap(p, inf.postContent(p, rng));
++  p = ap(p, inf.brandCollab(p));
++  p = ap(p, inf.buyFollowers(p, rng));
++  for (const o of [...p.influencer.offers].sort((a, b) => b.pay - a.pay)) p = ap(p, inf.acceptDeal(p, o.id));
++  if (p.influencer.burnout > 85) p = ap(p, inf.takeBreak(p));
++  if (p.influencer.bannedYears > 0) p = ap(p, inf.appealBan(p, rng));
++  return p;
++};
++
++const burnout: Strategy = (p, rng) => {
++  p = reply(p, rng);
++  if (p.age >= 16 && p.music.status === "none") p = ap(p, mu.startSolo(p));
++  p.effort = "grind";
++  p = ap(p, mu.practiceMusic(p, rng));
++  p = ap(p, mu.writeSongs(p, rng));
++  if (!p.music.signed && p.age >= 18) {
++    p = ap(p, mu.recordDemo(p, rng));
++    p = ap(p, mu.auditionContract(p, "solo", 100, rng));
++  }
++  if (p.music.signed) {
++    p = ap(p, mu.recordAlbum(p, "Rock", "", { producer: "pro", direction: "balanced" }));
++    const scale = [...mu.TOUR_SCALES].reverse().find((t) => p.music.fans >= t.minFans);
++    if (scale) p = ap(p, mu.goOnTour(p, rng, scale.id));
++  }
++  return p;
++};
++
++const fameAverse: Strategy = (p, rng) => {
++  p = reply(p, rng);
++  if (p.age >= 14 && p.music.status === "none") p = ap(p, mu.startSolo(p));
++  p.effort = "coast";
++  p = ap(p, mu.practiceMusic(p, rng));
++  if (p.age >= 18 && !p.currentJob) p = ap(p, applyForJob(p, "retail", rng));
++  if (p.bankBalance > 10_000 && !p.music.pendingAlbum) p = ap(p, mu.recordAlbum(p, "Jazz", "", { producer: "local", direction: "artistic" }));
++  return p;
++};
++
++const STRATS: Record<string, Strategy> = { indieAllIn, busker, labelPop, indieGrinder, viralCreator, brandChaser, burnout, fameAverse };
++
++describe("dump", () => {
++  it("dumps saves", () => {
++    const jobs: Array<[string, Strategy, number, number]> = [["band", indieGrinder, 24, 11], ["star", labelPop, 32, 12], ["creator", viralCreator, 26, 13]];
++    for (const [n, st, age, seed] of jobs) {
++      const { p } = life(seed * 101 + 7, n, st, false, age);
++      writeFileSync(`/home/user/bitlife-clone/.claude/worktrees/agent-a78964066f7d374af/scratch/save_${n}.json`, JSON.stringify({ v: 1, player: p, rngState: 12345 }));
++    }
++  });
++});
++
++describe("play", () => {
++  it("plays", () => {
++    writeFileSync(OUT, "");
++    const N = Number(process.env.PLAY_N ?? 60);
++    for (const [name, strat] of Object.entries(STRATS)) {
++      const agg = { n: 0, peakFans: [] as number[], peakFollowers: [] as number[], fame: [] as number[], albums: [] as number[], music$: [] as number[], inf$: [] as number[], endNet: [] as number[], scandals: 0, signed: 0, died: [] as number[] };
++      for (let s = 1; s <= N; s++) {
++        const { stats } = life(s * 101 + 7, name, strat, s <= 2);
++        agg.n++;
++        agg.peakFans.push(stats.peakFans);
++        agg.peakFollowers.push(stats.peakFollowers);
++        agg.fame.push(stats.peakFame);
++        agg.albums.push(stats.albums);
++        agg.music$.push(stats.music$);
++        agg.inf$.push(stats.inf$);
++        agg.endNet.push(stats.endNet);
++        agg.scandals += stats.scandals;
++        if (stats.signedYears > 0) agg.signed++;
++        agg.died.push(stats.died);
++      }
++      const q = (a: number[], f: number) => [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * f))];
++      const row = (label: string, a: number[]) => `${label}: p10 ${Math.round(q(a, 0.1))} p50 ${Math.round(q(a, 0.5))} p90 ${Math.round(q(a, 0.9))} max ${Math.round(q(a, 0.999))}`;
++      logLine(`  events: ` + Object.entries(EVC[name] ?? {}).filter(([k]) => /^(cr_|band|influ|fest|reality|holly|label|paparaz|stalk|fan|music|mx_|form_|rock|talent|record|concert|karaoke|busking|viral)/.test(k)).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${(v / agg.n).toFixed(2)}`).join(" "));
++      logLine(`  deaths: ` + Object.entries(DEATHS[name] ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k}:${v}`).join(" | "));
++      logLine(`#### ${name} (n=${agg.n}) signed ${agg.signed} scandals/life ${(agg.scandals / agg.n).toFixed(1)}\n  ${row("peakFans", agg.peakFans)}\n  ${row("peakFollowers", agg.peakFollowers)}\n  ${row("peakFame", agg.fame)}\n  ${row("albums", agg.albums)}\n  ${row("music$", agg.music$)}\n  ${row("inf$", agg.inf$)}\n  ${row("endBank", agg.endNet)}\n  ${row("deathAge", agg.died)}`);
++    }
++  });
++});
+diff --git a/src/engine/creativeState.ts b/src/engine/creativeState.ts
+index 6a1522d..c25fbf0 100644
+--- a/src/engine/creativeState.ts
++++ b/src/engine/creativeState.ts
+@@ -33,6 +33,9 @@ export const newInfluencer = (): InfluencerState => ({
+   peakFollowers: 0,
+   viralHits: 0,
+   followerHistory: [],
++  collabs: 0,
++  feud: null,
++  associate: null,
+ });
+ 
+ export const newMusic = (): MusicState => ({
+@@ -63,6 +66,12 @@ export const newMusic = (): MusicState => ({
+   earnings: 0,
+   droppedCount: 0,
+   lastIncome: { gigs: 0, royalties: 0, stipend: 0, costs: 0 },
++  split: "equal",
++  peakFans: 0,
++  formerBand: null,
++  dispute: null,
++  catalogSold: 0,
++  lastTour: null,
+ });
+ 
+ export const newActing = (): ActingState => ({
+@@ -101,6 +110,10 @@ export const newCeleb = (): CelebState => ({
+   businessManager: false,
+   scandal: null,
+   scandals: 0,
++  devotion: 20,
++  familyShield: false,
++  orders: 0,
++  orderYears: 0,
+ });
+ 
+ /** The contract an old save's signed artist is assumed to be on. */
+@@ -134,7 +147,21 @@ export function hydrateCreative(p: PlayerState): Pick<PlayerState, "influencer"
+   const oldMusic = p.music as Partial<MusicState> | undefined;
+   const music: MusicState = { ...newMusic(), ...oldMusic };
+   music.albums = (oldMusic?.albums ?? []).map((a) => ({ ...a }));
+-  music.members = oldMusic?.members ?? [];
++  music.members = (oldMusic?.members ?? []).map((m) => ({
++    ...m,
++    trait: m.trait ?? (m.partier ? "flake" : m.ego >= 65 ? "diva" : m.loyalty >= 70 ? "loyalist" : "peacemaker"),
++    credit: m.credit ?? 0,
++    years: m.years ?? 1,
++    grievance: m.grievance ?? null,
++    grievanceYears: m.grievanceYears ?? 0,
++    talked: false,
++  }));
++  music.split = oldMusic?.split ?? "equal";
++  music.peakFans = Math.max(oldMusic?.peakFans ?? 0, oldMusic?.fans ?? 0);
++  music.formerBand = oldMusic?.formerBand ?? null;
++  music.dispute = oldMusic?.dispute ?? null;
++  music.catalogSold = oldMusic?.catalogSold ?? 0;
++  music.lastTour = oldMusic?.lastTour ?? null;
+   music.awards = oldMusic?.awards ?? [];
+   music.lastIncome = { ...newMusic().lastIncome, ...oldMusic?.lastIncome };
+   if (music.signed && !music.contract) music.contract = legacyContract();
+@@ -155,5 +182,7 @@ export function hydrateCreative(p: PlayerState): Pick<PlayerState, "influencer"
+     acting.pull = 5 + p.currentJob.tier * 20;
+   }
+   const celeb: CelebState = { ...newCeleb(), ...(p.celeb as Partial<CelebState> | undefined) };
++  influencer.deals = (influencer.deals ?? []).map((d) => ({ ...d, morals: d.morals ?? !d.shady, strikes: d.strikes ?? 0 }));
++  influencer.offers = (influencer.offers ?? []).map((d) => ({ ...d, morals: d.morals ?? !d.shady, strikes: d.strikes ?? 0 }));
+   return { influencer, music, acting, celeb };
+ }
+diff --git a/src/engine/music.ts b/src/engine/music.ts
+index 2e64149..6a510bc 100644
+--- a/src/engine/music.ts
++++ b/src/engine/music.ts
+@@ -3,92 +3,26 @@
+  * demos, local fame). Stage two is the label (contract terms, recoupment, creative control).
+  * Albums are driven by skill, songwriting, producer, direction and effort; tours pay and cost.
+  */
+-import type { ActionResult, BandMember, PlayerState, RecordContract } from "@/types/game.types";
++import type { ActionResult, PlayerState, RecordContract } from "@/types/game.types";
+ import { makeRng, type Rng } from "@/lib/rng";
+ import { clamp, money } from "@/lib/format";
+-import { ALBUM_RATINGS, MUSIC_GENRES } from "@/data/careersRegistry";
+-import { addLog, changeStat, clone, getPartner, isRoyal, livingRelatives } from "./state";
++import { MUSIC_GENRES } from "@/data/careersRegistry";
++import { addLog, changeStat, clone, isRoyal } from "./state";
+ import { blockerFor } from "./occupation";
+ import { addVice } from "./vices";
+ import { info, logEvent, outputFor, payout, talentCeiling, trained, type Notices } from "./creativeCore";
+ import { raiseScandal } from "./celebrity";
+-
+-// ---------------------------------------------------------------------------
+-// Catalogue
+-// ---------------------------------------------------------------------------
+-
+-export const PRODUCERS = [
+-  { id: "self", label: "Produce it yourself", cost: 0, quality: -6, minFame: 0, blurb: "Free, and it sounds like it." },
+-  { id: "local", label: "Local engineer", cost: 6_000, quality: 0, minFame: 0, blurb: "Competent and affordable." },
+-  { id: "pro", label: "Industry producer", cost: 60_000, quality: 8, minFame: 15, blurb: "Radio-ready polish." },
+-  { id: "star", label: "Star producer", cost: 400_000, quality: 16, minFame: 45, blurb: "Their name sells records." },
+-] as const;
+-
+-export const DIRECTIONS = [
+-  { id: "commercial", label: "Go commercial", blurb: "Chase the radio. More hits, thinner credibility." },
+-  { id: "balanced", label: "Balanced", blurb: "A bit of both." },
+-  { id: "artistic", label: "Artistic statement", blurb: "Your vision. Critics may love it, labels may not." },
+-] as const;
+-
+-export const TOUR_SCALES = [
+-  { id: "club", label: "Club tour", minFans: 200, shows: 14, capacity: 400, price: 18, fixed: 6_000 },
+-  { id: "theatre", label: "Theatre tour", minFans: 8_000, shows: 24, capacity: 2_500, price: 45, fixed: 60_000 },
+-  { id: "arena", label: "Arena tour", minFans: 150_000, shows: 36, capacity: 15_000, price: 85, fixed: 500_000 },
+-  { id: "stadium", label: "Stadium tour", minFans: 2_000_000, shows: 44, capacity: 60_000, price: 140, fixed: 4_000_000 },
+-] as const;
+-export type TourScale = (typeof TOUR_SCALES)[number]["id"];
+-
+-const LABELS = ["Neon Records", "Blackbird Music", "Eastside Sound", "Crown & Anchor", "Velvet Vinyl", "Meridian Entertainment", "Static Garden", "Big Dog Records"];
+-const FIRST = ["Alex", "Sam", "Jo", "Max", "Riley", "Dani", "Kit", "Remy", "Jules", "Tariq", "Mina", "Leo", "Priya", "Cole", "Nico", "Bea", "Omar", "Ivy", "Mateo", "Zoe"];
+-const LAST = ["Vance", "Okafor", "Reyes", "Lindqvist", "Moreau", "Tanaka", "Walsh", "Costa", "Novak", "Hart", "Dubois", "Singh", "Kowalski", "Brandt"];
+-const ROLES = ["Guitar", "Bass", "Drums", "Keys", "Vocals"];
+-const BAND_A = ["Velvet", "Neon", "Broken", "Midnight", "Paper", "Electric", "Lost", "Hollow", "Rust", "Golden"];
+-const BAND_B = ["Hearts", "Static", "Parade", "Wolves", "Highway", "Echo", "Ghosts", "Rivals", "Radio", "Fire"];
+-
+-export const MAX_MEMBERS = 4;
+-
+-export function albumRating(score: number) {
+-  let chosen: (typeof ALBUM_RATINGS)[number] = ALBUM_RATINGS[0];
+-  for (const r of ALBUM_RATINGS) if (score >= r.min) chosen = r;
+-  return chosen;
+-}
+-
+-// ---------------------------------------------------------------------------
+-// Derived values
+-// ---------------------------------------------------------------------------
+-
+-export function bandSkill(p: PlayerState): number {
+-  const ms = p.music.members;
+-  if (ms.length === 0) return p.skills.music;
+-  return (p.skills.music * 1.5 + ms.reduce((s, m) => s + m.skill, 0)) / (1.5 + ms.length);
+-}
+-
+-export function chemistry(p: PlayerState): number {
+-  const ms = p.music.members;
+-  return ms.length === 0 ? 100 : Math.round(ms.reduce((s, m) => s + m.loyalty, 0) / ms.length);
+-}
+-
+-/** Your cut of whatever the act earns. */
+-export function playerShare(p: PlayerState): number {
+-  const n = p.music.members.length;
+-  return n === 0 ? 1 : Math.max(0.3, 1 / (n + 1) + 0.08);
+-}
+-
+-export const isOneHitWonder = (p: PlayerState) => p.music.hits === 1 && p.music.yearsSinceHit >= 5 && p.music.albums.length >= 2;
+-
+-export function musicTier(p: PlayerState): string {
+-  const m = p.music;
+-  if (m.status === "none" && m.albums.length === 0) return "Hobbyist";
+-  if (!m.signed) return m.localFame < 20 ? "Garage act" : m.localFame < 45 ? "Local favourite" : "Buzzing unsigned act";
+-  if (m.fans < 50_000) return "Signed act";
+-  if (m.fans < 500_000) return "Rising act";
+-  if (m.fans < 5_000_000) return "Headliner";
+-  return "Superstar";
+-}
+-
+-export function contractOutstanding(c: RecordContract | null): number {
+-  return c ? c.unrecouped : 0;
+-}
++import {
++  BAND_A, BAND_B, LABELS, PRODUCERS, ROLES, UNIT_VALUE, albumRating, audienceFor, bandSkill, chemistry, fanRetention, legacyScore,
++  makeMember, playerShare,
++} from "./musicCore";
++import { bandTick } from "./musicBand";
++import { disputeTick } from "./musicLegacy";
++
++export * from "./musicCore";
++export * from "./musicBand";
++export * from "./musicTour";
++export * from "./musicLegacy";
+ 
+ export function qualityEstimate(p: PlayerState, producerId: string, direction: "commercial" | "balanced" | "artistic"): number {
+   const m = p.music;
+@@ -99,20 +33,6 @@ export function qualityEstimate(p: PlayerState, producerId: string, direction: "
+   return clamp(Math.round(q));
+ }
+ 
+-const memberName = (rng: Rng) => `${rng.pick(FIRST)} ${rng.pick(LAST)}`;
+-
+-function makeMember(rng: Rng, skillBase: number, role?: string): BandMember {
+-  return {
+-    id: rng.id(),
+-    name: memberName(rng),
+-    role: role ?? rng.pick(ROLES),
+-    skill: clamp(Math.round(skillBase + rng.int(-14, 10))),
+-    loyalty: rng.int(55, 80),
+-    ego: rng.int(15, 85),
+-    partier: rng.chance(0.3),
+-  };
+-}
+-
+ // ---------------------------------------------------------------------------
+ // Scene actions
+ // ---------------------------------------------------------------------------
+@@ -174,6 +94,7 @@ export function formBand(p0: PlayerState, tapScore: number, rng: Rng = makeRng(p
+     const r = rng;
+     const m = p.music;
+     m.status = "band";
++    m.formerBand = null;
+     m.members = Array.from({ length: 2 }, (_, i) => makeMember(r, rating * 0.8, ROLES[(i + 1) % ROLES.length]));
+     m.bandName = `${r.pick(BAND_A)} ${r.pick(BAND_B)}`;
+     changeStat(p, "fame", 2);
+@@ -188,50 +109,6 @@ export function formBand(p0: PlayerState, tapScore: number, rng: Rng = makeRng(p
+   return { player: p, notices: [info("Band Fell Apart", body, "bad")] };
+ }
+ 
+-export function recruitMember(p0: PlayerState, rng: Rng): ActionResult {
+-  const p = clone(p0);
+-  const m = p.music;
+-  if (m.status !== "band") return { player: p0, notices: [info("No Band", "Form a band first.")] };
+-  if (m.members.length >= MAX_MEMBERS) return { player: p0, notices: [info("Full Line-up", `${MAX_MEMBERS} members is plenty.`)] };
+-  if ((p.annual.recruit ?? 0) >= 1) return { player: p0, notices: [info("Auditions Over", "You've already auditioned players this year.")] };
+-  p.annual.recruit = 1;
+-  const taken = new Set(m.members.map((x) => x.role));
+-  const role = ROLES.find((r) => !taken.has(r)) ?? rng.pick(ROLES);
+-  const member = makeMember(rng, clamp(p.skills.music + rng.int(-10, 5), 15, 25 + m.localFame * 0.6 + 30), role);
+-  m.members.push(member);
+-  const body = `${member.name} joined on ${role.toLowerCase()} (skill ${member.skill}). Chemistry is untested.`;
+-  addLog(p, body);
+-  return { player: p, notices: [info("New Member", body, "good")] };
+-}
+-
+-export function dismissMember(p0: PlayerState, id: string): ActionResult {
+-  const p = clone(p0);
+-  const m = p.music;
+-  const mem = m.members.find((x) => x.id === id);
+-  if (!mem) return { player: p0 };
+-  m.members = m.members.filter((x) => x.id !== id);
+-  for (const o of m.members) o.loyalty = clamp(o.loyalty - 6);
+-  if (m.members.length === 0 && !m.signed) m.status = "solo";
+-  const body = `You showed ${mem.name} the door. The others are uneasy about how easy that was.`;
+-  addLog(p, body);
+-  return { player: p, notices: [info("Band Shake-Up", body)] };
+-}
+-
+-export function teamNight(p0: PlayerState): ActionResult {
+-  const p = clone(p0);
+-  const m = p.music;
+-  if (m.members.length === 0) return { player: p0, notices: [info("No Band", "You need bandmates to bond with.")] };
+-  if ((p.annual.teamnight ?? 0) >= 1) return { player: p0, notices: [info("Enough Bonding", "You already took the band out this year.")] };
+-  if (p.bankBalance < 400) return { player: p0, notices: [info("Can't Afford It", "A night out for the band costs $400.", "bad")] };
+-  p.annual.teamnight = 1;
+-  p.bankBalance -= 400;
+-  for (const o of m.members) o.loyalty = clamp(o.loyalty + 12);
+-  changeStat(p, "happiness", 3);
+-  const body = "You took the band out for food and a long argument about the best album ever made. Chemistry up.";
+-  addLog(p, body);
+-  return { player: p, notices: [info("Band Night", body, "good")] };
+-}
+-
+ export function recordDemo(p0: PlayerState, rng: Rng): ActionResult {
+   const p = clone(p0);
+   const m = p.music;
+@@ -285,7 +162,8 @@ function rollTerms(p: PlayerState, leverage: number, rng: Rng): RecordContract {
+     advance,
+     stipend: 25_000,
+     royaltyRate: Number(clamp(0.1 + leverage * 0.0025 + (m.manager ? 0.02 : 0), 0.1, 0.2).toFixed(3)),
+-    albumsOwed: years >= 5 ? 4 : 3,
++    // Always one year of slack: a studio year and a touring year can't be the same year.
++    albumsOwed: Math.max(2, years - (years >= 5 ? 2 : 1)),
+     albumsDelivered: 0,
+     unrecouped: advance,
+     creativeControl: Math.round(clamp(25 + leverage * 1.5 + m.localFame / 4, 15, 80)),
+@@ -444,79 +322,12 @@ export function recordAlbum(
+   const quality = qualityEstimate(p, prod.id, direction);
+   m.genre = genre;
+   m.pendingAlbum = { title: name, genre, quality, producer: prod.id, direction, indie };
++  m.formerBand = m.status === "band" ? null : m.formerBand;
+   const body = `You recorded a ${genre} album called "${name}" with ${prod.label.toLowerCase()}${cost ? ` (${money(cost)}${indie ? " from your pocket" : ", added to your label debt"})` : ""}. It will be released this year!${notes.length ? " " + notes.join(" ") : ""}`;
+   addLog(p, body);
+   return { player: p, notices: [info("In the Studio", body, "good")] };
+ }
+ 
+-export function tourOptions(p: PlayerState) {
+-  return TOUR_SCALES.map((t) => ({ ...t, ok: p.music.fans >= t.minFans }));
+-}
+-
+-export function goOnTour(p0: PlayerState, rng: Rng, scaleId: TourScale): ActionResult {
+-  const p = clone(p0);
+-  const m = p.music;
+-  const scale = TOUR_SCALES.find((t) => t.id === scaleId);
+-  if (!scale || m.status === "none") return { player: p0 };
+-  if ((p.annual.tour ?? 0) >= 1) return { player: p0, notices: [info("Already Toured", "One tour a year is all your body can take.")] };
+-  if (m.pendingAlbum || (p.annual.album ?? 0) >= 1) return { player: p0, notices: [info("Studio Year", "You're making a record this year. You can't also be on the road.", "bad")] };
+-  if (m.fans < scale.minFans) return { player: p0, notices: [info("Not Enough Fans", `A ${scale.label.toLowerCase()} needs about ${scale.minFans.toLocaleString()} fans. You have ${Math.round(m.fans).toLocaleString()}.`)] };
+-  const indie = !m.signed;
+-  if (indie && p.bankBalance < scale.fixed * 0.5) return { player: p0, notices: [info("Can't Afford It", `You need ${money(Math.round(scale.fixed * 0.5))} up front to put a ${scale.label.toLowerCase()} on the road.`, "bad")] };
+-  p.annual.tour = 1;
+-  m.tours += 1;
+-  const relFactor = 0.5 + m.relevance / 100;
+-  const attendance = Math.min(scale.capacity, Math.round(m.fans * 0.04 * relFactor + m.localFame * 4 + 40));
+-  const fill = attendance / scale.capacity;
+-  const ticketRev = attendance * scale.shows * scale.price * (fill < 0.35 ? rng.float(0.7, 1) : 1);
+-  const merchRev = attendance * scale.shows * scale.price * 0.25;
+-  const gross = ticketRev + merchRev;
+-  const crew = ticketRev * 0.55;
+-  let net = gross - crew - scale.fixed;
+-  const notices: Notices = [];
+-  const c = m.contract;
+-  let labelCut = 0;
+-  if (net > 0 && m.signed && c) labelCut = net * c.tourCut;
+-  const mgrCut = net > 0 && m.manager ? net * 0.15 : 0;
+-  let yours = 0;
+-  if (net > 0) yours = (net - labelCut - mgrCut) * playerShare(p);
+-  else if (m.signed && c) {
+-    c.unrecouped += Math.round(-net);
+-    yours = 0;
+-  } else {
+-    yours = net * playerShare(p);
+-  }
+-  net = Math.round(net);
+-  const received = yours > 0 ? payout(p, yours) : Math.round(yours);
+-  if (yours < 0) p.bankBalance += Math.round(yours);
+-  m.earnings += Math.max(0, received);
+-  m.fans += attendance * scale.shows * 0.02;
+-  m.relevance = clamp(m.relevance + 4);
+-  m.burnout = clamp(m.burnout + 8 + TOUR_SCALES.indexOf(scale) * 4);
+-  changeStat(p, "health", -Math.round(scale.shows / 8));
+-  const success = net > 0;
+-  changeStat(p, "happiness", success ? 5 : -4);
+-  changeStat(p, "fame", success ? 2 : 0);
+-  const partner = getPartner(p);
+-  if (partner) partner.relationshipBar = clamp(partner.relationshipBar - 4);
+-  for (const k of livingRelatives(p, "Child")) if (k.age < 18) k.relationshipBar = clamp(k.relationshipBar - 2);
+-  let body = `${scale.label}: ${scale.shows} shows, about ${attendance.toLocaleString()} a night (${Math.round(fill * 100)}% full). ${
+-    net > 0 ? `You banked ${money(received)} after crew, label${m.manager ? ", manager" : ""} and band cuts and withholding.` : m.signed ? `It lost ${money(-net)}, which the label added to your debt.` : `It lost ${money(-net)} and you ate the cost.`
+-  }`;
+-  if (rng.chance(0.3 + m.burnout / 400 + m.members.filter((x) => x.partier).length * 0.06)) {
+-    const key = rng.chance(0.55) ? "alcohol" : "drugs";
+-    addVice(p, key, rng.int(4, 10));
+-    body += ` The tour bus had a lot of ${key === "alcohol" ? "drinking" : "pills and powders"}, and you joined in.`;
+-  }
+-  if (rng.chance(0.08)) {
+-    changeStat(p, "health", -10);
+-    body += " You strained your voice and cracked a rib on stage and had to cancel dates.";
+-  }
+-  addLog(p, body);
+-  notices.push(info(success ? "Tour Complete" : "Tour Loses Money", body, success ? "good" : "bad"));
+-  return { player: p, notices };
+-}
+-
+ // ---------------------------------------------------------------------------
+ // Yearly tick
+ // ---------------------------------------------------------------------------
+@@ -538,6 +349,13 @@ function dropFromLabel(p: PlayerState, notices: Notices, why: string, forfeit: b
+   logEvent(p, notices, "Dropped by the Label", why, "bad");
+ }
+ 
++/** What an album sells as a share of the audience it can reach, by how it landed. */
++const SALES_SHARE: Record<string, number> = { Flop: 0.02, Modest: 0.1, Hit: 0.28, Gold: 0.5, Platinum: 0.85, Diamond: 1.4 };
++/** Certifications are about real units: a small act can have a great record without it being "Platinum". */
++const CERT_FLOOR: Record<string, number> = { Gold: 40_000, Platinum: 200_000, Diamond: 1_000_000 };
++const RATING_ORDER = ["Flop", "Modest", "Hit", "Gold", "Platinum", "Diamond"];
++const ALBUM_MINS = [0, 35, 55, 70, 82, 94];
++
+ function releaseAlbum(p: PlayerState, rng: Rng, notices: Notices) {
+   const m = p.music;
+   const pending = m.pendingAlbum;
+@@ -545,17 +363,32 @@ function releaseAlbum(p: PlayerState, rng: Rng, notices: Notices) {
+   const indie = pending.indie ?? !m.signed;
+   const quality = pending.quality ?? qualityEstimate(p, "local", "balanced");
+   const dir = pending.direction ?? "balanced";
++  const audience = audienceFor(p);
+   const hitChance = clamp((quality - 55) / 70 + (dir === "commercial" ? 0.14 : dir === "artistic" ? -0.08 : 0) + (m.relevance - 50) / 400 + (indie ? 0 : 0.06), 0.02, 0.75);
+   const hit = rng.chance(hitChance);
++  // A song can catch fire on streaming far beyond the audience that was waiting for it.
++  const breakout = hit && m.fans < 1_500_000 && rng.chance(clamp(0.1 + (quality - 60) / 200, 0.04, 0.3));
+   const score = quality * 0.7 + p.fame * 0.25 + (m.relevance - 50) * 0.1 + (hit ? 8 : 0) + rng.int(-12, 14) + (dir === "commercial" ? 4 : dir === "artistic" ? -3 : 0);
+-  const r = albumRating(score);
+-  const sales = Math.round(r.sales * rng.float(0.8, 1.25) * (hit ? 1.5 : 1) * (indie ? 0.35 : 1));
++  const planned = albumRating(score);
++  // Releasing every single year floods your own market; a global audience also has only so much attention.
++  const last = m.albums[m.albums.length - 1];
++  const fatigue = last && p.year - last.year <= 1 ? 0.75 : 1;
++  const saturation = 1 / (1 + audience / 12_000_000);
++  const sales = Math.max(
++    12,
++    Math.round(audience * SALES_SHARE[planned.rating] * rng.float(0.75, 1.3) * (hit ? 1.5 : 1) * (breakout ? rng.float(3, 12) : 1) * (indie ? 0.8 : 1) * fatigue * saturation),
++  );
++  // Cap the headline rating at what the units actually support.
++  let idx = RATING_ORDER.indexOf(planned.rating);
++  while (idx > 0 && CERT_FLOOR[RATING_ORDER[idx]] !== undefined && sales < CERT_FLOOR[RATING_ORDER[idx]]) idx -= 1;
++  const r = albumRating(ALBUM_MINS[idx]);
+   const c = m.contract;
+   const rate = indie ? 0.7 : c?.royaltyRate ?? 0.14;
+-  const royalty = Math.round(sales * 9 * rate);
+-  m.albums.push({ title: pending.title, genre: pending.genre, rating: r.rating, sales, royalty, year: p.year, quality, hit, indie });
++  const royalty = Math.round(sales * UNIT_VALUE * rate);
++  const evergreen = idx >= 2 ? Math.round(royalty * 0.1) : 0;
++  m.albums.push({ title: pending.title, genre: pending.genre, rating: r.rating, sales, royalty, year: p.year, quality, hit, indie, evergreen, breakout, direction: dir });
+   m.pendingAlbum = null;
+-  m.fans += sales * 0.1 + (hit ? 2_000 : 0);
++  m.fans += sales * (breakout ? 0.3 : 0.1) + (hit ? audience * 0.03 : 0);
+   m.relevance = clamp(m.relevance + (hit ? 25 : r.fame >= 4 ? 12 : r.fame < 0 ? -12 : 2));
+   if (hit) {
+     m.hits += 1;
+@@ -567,9 +400,9 @@ function releaseAlbum(p: PlayerState, rng: Rng, notices: Notices) {
+     m.labelStanding = clamp(m.labelStanding + delta);
+   }
+   changeStat(p, "fame", r.fame);
+-  const body = `Your ${pending.genre} album "${pending.title}" ${hit ? "spawned a chart single and " : ""}sold ${sales.toLocaleString()} copies and was rated ${r.rating.toUpperCase()}.${indie ? " It was self-released." : ""} Royalties: ${money(royalty)}${!indie && c && c.unrecouped > 0 ? ` (they go against your ${money(c.unrecouped)} label debt first)` : ""}.`;
++  const body = `Your ${pending.genre} album "${pending.title}" ${breakout ? "had a single explode on streaming and " : hit ? "spawned a chart single and " : ""}sold ${sales.toLocaleString()} copies and was rated ${r.rating.toUpperCase()}.${indie ? " It was self-released." : ""} Royalties: ${money(royalty)}${!indie && c && c.unrecouped > 0 ? ` (they go against your ${money(c.unrecouped)} label debt first)` : ""}.`;
+   addLog(p, body);
+-  notices.push(info(`Album Released: ${r.rating}`, body, r.fame >= 7 ? "jackpot" : r.fame > 0 ? "good" : "bad"));
++  notices.push(info(`Album Released: ${r.rating}`, body, breakout || r.fame >= 7 ? "jackpot" : r.fame > 0 ? "good" : "bad"));
+ 
+   // Awards season
+   const album = m.albums[m.albums.length - 1];
+@@ -592,7 +425,7 @@ function royaltyIncome(p: PlayerState): { toPlayer: number; label: number } {
+   let label = 0;
+   let indie = 0;
+   for (const a of m.albums) {
+-    if (a.labelOwned) continue;
++    if (a.labelOwned || a.sold) continue;
+     if (a.indie) indie += a.royalty;
+     else label += a.royalty;
+   }
+@@ -606,30 +439,6 @@ function royaltyIncome(p: PlayerState): { toPlayer: number; label: number } {
+   return { toPlayer: Math.round((labelNet + indie) * playerShare(p)), label };
+ }
+ 
+-function bandTick(p: PlayerState, rng: Rng, notices: Notices, output: number) {
+-  const m = p.music;
+-  for (const mem of [...m.members]) {
+-    mem.skill = clamp(mem.skill + rng.int(0, 2) - (output < 0.4 ? 1 : 0));
+-    const drift =
+-      (output >= 0.8 ? 3 : output < 0.4 ? -3 : 0) - Math.round(mem.ego / 30) - (mem.partier ? 2 : 0) - (p.effort === "coast" ? 2 : 0) + (m.signed && m.labelStanding > 60 ? 2 : 0) + rng.int(-3, 4);
+-    mem.loyalty = clamp(mem.loyalty + drift);
+-    if (mem.loyalty < 20 && rng.chance(0.55)) {
+-      m.members = m.members.filter((x) => x.id !== mem.id);
+-      for (const o of m.members) o.loyalty = clamp(o.loyalty - 5);
+-      logEvent(p, notices, "Bandmate Quits", `${mem.name} (${mem.role.toLowerCase()}) quit the band after too many clashes and not enough rehearsal. The others are shaken.`, "bad");
+-    }
+-  }
+-  if (m.status === "band" && m.members.length === 0) {
+-    m.status = "solo";
+-    logEvent(p, notices, "The Band Is Over", `${m.bandName || "The band"} has no members left but you. You carry on as a solo act.`, "bad");
+-  }
+-  if (m.members.length >= 2 && chemistry(p) < 35 && rng.chance(0.3)) {
+-    for (const mem of m.members) mem.loyalty = clamp(mem.loyalty - 8);
+-    logEvent(p, notices, "Band Feud", "A blazing row backstage spilled onto social media. Chemistry took a beating.", "bad");
+-    if (m.fans >= 5_000) raiseScandal(p, "music", rng, notices, 1);
+-  }
+-}
+-
+ /** Returns the year's gross (taxable) music income. */
+ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number {
+   const m = p.music;
+@@ -651,7 +460,7 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
+   const royalty = royaltyIncome(p);
+   income.royalties = royalty.toPlayer;
+   gross += royalty.toPlayer;
+-  for (const a of m.albums) a.royalty = a.royalty < 500 ? 0 : Math.round(a.royalty * 0.55);
++  for (const a of m.albums) a.royalty = a.sold ? 0 : Math.max(a.evergreen ?? 0, a.royalty * 0.55 < 500 ? 0 : Math.round(a.royalty * 0.55));
+ 
+   if (active) {
+     // Playing is practice too: skills creep up with the hours you put in, up to your natural ceiling.
+@@ -665,6 +474,8 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
+     const ageDecay = p.age > 40 ? (p.age - 40) * 0.35 : 0;
+     const genreDecay = m.genre === "Pop" || m.genre === "Hip-Hop" ? 3 : m.genre === "Jazz" || m.genre === "Country" ? -3 : 0;
+     m.relevance = clamp(m.relevance - (7 + ageDecay + genreDecay - (m.yearsSinceHit <= 1 ? 3 : 0)));
++    // A legend never sounds entirely out of date: the catalogue keeps a floor under relevance.
++    m.relevance = Math.max(m.relevance, Math.round(legacyScore(p) * 0.25), Math.round(8 + m.localFame * 0.3));
+ 
+     // Burnout, writer's block
+     const burnDelta = output > 1.15 ? (output - 1.15) * 18 : output < 0.75 ? -6 : -2;
+@@ -696,14 +507,14 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
+       costs += gigCosts;
+       const lf = m.localFame;
+       m.localFame = clamp(lf + gigs * 0.7 * skillF * (1 - lf / 110) - (gigs < 4 ? lf * 0.12 : lf * 0.03));
+-      m.fans = Math.max(0, Math.round(m.fans * (gigs >= 6 ? 0.96 : 0.88) + gigs * (5 + m.localFame * 0.7) * skillF));
++      m.fans = Math.max(0, Math.round(m.fans * fanRetention(p, gigs >= 6 ? 0.96 : 0.88) + gigs * (5 + m.localFame * 0.7) * skillF));
+     } else if (m.contract) {
+       const c = m.contract;
+       income.stipend = c.stipend;
+       gross += c.stipend;
+       c.unrecouped += c.stipend;
+       c.yearsLeft -= 1;
+-      m.fans = Math.round(m.fans * (m.yearsSinceHit <= 1 ? 0.97 : 0.92));
++      m.fans = Math.round(m.fans * fanRetention(p, m.yearsSinceHit <= 1 ? 0.97 : 0.92));
+       const sinceRelease = p.year - (m.albums[m.albums.length - 1]?.year ?? p.year - 3);
+       if (sinceRelease >= 2 && !m.pendingAlbum) m.labelStanding = clamp(m.labelStanding - 6);
+       const last2 = m.albums.filter((a) => !a.indie).slice(-2);
+@@ -720,8 +531,9 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
+             advance: Math.round(c.advance * 1.5),
+             stipend: Math.round(c.stipend * 1.4),
+             royaltyRate: Number(Math.min(0.3, c.royaltyRate + 0.03).toFixed(3)),
+-            albumsOwed: rng.int(2, 3),
++            albumsOwed: Math.max(1, years - 1),
+             albumsDelivered: 0,
++            extended: 0,
+             creativeControl: clamp(c.creativeControl + 10),
+             renegotiatedYear: 0,
+           };
+@@ -734,6 +546,14 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
+           m.pendingAlbum = null;
+           if (p.specialCareerPath === "musician") p.specialCareerPath = "none";
+           logEvent(p, notices, "Contract Expired", `${c.label} let your contract lapse. You keep your catalogue and your freedom, but not their budget. Release independently or look for another deal.`, "neutral");
++        } else if ((c.extended ?? 0) < 1 && m.labelStanding > 25) {
++          // The label would rather have the records than the lawsuit: one extension, at a price.
++          const short = c.albumsOwed - c.albumsDelivered;
++          c.extended = (c.extended ?? 0) + 1;
++          c.yearsLeft = Math.min(2, short);
++          c.totalYears += c.yearsLeft;
++          m.labelStanding = clamp(m.labelStanding - 8);
++          logEvent(p, notices, "Contract Extended", `You still owe ${c.label} ${short} album${short > 1 ? "s" : ""}. They extended your term by ${c.yearsLeft} year${c.yearsLeft > 1 ? "s" : ""} to get them, with no new advance and a grudge.`, "bad");
+         } else {
+           dropFromLabel(p, notices, `You didn't deliver the ${c.albumsOwed} albums you owed ${c.label}. They terminated the contract and kept the masters.`, true);
+         }
+@@ -754,6 +574,8 @@ export function processMusic(p: PlayerState, rng: Rng, notices: Notices): number
+     if (m.manager && gross > 0) costs += Math.round(gross * 0.15);
+   }
+   m.fans = Math.round(m.fans);
++  m.peakFans = Math.max(m.peakFans ?? 0, m.fans);
++  disputeTick(p, rng, notices);
+   income.costs = costs;
+   p.bankBalance -= costs;
+   m.lastIncome = income;
+diff --git a/src/engine/musicBand.ts b/src/engine/musicBand.ts
+new file mode 100644
+index 0000000..584f10e
+--- /dev/null
++++ b/src/engine/musicBand.ts
+@@ -0,0 +1,351 @@
++/**
++ * Band life: members are people with a temperament, a share of the songwriting and grievances that
++ * fester if ignored. You can talk, share credit, pay, send to rehab, dismiss, split up, and one day reunite.
++ */
++import type { ActionResult, BandMember, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { addLog, changeStat, clone } from "./state";
++import { logEvent, info, type Notices } from "./creativeCore";
++import { raiseScandal } from "./celebrity";
++import { MAX_MEMBERS, ROLES, TRAITS, chemistry, legacyScore, makeMember, playerCredit } from "./musicCore";
++import { raiseDispute } from "./musicLegacy";
++
++const GRIEVANCE_TEXT: Record<NonNullable<BandMember["grievance"]>, string> = {
++  credit: "wants more writing credit",
++  money: "thinks the band underpays them",
++  direction: "hates the direction the band is heading",
++  habit: "is struggling with drink and drugs",
++};
++
++/** What a member's departure is worth to a lawyer: credit on songs that still earn. */
++const claimFor = (p: PlayerState, credit: number) =>
++  Math.round(Math.max(4_000, (p.music.lastIncome.royalties + p.music.lastIncome.gigs) * (credit / 100) * 1.6 + 2_500) / 100) * 100;
++
++// ---------------------------------------------------------------------------
++// Actions
++// ---------------------------------------------------------------------------
++
++export function recruitMember(p0: PlayerState, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const m = p.music;
++  if (m.status !== "band") return { player: p0, notices: [info("No Band", "Form a band first.")] };
++  if (m.members.length >= MAX_MEMBERS) return { player: p0, notices: [info("Full Line-up", `${MAX_MEMBERS} members is plenty.`)] };
++  if ((p.annual.recruit ?? 0) >= 1) return { player: p0, notices: [info("Auditions Over", "You've already auditioned players this year.")] };
++  p.annual.recruit = 1;
++  const taken = new Set(m.members.map((x) => x.role));
++  const role = ROLES.find((r) => !taken.has(r)) ?? rng.pick(ROLES);
++  const member = makeMember(rng, clamp(p.skills.music + rng.int(-10, 5), 15, 25 + m.localFame * 0.6 + 30), role);
++  m.members.push(member);
++  const body = `${member.name} joined on ${role.toLowerCase()} (skill ${member.skill}). First impressions: ${TRAITS[member.trait ?? "peacemaker"].label.toLowerCase()}. Chemistry is untested.`;
++  addLog(p, body);
++  return { player: p, notices: [info("New Member", body, "good")] };
++}
++
++function recordFormerBand(p: PlayerState, members: BandMember[], split: "amicable" | "bitter") {
++  const m = p.music;
++  if (members.length === 0) return;
++  m.formerBand = { name: m.bandName || "The band", year: p.year, members: members.map((x) => ({ ...x, grievance: null, grievanceYears: 0 })), split };
++}
++
++export function dismissMember(p0: PlayerState, id: string, rng?: Rng): ActionResult {
++  const p = clone(p0);
++  const m = p.music;
++  const mem = m.members.find((x) => x.id === id);
++  if (!mem) return { player: p0 };
++  m.members = m.members.filter((x) => x.id !== id);
++  for (const o of m.members) o.loyalty = clamp(o.loyalty - (mem.trait === "loyalist" ? 10 : 6));
++  let body = `You showed ${mem.name} the door. The others are uneasy about how easy that was.`;
++  if ((mem.credit ?? 0) >= 10 && m.fans >= 2_000 && (rng ? rng.chance(0.6) : true)) {
++    const claim = claimFor(p, mem.credit ?? 0);
++    if (raiseDispute(p, "credit", mem.name, claim, 2)) body += ` ${mem.name} has hired a lawyer over the songs they wrote.`;
++  }
++  if (m.members.length === 0 && !m.signed) {
++    m.status = "solo";
++    recordFormerBand(p, [mem], "bitter");
++  }
++  addLog(p, body);
++  return { player: p, notices: [info("Band Shake-Up", body)] };
++}
++
++export function teamNight(p0: PlayerState): ActionResult {
++  const p = clone(p0);
++  const m = p.music;
++  if (m.members.length === 0) return { player: p0, notices: [info("No Band", "You need bandmates to bond with.")] };
++  if ((p.annual.teamnight ?? 0) >= 1) return { player: p0, notices: [info("Enough Bonding", "You already took the band out this year.")] };
++  if (p.bankBalance < 400) return { player: p0, notices: [info("Can't Afford It", "A night out for the band costs $400.", "bad")] };
++  p.annual.teamnight = 1;
++  p.bankBalance -= 400;
++  // A night out cheers everybody, but it is no substitute for dealing with what is actually wrong.
++  for (const o of m.members) o.loyalty = clamp(o.loyalty + (o.grievance ? 4 : 10));
++  changeStat(p, "happiness", 3);
++  const body = "You took the band out for food and a long argument about the best album ever made. Chemistry up, though the ones with real problems are still sitting on them.";
++  addLog(p, body);
++  return { player: p, notices: [info("Band Night", body, "good")] };
++}
++
++export function talkToMember(p0: PlayerState, rng: Rng, id: string): ActionResult {
++  const p = clone(p0);
++  const mem = p.music.members.find((x) => x.id === id);
++  if (!mem) return { player: p0 };
++  if ((p.annual[`talk:${id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Talked", `You've already sat down with ${mem.name} this year.`)] };
++  p.annual[`talk:${id}`] = 1;
++  mem.talked = true;
++  if (!mem.grievance) {
++    mem.loyalty = clamp(mem.loyalty + 4);
++    const body = `You and ${mem.name} had a long, easy talk about where the band is going. They left feeling heard.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Heart to Heart", body, "good")] };
++  }
++  if (mem.grievance === "habit") {
++    mem.loyalty = clamp(mem.loyalty + 2);
++    const body = `${mem.name} nodded, said they were fine, and changed the subject. This needs treatment, not conversation.`;
++    addLog(p, body);
++    return { player: p, notices: [info("They Won't Listen", body, "bad")] };
++  }
++  const trait = mem.trait ?? "peacemaker";
++  const bonus = trait === "peacemaker" || trait === "loyalist" ? 0.15 : trait === "diva" ? -0.15 : trait === "mercenary" ? -0.1 : 0;
++  const hard = mem.grievance === "direction" ? 0 : -0.15;
++  const chance = clamp(0.4 + p.skills.charisma / 250 + mem.loyalty / 350 + bonus + hard, 0.1, 0.85);
++  if (rng.chance(chance)) {
++    mem.grievance = null;
++    mem.grievanceYears = 0;
++    mem.loyalty = clamp(mem.loyalty + 10);
++    const body = `You talked ${mem.name} round. They still have opinions, but they are staying.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Cleared the Air", body, "good")] };
++  }
++  mem.loyalty = clamp(mem.loyalty - 5);
++  const body = `The talk with ${mem.name} turned into a shouting match. Nothing is settled and the mood is worse.`;
++  addLog(p, body);
++  return { player: p, notices: [info("It Got Heated", body, "bad")] };
++}
++
++export function shareCredit(p0: PlayerState, id: string): ActionResult {
++  const p = clone(p0);
++  const mem = p.music.members.find((x) => x.id === id);
++  if (!mem) return { player: p0 };
++  if ((mem.credit ?? 0) >= 45) return { player: p0, notices: [info("Nothing Left to Give", `${mem.name} already has a huge share of the songs.`)] };
++  if (playerCredit(p) <= 25) return { player: p0, notices: [info("Your Own Band", "You already give away most of the songs.")] };
++  mem.credit = Math.min(45, (mem.credit ?? 0) + 10);
++  mem.loyalty = clamp(mem.loyalty + 12);
++  if (mem.grievance === "credit") {
++    mem.grievance = null;
++    mem.grievanceYears = 0;
++  }
++  for (const o of p.music.members) if (o.id !== id && (o.credit ?? 0) === 0 && p.music.split === "writers") o.loyalty = clamp(o.loyalty - 3);
++  const body = `You put ${mem.name}'s name on more of the songs (now ${mem.credit}% of the writing). ${p.music.split === "writers" ? "Their royalty share grows with it." : "It costs you nothing yet, but switch to a writers' split and it would."}`;
++  addLog(p, body);
++  return { player: p, notices: [info("Credit Shared", body, "good")] };
++}
++
++export const raiseCost = (p: PlayerState) => Math.max(2_500, Math.round((p.music.lastIncome.gigs + p.music.lastIncome.royalties + p.music.lastIncome.stipend) * 0.06));
++
++export function payRaise(p0: PlayerState, id: string): ActionResult {
++  const p = clone(p0);
++  const mem = p.music.members.find((x) => x.id === id);
++  if (!mem) return { player: p0 };
++  const cost = raiseCost(p);
++  if (p.bankBalance < cost) return { player: p0, notices: [info("Can't Afford It", `A proper bonus for ${mem.name} is ${money(cost)}.`, "bad")] };
++  if ((p.annual[`raise:${id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Paid", `${mem.name} has had their bonus this year.`)] };
++  p.annual[`raise:${id}`] = 1;
++  p.bankBalance -= cost;
++  mem.loyalty = clamp(mem.loyalty + (mem.grievance === "money" ? 12 : 6));
++  if (mem.grievance === "money") {
++    mem.grievance = null;
++    mem.grievanceYears = 0;
++  }
++  const body = `You paid ${mem.name} a ${money(cost)} bonus out of your own pocket. Money talks, and for now they are listening.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Bonus Paid", body, "good")] };
++}
++
++export const REHAB_COST_MEMBER = 12_000;
++
++export function sendToRehab(p0: PlayerState, rng: Rng, id: string): ActionResult {
++  const p = clone(p0);
++  const mem = p.music.members.find((x) => x.id === id);
++  if (!mem) return { player: p0 };
++  if (mem.grievance !== "habit" && mem.trait !== "addict") return { player: p0, notices: [info("No Need", `${mem.name} isn't in trouble.`)] };
++  if (p.bankBalance < REHAB_COST_MEMBER) return { player: p0, notices: [info("Can't Afford It", `A good clinic is ${money(REHAB_COST_MEMBER)}.`, "bad")] };
++  if ((p.annual[`rehab:${id}`] ?? 0) >= 1) return { player: p0, notices: [info("Already Done", `${mem.name} has already been this year.`)] };
++  p.annual[`rehab:${id}`] = 1;
++  p.bankBalance -= REHAB_COST_MEMBER;
++  if (rng.chance(0.6 + (mem.loyalty - 50) / 250)) {
++    mem.trait = "loyalist";
++    mem.grievance = null;
++    mem.grievanceYears = 0;
++    mem.partier = false;
++    mem.loyalty = clamp(mem.loyalty + 15);
++    const body = `${mem.name} came back from rehab clear-eyed and grateful. They will not forget who paid for it.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Clean", body, "good")] };
++  }
++  mem.loyalty = clamp(mem.loyalty - 6);
++  const body = `${mem.name} walked out of the clinic after ten days. The money is gone and so is the progress.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Relapse", body, "bad")] };
++}
++
++export function setSplit(p0: PlayerState, policy: "equal" | "writers"): ActionResult {
++  const p = clone(p0);
++  const m = p.music;
++  if (m.split === policy) return { player: p0 };
++  m.split = policy;
++  for (const o of m.members) {
++    if (policy === "writers") o.loyalty = clamp(o.loyalty - ((o.credit ?? 0) >= 10 ? 0 : o.trait === "mercenary" ? 12 : 6));
++    else o.loyalty = clamp(o.loyalty - ((o.credit ?? 0) >= 10 ? 10 : 0) + (o.trait === "mercenary" ? 4 : 0));
++  }
++  const body = policy === "writers"
++    ? "From now on, money follows the songs: whoever writes more, earns more. Members who only play are not delighted."
++    : "You went back to an equal split. Writers who carried the songs feel robbed.";
++  addLog(p, body);
++  return { player: p, notices: [info(policy === "writers" ? "Writers' Split" : "Equal Split", body)] };
++}
++
++/** Break the band up. Going solo keeps most of your audience, but the story gets told by the people you leave. */
++export function leaveBand(p0: PlayerState, rng: Rng, amicable: boolean): ActionResult {
++  const p = clone(p0);
++  const m = p.music;
++  if (m.status !== "band") return { player: p0 };
++  const notices: Notices = [];
++  const members = m.members;
++  const name = m.bandName || "the band";
++  const body0 = amicable ? `${name} played a farewell show and went their separate ways, hugging in the car park.` : `You walked out on ${name}. The group chat has been unusually quiet since.`;
++  let body = body0;
++  recordFormerBand(p, members, amicable ? "amicable" : "bitter");
++  m.members = [];
++  m.status = "solo";
++  m.fans = Math.round(m.fans * (amicable ? 0.88 : 0.75));
++  m.relevance = clamp(m.relevance - (amicable ? 2 : 8));
++  if (m.signed && m.contract) m.labelStanding = clamp(m.labelStanding - (amicable ? 6 : 15));
++  if (!amicable) {
++    const heavy = members.filter((x) => (x.credit ?? 0) >= 10);
++    if (heavy.length && m.fans >= 2_000) {
++      const w = heavy[0];
++      if (raiseDispute(p, "credit", w.name, claimFor(p, w.credit ?? 0), 2)) body += ` ${w.name} is talking to lawyers.`;
++    }
++    if (m.fans >= 5_000 && rng.chance(0.5)) raiseScandal(p, "music", rng, notices, 1, "your bandmates told their side of the break-up to a magazine");
++  }
++  changeStat(p, "happiness", amicable ? -2 : -6);
++  addLog(p, body);
++  return { player: p, notices: [info(amicable ? "The Band Splits" : "Bitter Split", body, amicable ? "neutral" : "bad"), ...notices] };
++}
++
++/** Get the old band back together. Time heals; so does a catalogue people still love. */
++export function reunite(p0: PlayerState, rng: Rng): ActionResult {
++  const p = clone(p0);
++  const m = p.music;
++  const fb = m.formerBand;
++  if (!fb || m.status === "band") return { player: p0 };
++  if (p.year - fb.year < 3) return { player: p0, notices: [info("Too Soon", "The wounds are still fresh. Give it a few years.")] };
++  if ((p.annual.reunion ?? 0) >= 1) return { player: p0, notices: [info("Waiting on Replies", "You've already made the calls this year.")] };
++  p.annual.reunion = 1;
++  const years = p.year - fb.year;
++  const base = (fb.split === "amicable" ? 0.7 : 0.25) + Math.min(0.25, (years - 3) * 0.03) + legacyScore(p) / 300;
++  const back = fb.members.filter((x) => rng.chance(clamp(base + (x.loyalty - 50) / 300, 0.05, 0.92)));
++  if (back.length === 0) {
++    const body = `You called around about getting ${fb.name} back together. Nobody picked up. One voicemail was just a laugh.`;
++    addLog(p, body);
++    return { player: p, notices: [info("No Reunion", body, "bad")] };
++  }
++  m.status = "band";
++  m.bandName = fb.name;
++  m.members = back.map((x) => ({ ...x, loyalty: clamp(x.loyalty * 0.5 + 35), grievance: null, grievanceYears: 0, years: 0, talked: false }));
++  m.formerBand = null;
++  const bump = 1.1 + legacyScore(p) / 400;
++  m.fans = Math.round(m.fans * bump);
++  m.relevance = clamp(m.relevance + 12);
++  m.localFame = clamp(m.localFame + 6);
++  changeStat(p, "happiness", 8);
++  changeStat(p, "fame", 2);
++  const body = `${fb.name} are back: ${back.map((x) => x.name).join(", ")} agreed to plug in again${back.length < fb.members.length ? " (not everyone returned the call)" : ""}. Nostalgia is a powerful drug: ticket queries tripled overnight.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Reunion!", body, "jackpot")] };
++}
++
++// ---------------------------------------------------------------------------
++// Yearly tick
++// ---------------------------------------------------------------------------
++
++function newGrievance(p: PlayerState, rng: Rng, mem: BandMember, output: number): BandMember["grievance"] {
++  const m = p.music;
++  const ego = mem.ego;
++  const last = m.albums[m.albums.length - 1];
++  switch (mem.trait) {
++    case "diva":
++      return rng.chance(0.28) ? "credit" : null;
++    case "mercenary":
++      return rng.chance(m.lastIncome.gigs + m.lastIncome.royalties + m.lastIncome.stipend < 30_000 * (m.members.length + 1) ? 0.3 : 0.08) ? "money" : null;
++    case "workaholic":
++      return output < 0.8 && rng.chance(0.3) ? "direction" : null;
++    case "addict":
++      return rng.chance(0.35) ? "habit" : null;
++    default:
++      if (last && last.direction === "commercial" && last.year >= p.year - 1 && ego > 50 && rng.chance(0.18)) return "direction";
++      return ego > 65 && rng.chance(0.12) ? "credit" : null;
++  }
++}
++
++export function bandTick(p: PlayerState, rng: Rng, notices: Notices, output: number) {
++  const m = p.music;
++  const peace = m.members.some((x) => x.trait === "peacemaker") ? 1 : 0;
++  let raised = false;
++  const gone: BandMember[] = [];
++  for (const mem of [...m.members]) {
++    mem.years = (mem.years ?? 0) + 1;
++    mem.talked = false;
++    const trait = mem.trait ?? "peacemaker";
++    const growth = trait === "flake" ? rng.int(0, 1) : trait === "workaholic" ? rng.int(1, 3) : rng.int(0, 2);
++    mem.skill = clamp(mem.skill + growth - (output < 0.4 ? 1 : 0));
++    let drift =
++      (output >= 0.8 ? 3 : output < 0.4 ? -3 : 0) - Math.round(mem.ego / 30) - (mem.partier ? 2 : 0) - (p.effort === "coast" ? 2 : 0) + (m.signed && m.labelStanding > 60 ? 2 : 0) + rng.int(-3, 4);
++    drift += trait === "peacemaker" ? 2 : trait === "loyalist" ? 3 : trait === "diva" ? -2 : trait === "addict" ? -2 : 0;
++    if (trait === "workaholic") drift += output < 0.8 ? -4 : 2;
++    if (trait === "flake") drift += rng.int(-4, 3);
++    if (trait === "mercenary") drift += m.lastIncome.gigs + m.lastIncome.royalties + m.lastIncome.stipend >= 30_000 * (m.members.length + 1) ? 3 : -3;
++    if (peace && trait !== "peacemaker") drift += 1;
++    if (mem.grievance) {
++      mem.grievanceYears = (mem.grievanceYears ?? 0) + 1;
++      drift -= 4 + 3 * mem.grievanceYears;
++    } else if (!raised) {
++      const g = newGrievance(p, rng, mem, output);
++      if (g) {
++        mem.grievance = g;
++        mem.grievanceYears = 0;
++        raised = true;
++        notices.push(info("Band Trouble", `${mem.name} (${(TRAITS[trait].label).toLowerCase()}) ${GRIEVANCE_TEXT[g]}. Deal with it in The Band section before it festers.`, "bad"));
++      }
++    }
++    mem.loyalty = clamp(mem.loyalty + drift);
++    if (mem.grievance === "habit" && (mem.grievanceYears ?? 0) >= 2 && rng.chance(0.35)) {
++      mem.loyalty = clamp(mem.loyalty - 20);
++      mem.grievance = null;
++      mem.grievanceYears = 0;
++      for (const o of m.members) if (o.id !== mem.id) o.loyalty = clamp(o.loyalty - 8);
++      logEvent(p, notices, "Overdose Scare", `${mem.name} was found unconscious after a party and rushed to hospital. They lived. The whole band is shaken.`, "bad");
++      if (m.fans >= 5_000) raiseScandal(p, "music", rng, notices, 1, `${mem.name}'s overdose made the papers`);
++    }
++    const limit = trait === "loyalist" ? 12 : 20;
++    if (mem.loyalty < limit && rng.chance(0.55)) {
++      m.members = m.members.filter((x) => x.id !== mem.id);
++      gone.push(mem);
++      for (const o of m.members) o.loyalty = clamp(o.loyalty - 5);
++      let text = `${mem.name} (${mem.role.toLowerCase()}) quit the band after too many clashes and not enough rehearsal. The others are shaken.`;
++      if (mem.grievance === "credit" || (mem.credit ?? 0) >= 10) {
++        if (m.fans >= 2_000 && raiseDispute(p, "credit", mem.name, claimFor(p, Math.max(10, mem.credit ?? 0)), 2)) text += ` ${mem.name} says half the songs are theirs and is taking it to lawyers.`;
++      }
++      logEvent(p, notices, "Bandmate Quits", text, "bad");
++    }
++  }
++  if (m.status === "band" && m.members.length === 0) {
++    m.status = "solo";
++    recordFormerBand(p, gone, "bitter");
++    logEvent(p, notices, "The Band Is Over", `${m.bandName || "The band"} has no members left but you. You carry on as a solo act.`, "bad");
++  }
++  if (m.members.length >= 2 && chemistry(p) < 35 && rng.chance(0.3)) {
++    for (const mem of m.members) mem.loyalty = clamp(mem.loyalty - 8);
++    logEvent(p, notices, "Band Feud", "A blazing row backstage spilled onto social media. Chemistry took a beating.", "bad");
++    if (m.fans >= 5_000) raiseScandal(p, "music", rng, notices, 1);
++  }
++}
+diff --git a/src/engine/musicCore.ts b/src/engine/musicCore.ts
+new file mode 100644
+index 0000000..0d3f497
+--- /dev/null
++++ b/src/engine/musicCore.ts
+@@ -0,0 +1,204 @@
++/**
++ * Shared music-career model: catalogue of producers and tours, band maths, audience size, catalogue value and legacy.
++ * No actions here; see music.ts (scene, label, albums), musicBand.ts, musicTour.ts and musicLegacy.ts.
++ */
++import type { BandMember, BandTrait, PlayerState, RecordContract } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp } from "@/lib/format";
++import { ALBUM_RATINGS } from "@/data/careersRegistry";
++
++// ---------------------------------------------------------------------------
++// Catalogue
++// ---------------------------------------------------------------------------
++
++export const PRODUCERS = [
++  { id: "self", label: "Produce it yourself", cost: 0, quality: -6, minFame: 0, blurb: "Free, and it sounds like it." },
++  { id: "local", label: "Local engineer", cost: 6_000, quality: 0, minFame: 0, blurb: "Competent and affordable." },
++  { id: "pro", label: "Industry producer", cost: 60_000, quality: 8, minFame: 15, blurb: "Radio-ready polish." },
++  { id: "star", label: "Star producer", cost: 400_000, quality: 16, minFame: 45, blurb: "Their name sells records." },
++] as const;
++
++export const DIRECTIONS = [
++  { id: "commercial", label: "Go commercial", blurb: "Chase the radio. More hits, thinner credibility." },
++  { id: "balanced", label: "Balanced", blurb: "A bit of both." },
++  { id: "artistic", label: "Artistic statement", blurb: "Your vision. Critics may love it, labels may not." },
++] as const;
++
++/** Venue sizes. Attendance comes from your fan base, so a small act that books too big plays to empty seats. */
++export const TOUR_SCALES = [
++  { id: "club", label: "Club tour", minFans: 300, shows: 14, capacity: 300, price: 18, fixed: 6_000 },
++  { id: "theatre", label: "Theatre tour", minFans: 30_000, shows: 20, capacity: 1_500, price: 42, fixed: 70_000 },
++  { id: "arena", label: "Arena tour", minFans: 800_000, shows: 30, capacity: 12_000, price: 78, fixed: 700_000 },
++  { id: "stadium", label: "Stadium tour", minFans: 6_000_000, shows: 40, capacity: 50_000, price: 125, fixed: 6_000_000 },
++] as const;
++export type TourScale = (typeof TOUR_SCALES)[number]["id"];
++
++export const TOUR_PACES = [
++  { id: "light", label: "Light schedule", shows: 0.7, wear: 0.6, blurb: "Fewer dates, days off between shows. Smaller payday, kinder on body and band." },
++  { id: "standard", label: "Standard run", shows: 1, wear: 1, blurb: "A normal touring cycle." },
++  { id: "punishing", label: "Punishing schedule", shows: 1.4, wear: 1.7, blurb: "Back-to-back dates. Big money, big toll on health, voice and marriages." },
++] as const;
++export type TourPace = (typeof TOUR_PACES)[number]["id"];
++
++export const LABELS = ["Neon Records", "Blackbird Music", "Eastside Sound", "Crown & Anchor", "Velvet Vinyl", "Meridian Entertainment", "Static Garden", "Big Dog Records"];
++const FIRST = ["Alex", "Sam", "Jo", "Max", "Riley", "Dani", "Kit", "Remy", "Jules", "Tariq", "Mina", "Leo", "Priya", "Cole", "Nico", "Bea", "Omar", "Ivy", "Mateo", "Zoe"];
++const LAST = ["Vance", "Okafor", "Reyes", "Lindqvist", "Moreau", "Tanaka", "Walsh", "Costa", "Novak", "Hart", "Dubois", "Singh", "Kowalski", "Brandt"];
++export const ROLES = ["Guitar", "Bass", "Drums", "Keys", "Vocals"];
++export const BAND_A = ["Velvet", "Neon", "Broken", "Midnight", "Paper", "Electric", "Lost", "Hollow", "Rust", "Golden"];
++export const BAND_B = ["Hearts", "Static", "Parade", "Wolves", "Highway", "Echo", "Ghosts", "Rivals", "Radio", "Fire"];
++
++export const MAX_MEMBERS = 4;
++/** Dollars the artist earns per record sold, before their royalty rate. */
++export const UNIT_VALUE = 7;
++
++export const TRAITS: Record<BandTrait, { label: string; blurb: string }> = {
++  peacemaker: { label: "Peacemaker", blurb: "Keeps everyone talking. Chemistry holds up under pressure." },
++  diva: { label: "Diva", blurb: "Big talent, bigger ego. Wants credit, the spotlight and the last word." },
++  workaholic: { label: "Workaholic", blurb: "Always rehearsing. Resents a band that coasts." },
++  flake: { label: "Flake", blurb: "Late, distracted, brilliant when present. Never grows much." },
++  addict: { label: "Troubled", blurb: "Fighting a habit. Tours and after-parties are dangerous for them." },
++  mercenary: { label: "Hired gun", blurb: "Plays for the paycheque. Loyal exactly as long as the money is good." },
++  loyalist: { label: "Ride-or-die", blurb: "Has your back through everything. Rarely causes trouble." },
++};
++
++export const albumRating = (score: number) => {
++  let chosen: (typeof ALBUM_RATINGS)[number] = ALBUM_RATINGS[0];
++  for (const r of ALBUM_RATINGS) if (score >= r.min) chosen = r;
++  return chosen;
++};
++
++// ---------------------------------------------------------------------------
++// The band
++// ---------------------------------------------------------------------------
++
++const memberName = (rng: Rng) => `${rng.pick(FIRST)} ${rng.pick(LAST)}`;
++
++export function makeMember(rng: Rng, skillBase: number, role?: string): BandMember {
++  const trait: BandTrait = rng.weighted<BandTrait>(["peacemaker", "diva", "workaholic", "flake", "addict", "mercenary", "loyalist"], (t) => (t === "addict" ? 0.7 : t === "loyalist" ? 1.2 : 1)) ?? "peacemaker";
++  const ego = clamp(rng.int(15, 85) + (trait === "diva" ? 25 : trait === "peacemaker" || trait === "loyalist" ? -15 : 0));
++  return {
++    id: rng.id(),
++    name: memberName(rng),
++    role: role ?? rng.pick(ROLES),
++    skill: clamp(Math.round(skillBase + rng.int(-14, 10))),
++    loyalty: clamp(rng.int(55, 80) + (trait === "loyalist" ? 12 : trait === "mercenary" ? -10 : 0)),
++    ego,
++    partier: trait === "addict" || trait === "flake" ? rng.chance(0.7) : rng.chance(0.15),
++    trait,
++    credit: 0,
++    years: 0,
++    grievance: null,
++    grievanceYears: 0,
++    talked: false,
++  };
++}
++
++export function bandSkill(p: PlayerState): number {
++  const ms = p.music.members;
++  if (ms.length === 0) return p.skills.music;
++  return (p.skills.music * 1.5 + ms.reduce((s, m) => s + m.skill, 0)) / (1.5 + ms.length);
++}
++
++export function chemistry(p: PlayerState): number {
++  const ms = p.music.members;
++  return ms.length === 0 ? 100 : Math.round(ms.reduce((s, m) => s + m.loyalty, 0) / ms.length);
++}
++
++/** Share of the band's songs credited to you. */
++export function playerCredit(p: PlayerState): number {
++  return clamp(100 - p.music.members.reduce((s, m) => s + (m.credit ?? 0), 0), 20, 100);
++}
++
++/** Your cut of whatever the act earns. */
++export function playerShare(p: PlayerState): number {
++  const n = p.music.members.length;
++  if (n === 0) return 1;
++  const equal = Math.max(0.3, 1 / (n + 1) + 0.08);
++  if (p.music.split === "writers") return Math.max(0.25, (0.35 / (n + 1) + (0.65 * playerCredit(p)) / 100));
++  return equal;
++}
++
++/** What one member of the band takes from a given pot, for display. */
++export function memberShare(p: PlayerState, m: BandMember): number {
++  const n = p.music.members.length;
++  if (p.music.split === "writers") return 0.35 / (n + 1) + (0.65 * (m.credit ?? 0)) / 100;
++  return (1 - playerShare(p)) / Math.max(1, n);
++}
++
++// ---------------------------------------------------------------------------
++// Audience, catalogue, legacy
++// ---------------------------------------------------------------------------
++
++export const isOneHitWonder = (p: PlayerState) => p.music.hits === 1 && p.music.yearsSinceHit >= 5 && p.music.albums.length >= 2;
++
++export function musicTier(p: PlayerState): string {
++  const m = p.music;
++  if (m.status === "none" && m.albums.length === 0) return "Hobbyist";
++  if (!m.signed) return m.localFame < 20 ? "Garage act" : m.localFame < 45 ? "Local favourite" : "Buzzing unsigned act";
++  if (m.fans < 50_000) return "Signed act";
++  if (m.fans < 500_000) return "Rising act";
++  if (m.fans < 5_000_000) return "Headliner";
++  return "Superstar";
++}
++
++export function contractOutstanding(c: RecordContract | null): number {
++  return c ? c.unrecouped : 0;
++}
++
++/** People an album can reach: fans first, then the wider scene and general fame. A label's marketing multiplies it. */
++export function audienceFor(p: PlayerState): number {
++  const m = p.music;
++  const base = m.fans + 25 * m.localFame + 90 * p.fame;
++  return Math.round(base * (m.signed ? 1.5 : 1));
++}
++
++/** A rough yearly value of the catalogue you own: the floor under every record plus half of what is still decaying. */
++export function catalogueIncome(p: PlayerState): number {
++  let sum = 0;
++  for (const a of p.music.albums) {
++    if (a.labelOwned || a.sold) continue;
++    sum += (a.evergreen ?? 0) + 0.5 * Math.max(0, a.royalty - (a.evergreen ?? 0));
++  }
++  return Math.round(sum);
++}
++
++export const catalogueValue = (p: PlayerState): number => Math.round(catalogueIncome(p) * 7);
++
++/** Masters the label owns that you could try to buy back, and what they want. */
++export function masterBuybackPrice(p: PlayerState): number {
++  let sum = 0;
++  for (const a of p.music.albums) {
++    if (!a.labelOwned || a.sold) continue;
++    sum += 20_000 + 6 * ((a.evergreen ?? 0) + 0.5 * Math.max(0, a.royalty - (a.evergreen ?? 0)));
++  }
++  return Math.round(sum / 1000) * 1000;
++}
++
++/** How history will remember you: 0-100. */
++export function legacyScore(p: PlayerState): number {
++  const m = p.music;
++  const certified = (rating: string) => m.albums.filter((a) => a.rating === rating).length;
++  const score =
++    m.hits * 5 +
++    m.awards.length * 8 +
++    certified("Gold") * 3 +
++    certified("Platinum") * 6 +
++    certified("Diamond") * 10 +
++    Math.min(18, m.yearsActive * 0.6) +
++    Math.max(0, Math.log10(Math.max(10, m.peakFans ?? m.fans)) - 3) * 6;
++  return clamp(Math.round(score));
++}
++
++export function legacyTier(score: number): string {
++  if (score < 12) return "Barely remembered";
++  if (score < 30) return "Cult name";
++  if (score < 55) return "Respected veteran";
++  if (score < 80) return "Legend";
++  return "Icon";
++}
++
++/** Burnout and bad press chew through the fans slower for loyal audiences. */
++export function fanRetention(p: PlayerState, base: number): number {
++  const d = p.celeb.devotion ?? 20;
++  return 1 - (1 - base) * (1 - d * 0.004);
++}
+diff --git a/src/engine/musicLegacy.ts b/src/engine/musicLegacy.ts
+new file mode 100644
+index 0000000..78a289e
+--- /dev/null
++++ b/src/engine/musicLegacy.ts
+@@ -0,0 +1,109 @@
++/**
++ * Rights and legacy: credit and plagiarism disputes, selling or buying back catalogue, and the long tail
++ * of a career. Pure bookkeeping on top of musicCore; no imports of the other music modules (they import this).
++ */
++import type { ActionResult, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { addLog, changeStat, clone } from "./state";
++import { info, logEvent, payout, type Notices } from "./creativeCore";
++import { catalogueValue, masterBuybackPrice } from "./musicCore";
++
++/** Start a dispute. Returns false if one is already running. */
++export function raiseDispute(p: PlayerState, kind: "credit" | "plagiarism" | "masters", claimant: string, amount: number, years: number): boolean {
++  if (p.music.dispute) return false;
++  p.music.dispute = { kind, claimant, amount: Math.round(amount), yearsLeft: years };
++  addLog(p, `Legal trouble: ${claimant} is demanding ${money(Math.round(amount))} over ${kind === "plagiarism" ? "a melody they say you lifted" : kind === "masters" ? "ownership of your recordings" : "songwriting credit"}.`);
++  return true;
++}
++
++const DISPUTE_NAME = { credit: "Credit Dispute", plagiarism: "Plagiarism Claim", masters: "Masters Dispute" } as const;
++
++export function resolveDispute(p0: PlayerState, rng: Rng, how: "settle" | "fight"): ActionResult {
++  const p = clone(p0);
++  const d = p.music.dispute;
++  if (!d) return { player: p0 };
++  if (how === "settle") {
++    if (p.bankBalance < d.amount) return { player: p0, notices: [info("Can't Afford It", `A settlement is ${money(d.amount)}.`, "bad")] };
++    p.bankBalance -= d.amount;
++    p.music.dispute = null;
++    const body = `You settled with ${d.claimant} for ${money(d.amount)} and a confidentiality agreement. Expensive, quiet and over.`;
++    addLog(p, body);
++    return { player: p, notices: [info("Settled", body, "neutral")] };
++  }
++  const fees = Math.round(d.amount * 0.2);
++  if (p.bankBalance < fees) return { player: p0, notices: [info("Can't Afford It", `Taking it to court costs ${money(fees)} in fees up front.`, "bad")] };
++  p.bankBalance -= fees;
++  p.music.dispute = null;
++  const strength = d.kind === "plagiarism" ? 0.5 : d.kind === "credit" ? 0.45 : 0.4;
++  if (rng.chance(clamp(strength + p.smarts / 600 + (p.music.manager ? 0.08 : 0), 0.2, 0.75))) {
++    const body = `The court threw out ${d.claimant}'s claim. You paid ${money(fees)} in fees and kept every cent of the rest. The press called you vindicated.`;
++    addLog(p, body);
++    changeStat(p, "happiness", 4);
++    return { player: p, notices: [info("Case Dismissed", body, "good")] };
++  }
++  const pay = Math.round(d.amount * 1.4);
++  p.bankBalance -= Math.min(p.bankBalance, pay);
++  p.music.relevance = clamp(p.music.relevance - 4);
++  changeStat(p, "happiness", -6);
++  const body = `You lost in court. ${d.claimant} was awarded ${money(pay)} on top of your ${money(fees)} fees, and the headlines were not kind.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Judgement Against You", body, "bad")] };
++}
++
++/** An unanswered dispute runs out its clock and goes against you. */
++export function disputeTick(p: PlayerState, rng: Rng, notices: Notices) {
++  const d = p.music.dispute;
++  if (!d) {
++    if (p.music.fans >= 50_000 && p.music.hits > 0 && rng.chance(0.02)) {
++      raiseDispute(p, "plagiarism", rng.pick(["an unknown songwriter", "a session guitarist", "a small label", "a jazz estate"]), Math.max(15_000, p.music.lastIncome.royalties * 0.2), 2);
++      notices.push(info("Lawsuit", `${p.music.dispute?.claimant ?? "Someone"} claims you lifted part of a song. See the Legacy section of your music tab.`, "bad"));
++    }
++    return;
++  }
++  d.yearsLeft -= 1;
++  if (d.yearsLeft > 0) return;
++  const pay = Math.round(d.amount * 1.3);
++  p.bankBalance -= Math.min(p.bankBalance, pay);
++  p.music.dispute = null;
++  p.music.relevance = clamp(p.music.relevance - 4);
++  logEvent(p, notices, "Default Judgement", `You never answered ${d.claimant}'s ${DISPUTE_NAME[d.kind].toLowerCase()}. A court ruled for them by default: ${money(pay)}.`, "bad");
++}
++
++export function sellCatalogue(p0: PlayerState): ActionResult {
++  const p = clone(p0);
++  const value = catalogueValue(p);
++  if (value < 5_000) return { player: p0, notices: [info("Not Worth Buying", "Your catalogue doesn't earn enough for anyone to bid on it.")] };
++  const net = payout(p, value);
++  for (const a of p.music.albums) {
++    if (!a.labelOwned) {
++      a.sold = true;
++      a.royalty = 0;
++      a.evergreen = 0;
++    }
++  }
++  p.music.catalogSold = (p.music.catalogSold ?? 0) + value;
++  changeStat(p, "happiness", 3);
++  const body = `You sold the rights to your back catalogue for ${money(value)} (${money(net)} after withholding). A fund now owns what you made. The albums still stream, but not for you.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Catalogue Sold", body, "good")] };
++}
++
++export function buyBackMasters(p0: PlayerState): ActionResult {
++  const p = clone(p0);
++  const price = masterBuybackPrice(p);
++  if (price <= 0) return { player: p0 };
++  if (p.bankBalance < price) return { player: p0, notices: [info("Can't Afford It", `The label wants ${money(price)} for your masters.`, "bad")] };
++  p.bankBalance -= price;
++  let n = 0;
++  for (const a of p.music.albums) {
++    if (a.labelOwned) {
++      a.labelOwned = false;
++      n += 1;
++    }
++  }
++  changeStat(p, "happiness", 8);
++  const body = `You bought back the masters to ${n} record${n > 1 ? "s" : ""} for ${money(price)}. They are yours again, and so is every royalty.`;
++  addLog(p, body);
++  return { player: p, notices: [info("Masters Recovered", body, "jackpot")] };
++}
+diff --git a/src/engine/musicTour.ts b/src/engine/musicTour.ts
+new file mode 100644
+index 0000000..37ec9fe
+--- /dev/null
++++ b/src/engine/musicTour.ts
+@@ -0,0 +1,183 @@
++/**
++ * Touring: headline runs sized to your audience, or a support slot on somebody bigger's tour.
++ * Pace trades money against health, band chemistry and home life. Things go wrong on the road.
++ */
++import type { ActionResult, PlayerState } from "@/types/game.types";
++import type { Rng } from "@/lib/rng";
++import { clamp, money } from "@/lib/format";
++import { addLog, changeStat, clone, getPartner, livingRelatives } from "./state";
++import { addVice } from "./vices";
++import { info, payout, type Notices } from "./creativeCore";
++import { raiseScandal } from "./celebrity";
++import { TOUR_PACES, TOUR_SCALES, playerShare, type TourPace, type TourScale } from "./musicCore";
++
++export interface TourOpts {
++  pace?: TourPace;
++  mode?: "headline" | "support";
++}
++
++export function tourOptions(p: PlayerState) {
++  return TOUR_SCALES.map((t) => ({ ...t, ok: p.music.fans >= t.minFans }));
++}
++
++/** Expected nightly crowd for a venue size. */
++export function expectedAttendance(p: PlayerState, capacity: number): number {
++  const m = p.music;
++  const relFactor = 0.5 + m.relevance / 100;
++  return Math.min(capacity, Math.round(m.fans * 0.006 * relFactor + m.localFame * 2 + 25));
++}
++
++/** Can you open for someone bigger? Needs a real following but not a huge one. */
++export function supportBlock(p: PlayerState): string | null {
++  const m = p.music;
++  if (m.fans < 1_000) return "Headliners want openers with at least 1,000 fans.";
++  if (m.fans >= 600_000) return "You're too big to open for anyone.";
++  if (m.relevance < 20) return "Nobody is booking an act that sounds this stale.";
++  return null;
++}
++
++export function supportPreview(p: PlayerState, pace: TourPace = "standard") {
++  const m = p.music;
++  const paceInfo = TOUR_PACES.find((x) => x.id === pace) ?? TOUR_PACES[1];
++  const shows = Math.round(24 * paceInfo.shows);
++  const headliner = clamp(m.fans * 8, 6_000, 4_000_000);
++  const fee = Math.round(shows * (200 + m.fans * 0.01));
++  const gain = Math.round(headliner * 0.025 * (0.5 + m.relevance / 100));
++  return { shows, headliner, fee, gain };
++}
++
++export function goOnTour(p0: PlayerState, rng: Rng, scaleId: TourScale, opts: TourOpts = {}): ActionResult {
++  const p = clone(p0);
++  const m = p.music;
++  const scale = TOUR_SCALES.find((t) => t.id === scaleId);
++  if (!scale || m.status === "none") return { player: p0 };
++  const mode = opts.mode ?? "headline";
++  const pace = TOUR_PACES.find((x) => x.id === (opts.pace ?? "standard")) ?? TOUR_PACES[1];
++  if ((p.annual.tour ?? 0) >= 1) return { player: p0, notices: [info("Already Toured", "One tour a year is all your body can take.")] };
++  if (m.pendingAlbum || (p.annual.album ?? 0) >= 1) return { player: p0, notices: [info("Studio Year", "You're making a record this year. You can't also be on the road.", "bad")] };
++  if (mode === "support") {
++    const blocked = supportBlock(p);
++    if (blocked) return { player: p0, notices: [info("Not Yet", blocked)] };
++  } else {
++    if (m.fans < scale.minFans) return { player: p0, notices: [info("Not Enough Fans", `A ${scale.label.toLowerCase()} needs about ${scale.minFans.toLocaleString()} fans. You have ${Math.round(m.fans).toLocaleString()}.`)] };
++    const indie = !m.signed;
++    if (indie && p.bankBalance < scale.fixed * 0.5) return { player: p0, notices: [info("Can't Afford It", `You need ${money(Math.round(scale.fixed * 0.5))} up front to put a ${scale.label.toLowerCase()} on the road.`, "bad")] };
++  }
++  p.annual.tour = 1;
++  m.tours += 1;
++  const notices: Notices = [];
++  const c = m.contract;
++  const sizeIdx = mode === "support" ? 1 : TOUR_SCALES.findIndex((t) => t.id === scale.id);
++  let body = "";
++  let shows = 0;
++  let attendance = 0;
++  let net = 0;
++  let received = 0;
++
++  if (mode === "support") {
++    const pv = supportPreview(p, pace.id);
++    shows = pv.shows;
++    attendance = pv.headliner;
++    const fee = pv.fee;
++    received = payout(p, fee * playerShare(p) * (m.manager ? 0.85 : 1));
++    net = fee;
++    m.earnings += Math.max(0, received);
++    const gain = Math.round(pv.gain * rng.float(0.7, 1.35));
++    m.fans += gain;
++    m.relevance = clamp(m.relevance + 5);
++    m.localFame = clamp(m.localFame + 4);
++    m.burnout = clamp(m.burnout + Math.round((7 + sizeIdx * 3) * pace.wear));
++    body = `Support slot: ${shows} nights opening for a bigger act to crowds of about ${attendance.toLocaleString()}. You were paid ${money(received)} and picked up ${gain.toLocaleString()} new fans who had never heard of you.`;
++    changeStat(p, "happiness", 4);
++    changeStat(p, "fame", 1);
++  } else {
++    shows = Math.max(4, Math.round(scale.shows * pace.shows));
++    attendance = expectedAttendance(p, scale.capacity);
++    const fill = attendance / scale.capacity;
++    const ticketRev = attendance * shows * scale.price * (fill < 0.35 ? rng.float(0.7, 1) : 1);
++    const merchRev = attendance * shows * scale.price * 0.22;
++    const gross = ticketRev + merchRev;
++    const venueCut = ticketRev * 0.15;
++    const crew = ticketRev * 0.4;
++    const fixed = scale.fixed * (0.6 + 0.4 * pace.shows);
++    net = gross - venueCut - crew - fixed;
++    let labelCut = 0;
++    if (net > 0 && m.signed && c) labelCut = net * c.tourCut;
++    const mgrCut = net > 0 && m.manager ? net * 0.15 : 0;
++    let yours = 0;
++    if (net > 0) yours = (net - labelCut - mgrCut) * playerShare(p);
++    else if (m.signed && c) {
++      c.unrecouped += Math.round(-net);
++      yours = 0;
++    } else {
++      yours = net * playerShare(p);
++    }
++    net = Math.round(net);
++    received = yours > 0 ? payout(p, yours) : Math.round(yours);
++    if (yours < 0) p.bankBalance += Math.round(yours);
++    m.earnings += Math.max(0, received);
++    m.fans += attendance * shows * 0.02 * (fill >= 0.8 ? 1.5 : 1);
++    m.relevance = clamp(m.relevance + 4);
++    m.burnout = clamp(m.burnout + Math.round((8 + sizeIdx * 4) * pace.wear));
++    const success = net > 0;
++    changeStat(p, "happiness", success ? 5 : -4);
++    changeStat(p, "fame", success ? 2 : 0);
++    body = `${scale.label} (${pace.label.toLowerCase()}): ${shows} shows, about ${attendance.toLocaleString()} a night (${Math.round(fill * 100)}% full). ${
++      net > 0 ? `You banked ${money(received)} after venues, crew, label${m.manager ? ", manager" : ""} and band cuts and withholding.` : m.signed ? `It lost ${money(-net)}, which the label added to your debt.` : `It lost ${money(-net)} and you ate the cost.`
++    }`;
++  }
++
++  // The road takes its toll.
++  const wear = pace.wear;
++  changeStat(p, "health", -Math.max(1, Math.round((shows / 8) * wear)));
++  const partner = getPartner(p);
++  const home = Math.round((2 + shows / 10) * (p.celeb.familyShield ? 0.6 : 1) * (wear > 1 ? 1.4 : wear < 1 ? 0.6 : 1));
++  if (partner) partner.relationshipBar = clamp(partner.relationshipBar - home - 2);
++  for (const k of livingRelatives(p, "Child")) if (k.age < 18) k.relationshipBar = clamp(k.relationshipBar - Math.max(1, home - 1));
++  if (rng.chance(clamp(0.28 + m.burnout / 400 + m.members.filter((x) => x.partier).length * 0.06, 0, 0.8) * (wear > 1 ? 1.25 : wear < 1 ? 0.6 : 1))) {
++    const key = rng.chance(0.55) ? "alcohol" : "drugs";
++    addVice(p, key, rng.int(4, 10));
++    body += ` The tour bus had a lot of ${key === "alcohol" ? "drinking" : "pills and powders"}, and you joined in.`;
++  }
++  const incidents: string[] = [];
++  if (rng.chance(0.07 * wear + m.burnout / 1500)) {
++    changeStat(p, "health", -10);
++    incidents.push("You strained your voice and cracked a rib on stage and had to cancel dates.");
++    net = Math.round(net * 0.85);
++  }
++  if (rng.chance(0.015 * wear)) {
++    changeStat(p, "health", -18);
++    incidents.push("The tour bus left the road on a wet night. Everyone survived, but you spent a month in a neck brace.");
++  }
++  if (!m.manager && !m.signed && mode === "headline" && net > 0 && rng.chance(0.1)) {
++    const lost = Math.round(net * 0.08);
++    p.bankBalance = Math.max(0, p.bankBalance - lost);
++    incidents.push(`An unscrupulous promoter skimmed ${money(lost)} off the door. A manager would have caught it.`);
++  }
++  for (const mem of m.members) {
++    if ((mem.trait === "addict" || mem.trait === "flake") && rng.chance(0.14 * wear)) {
++      mem.loyalty = clamp(mem.loyalty - 8);
++      if (mem.trait === "addict" && !mem.grievance) {
++        mem.grievance = "habit";
++        mem.grievanceYears = 0;
++      }
++      incidents.push(`${mem.name} missed a soundcheck and then a show. The tour bus has been tense ever since.`);
++      break;
++    }
++  }
++  if (m.burnout >= 75 && rng.chance(0.25)) {
++    incidents.push("You came apart on stage in front of thousands and walked off mid-song. It was filmed.");
++    raiseScandal(p, "music", rng, notices, 1, "a meltdown on stage went viral");
++  } else if (net > 0 && attendance >= 300 && rng.chance(0.1 + (attendance / Math.max(1, scale.capacity) >= 0.85 ? 0.12 : 0))) {
++    incidents.push("One night everything clicked. Fans are calling it the show of the decade, and the bootleg has a million views.");
++    m.relevance = clamp(m.relevance + 6);
++    m.fans += Math.round(m.fans * 0.05);
++    changeStat(p, "happiness", 4);
++  }
++  if (incidents.length) body += " " + incidents.join(" ");
++  m.lastTour = { year: p.year, label: mode === "support" ? "Support slot" : scale.label, shows, attendance, net: Math.round(received), mode };
++  addLog(p, body);
++  const good = mode === "support" || net > 0;
++  notices.unshift(info(mode === "support" ? "Support Tour Done" : good ? "Tour Complete" : "Tour Loses Money", body, good ? "good" : "bad"));
++  return { player: p, notices };
++}
+diff --git a/src/types/game.types.ts b/src/types/game.types.ts
+index d07187b..fbd8823 100644
+--- a/src/types/game.types.ts
++++ b/src/types/game.types.ts
+@@ -271,6 +271,10 @@ export interface SponsorDeal {
+   /** Authenticity lost per year for pushing this product. */
+   authCost: number;
+   shady: boolean;
++  /** Clean brands have a morals clause: a serious scandal ends the deal. Shady ones don't care. Defaults to !shady. */
++  morals?: boolean;
++  /** Years you missed the output target while burnt out. A first strike is forgiven, a second breaches. */
++  strikes?: number;
+ }
+ 
+ export interface IncomeBreakdown {
+@@ -318,6 +322,19 @@ export interface InfluencerState {
+   peakFollowers: number;
+   viralHits: number;
+   followerHistory: number[];
++  /** Collaborations done in your whole career. */
++  collabs?: number;
++  /** An ongoing public feud: it feeds attention and starves trust until it burns out. */
++  feud?: CreatorFeud | null;
++  /** A collaborator whose behaviour can splash onto you for a couple of years. */
++  associate?: { name: string; years: number } | null;
++}
++
++export interface CreatorFeud {
++  name: string;
++  years: number;
++  /** 0-100: how loud it is. */
++  heat: number;
+ }
+ 
+ // ---- Sports career (engine: src/engine/athlete*.ts, data: src/data/sports.ts) ----
+@@ -672,6 +689,13 @@ export interface Album {
+   /** The label owns it and keeps the royalties. */
+   labelOwned?: boolean;
+   award?: string;
++  /** Floor under the yearly royalty: a loved record never quite stops earning. */
++  evergreen?: number;
++  /** The catalogue was sold: it no longer pays you. */
++  sold?: boolean;
++  /** An unexpected streaming breakout rather than a planned hit. */
++  breakout?: boolean;
++  direction?: "commercial" | "balanced" | "artistic";
+ }
+ 
+ export interface BandMember {
+@@ -683,6 +707,38 @@ export interface BandMember {
+   loyalty: number;
+   ego: number;
+   partier: boolean;
++  /** Personality. Shapes what they want and how they fall apart. */
++  trait?: BandTrait;
++  /** Share (0-100) of the band's songs credited to them. The rest is yours. */
++  credit?: number;
++  /** Years in the band. */
++  years?: number;
++  /** What is eating them right now, if anything. Unaddressed grievances end careers. */
++  grievance?: "credit" | "money" | "direction" | "habit" | null;
++  /** Years the grievance has gone unanswered. */
++  grievanceYears?: number;
++  /** The player talked to them this year. */
++  talked?: boolean;
++}
++
++export type BandTrait = "peacemaker" | "diva" | "workaholic" | "flake" | "addict" | "mercenary" | "loyalist";
++
++/** A band that no longer exists but might one day reunite. */
++export interface FormerBand {
++  name: string;
++  year: number;
++  members: BandMember[];
++  /** How it ended: shapes whether anyone will pick up the phone. */
++  split: "amicable" | "bitter";
++}
++
++/** A rights or credit dispute over your work. */
++export interface RightsDispute {
++  kind: "credit" | "plagiarism" | "masters";
++  claimant: string;
++  /** What they want, in dollars. */
++  amount: number;
++  yearsLeft: number;
+ }
+ 
+ export interface RecordContract {
+@@ -703,6 +759,8 @@ export interface RecordContract {
+   creativeControl: number;
+   tourCut: number;
+   renegotiatedYear: number;
++  /** Times the label has extended the term to make you finish owed albums. */
++  extended?: number;
+ }
+ 
+ export interface PendingAlbum {
+@@ -748,6 +806,17 @@ export interface MusicState {
+   earnings: number;
+   droppedCount: number;
+   lastIncome: { gigs: number; royalties: number; stipend: number; costs: number };
++  /** How band income is carved up: equally, or by who wrote the songs. */
++  split?: "equal" | "writers";
++  /** Largest audience you ever had. */
++  peakFans?: number;
++  /** The band you used to be in, if it broke up. */
++  formerBand?: FormerBand | null;
++  dispute?: RightsDispute | null;
++  /** Cash taken for selling catalogue rights over the years. */
++  catalogSold?: number;
++  /** Summary of the last tour for the dashboard. */
++  lastTour?: { year: number; label: string; shows: number; attendance: number; net: number; mode: "headline" | "support" } | null;
+ }
+ 
+ export type ActingMedium = "film" | "tv" | "stage";
+@@ -952,6 +1021,14 @@ export interface CelebState {
+   businessManager: boolean;
+   scandal: ScandalState | null;
+   scandals: number;
++  /** 0-100: how intense your fans' attachment is. Loyal, but a few go too far. */
++  devotion?: number;
++  /** Paying to keep a partner and children out of the press. */
++  familyShield?: boolean;
++  /** Restraining orders obtained over your career. */
++  orders?: number;
++  /** A restraining order is in force: stalker incidents are rarer but a breach is dangerous. */
++  orderYears?: number;
+ }
+ 
+ export interface NationState {
