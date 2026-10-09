@@ -295,7 +295,10 @@ describe("financing", () => {
     expect(b.cash).toBeGreaterThan(base.business!.cash);
     expect(b.rounds).toBe(1);
     const quote = saleQuote(diluted!, b);
-    expect(quote.gross).toBe(Math.round(quote.equity * 0.8));
+    // A venture investor's 1x preference is paid first, so a weak exit leaves the founder with less than 80%.
+    expect(quote.gross).toBeLessThanOrEqual(Math.round(quote.equity * 0.8));
+    expect(b.investors).toHaveLength(1);
+    expect(b.investors[0].share).toBeCloseTo(0.2, 3);
     expect(fundingTerms(diluted!, b, 0.2).preMoney).toBeGreaterThan(0);
   });
 

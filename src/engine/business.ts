@@ -10,7 +10,7 @@
  * company level (15%) and draws are then taxed as personal income. Exit proceeds above the owner's invested capital
  * are taxed at a capital-gains-like rate (see `exitTax`).
  */
-import type { ActionResult, Business, BusinessPayout, PlayerState } from "@/types/game.types";
+import type { ActionResult, Business, BusinessPayout, InvestorKind, PlayerState, RivalKind } from "@/types/game.types";
 import { hashString, makeRng, type Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { BUSINESS_BY_ID, BUSINESS_TYPES, type BusinessType } from "@/data/businessTypes";
@@ -31,6 +31,9 @@ import {
   loanLimit,
   loanRateFor,
   newBusiness,
+  newFranchise,
+  franchiseTerms,
+  ownerProceeds,
   revenueGrowth,
   saleQuote,
   stakeValue,
@@ -44,11 +47,21 @@ export type { BusinessType };
 export {
   forecast, riskNotes, saleQuote, loanLimit, loanRateFor, kindOf, capacityOf, enterpriseValue, equityOf, stakeValue, liquidationValue,
   normalizedEarnings, recommendedStaff, typicalOutlook, businessHealth, PRICE_LABELS, PAYOUT_LABELS, INSURANCE_LABELS, CORP_TAX, SALE_FEE, PAYOUT_SHARE, marketMood, exitTax,
+  franchiseTerms, ownerProceeds, keyOf, rivalPull, shiftEffect, teamWages, FRANCHISE_BRANDS,
 } from "./businessModel";
 
-type Notices = NonNullable<ActionResult["notices"]>;
-type Tone = "good" | "bad" | "neutral" | "jackpot";
-const info = (title: string, body: string, tone: Tone = "neutral") => ({ kind: "info" as const, title, body, tone });
+import {
+  businessCosts, canSpend, done, fromWhere, info, open, poor, refresh, reserveOf, scale, spend, unchanged,
+  type Ctx, type Notices,
+} from "./businessKit";
+export { businessCosts };
+import { buyOutRival, spawnRival, strongestRival, processMarket } from "./businessMarket";
+import { flightRisk } from "./businessPeople";
+import { makeInvestor, processBoard, processPassive, sellShares, takeBackShares } from "./businessBoard";
+import { processTeam } from "./businessPeople";
+export * from "./businessPeople";
+export * from "./businessMarket";
+export * from "./businessBoard";
 
 // ---------------------------------------------------------------------------
 // Constants kept for older callers
@@ -68,98 +81,10 @@ export const maxStaff = (locations: number, kindId?: string) => {
 export const COOLOFF_YEARS = 4;
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const unitCost = (k: BusinessType, b: Business) => k.cost * b.locations;
-const reserveOf = (b: Business) => {
-  const k = kindOf(b);
-  return 0.25 * (k.fixed * b.locations + b.staff * k.wage + (b.manager?.wage ?? 0));
-};
-const scale = (b: Business) => {
-  const k = kindOf(b);
-  return Math.max(k.baseRev * b.locations * 0.4, b.revenue);
-};
-
-function refresh(b: Business) {
-  b.value = stakeValue(b);
-  b.reputation = Math.round(clamp(b.reputation) * 10) / 10;
-}
-
-/**
- * Pay for a decision. Company cash is used while it stays above a small reserve, otherwise the owner's savings,
- * otherwise whatever company cash is left. Capital items paid from savings raise the owner's cost basis.
- */
-function spend(p: PlayerState, b: Business, amount: number, capital: boolean): "company" | "savings" | null {
-  amount = Math.round(amount);
-  let src: "company" | "savings" | null = null;
-  if (b.cash - amount >= reserveOf(b)) {
-    b.cash -= amount;
-    src = "company";
-  } else if (p.bankBalance >= amount) {
-    p.bankBalance -= amount;
-    if (capital) b.basis += amount;
-    src = "savings";
-  } else if (b.cash >= amount) {
-    b.cash -= amount;
-    src = "company";
-  }
-  if (src && !capital) b.ytdSpend += amount;
-  return src;
-}
-
-const canSpend = (p: PlayerState, b: Business, amount: number) => b.cash >= amount || p.bankBalance >= amount;
-const fromWhere = (src: "company" | "savings") => (src === "company" ? "from company cash" : "from your savings");
-
-interface Ctx {
-  p: PlayerState;
-  b: Business;
-  k: BusinessType;
-}
-
-/** Common preamble for actions on an existing business. */
-function open(p0: PlayerState): Ctx | null {
-  if (!p0.business) return null;
-  const p = clone(p0);
-  const b = ensureBusiness(p.business!);
-  return { p, b, k: kindOf(b) };
-}
-
-const unchanged = (p0: PlayerState, title: string, body: string, tone: Tone = "neutral"): ActionResult => ({ player: p0, notices: [info(title, body, tone)] });
-const poor = (p0: PlayerState, what: string, cost: number): ActionResult => unchanged(p0, "Insufficient Funds", `${what} costs ${money(cost)}. Neither your savings nor the company's cash can cover it.`, "bad");
-
-function done(c: Ctx, title: string, body: string, tone: Tone = "good"): ActionResult {
-  refresh(c.b);
-  addLog(c.p, body);
-  return { player: c.p, notices: [info(title, body, tone)] };
-}
-
-/** Costs shown in the UI and charged by actions. */
-export function businessCosts(b: Business) {
-  const k = kindOf(b);
-  return {
-    hire: Math.max(1_500, Math.round(k.wage * 0.1)),
-    severance: Math.round(k.wage * 0.25),
-    train: 3_000 + 1_500 * b.staff,
-    marketing: Math.max(4_000, Math.round(0.04 * scale(b))),
-    audit: Math.max(3_000, Math.round(0.008 * k.baseRev * b.locations)),
-    renovate: Math.round(0.12 * unitCost(k, b)),
-    upgrade: Math.round(0.1 * unitCost(k, b) * (1 + 0.25 * b.upgrades)),
-    diversify: Math.max(Math.round(0.09 * k.cost), Math.round(0.05 * scale(b))) * (1 + b.diversified),
-    pivot: Math.round(0.15 * k.cost),
-    acquire: Math.max(40_000, Math.round(0.5 * scale(b))),
-    expand: Math.round(k.cost * 0.9 * (1 + 0.15 * (b.locations - 1))),
-    managerFee: { solid: Math.round(k.mgrWage * 0.2), star: Math.round(k.mgrWage * 1.5 * 0.2) },
-    managerWage: { solid: k.mgrWage, star: Math.round(k.mgrWage * 1.5) },
-    managerSeverance: Math.round((b.manager?.wage ?? 0) * 0.5),
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Founding
 // ---------------------------------------------------------------------------
 
-export function startBusiness(p0: PlayerState, kindId: string, name: string, rng?: Rng): ActionResult {
+export function startBusiness(p0: PlayerState, kindId: string, name: string, rng?: Rng, opts: { franchise?: boolean } = {}): ActionResult {
   const p = clone(p0);
   const kind = BUSINESS_BY_ID[kindId];
   if (!kind) return { player: p0 };
@@ -171,17 +96,24 @@ export function startBusiness(p0: PlayerState, kindId: string, name: string, rng
   if (blocked) return { player: p0, notices: [info("Can't Start a Business", blocked, "bad")] };
   if (p.smarts < kind.minSmarts) return { player: p0, notices: [info("Not Ready", `Running a ${kind.name.toLowerCase()} needs ${kind.minSmarts}+ Smarts.`, "bad")] };
   if (kind.skill && p.skills[kind.skill.key] < kind.skill.min) return { player: p0, notices: [info("Not Ready", `A ${kind.name.toLowerCase()} needs ${kind.skill.min}+ ${kind.skill.label}.`, "bad")] };
-  if (p.bankBalance < kind.cost) return { player: p0, notices: [info("Insufficient Funds", `You need ${money(kind.cost)} in cash to open a ${kind.name.toLowerCase()}.`, "bad")] };
+  const terms = opts.franchise ? franchiseTerms(kind) : null;
+  if (opts.franchise && !terms) return { player: p0, notices: [info("No Franchise Offer", `Nobody franchises ${kind.name.toLowerCase()}s: you'll have to build the concept yourself.`, "bad")] };
+  const total = kind.cost + (terms?.fee ?? 0);
+  if (p.bankBalance < total) return { player: p0, notices: [info("Insufficient Funds", `You need ${money(total)} in cash to ${terms ? "buy into" : "open"} a ${kind.name.toLowerCase()}.`, "bad")] };
   const r = rng ?? makeRng(hashString(`${p.firstName}${p.lastName}${p.year}${kindId}${name}`));
-  p.bankBalance -= kind.cost;
-  const label = name.trim() || `${p.lastName} ${kind.name}`;
-  p.business = newBusiness(kind, label, p.year, r);
+  p.bankBalance -= total;
+  const fr = terms ? newFranchise(kind, "", p.year, r) : null;
+  const label = name.trim() || (fr ? `${fr.franchisor!.brand} ${p.lastName}` : `${p.lastName} ${kind.name}`);
+  if (fr) fr.name = label;
+  p.business = fr ?? newBusiness(kind, label, p.year, r);
   // Natural business sense improves (or hurts) how well the idea suits its market.
   p.business.fit = Math.max(0.2, Math.min(2.4, p.business.fit * (1 + (p.talents.business - 50) / 220)));
   p.business.value = stakeValue(p.business);
   setFlag(p, "business_owner");
   changeStat(p, "happiness", 8);
-  const body = `You opened "${label}" with ${money(kind.cost)} of your own capital (${money(p.business.cash)} working cash, the rest premises and equipment). Now you need staff, customers and a bit of luck.`;
+  const body = terms
+    ? `You bought a ${fr!.franchisor!.brand} franchise: ${money(terms.fee)} to the franchisor plus ${money(kind.cost)} to fit out your unit (${money(p.business.cash)} working cash). You'll pay ${((terms.royalty + terms.adFund) * 100).toFixed(1)}% of revenue in royalties and brand fund, and head office sets the menu and the prices. In return you get a known name, a proven playbook and a running start.`
+    : `You opened "${label}" with ${money(kind.cost)} of your own capital (${money(p.business.cash)} working cash, the rest premises and equipment). Now you need staff, customers and a bit of luck.`;
   addLog(p, body);
   return { player: p, notices: [info("Business Launched", body, "good")] };
 }
@@ -297,6 +229,7 @@ export function runMarketing(p0: PlayerState): ActionResult {
 export function setPrice(p0: PlayerState, level: number): ActionResult {
   const c = open(p0);
   if (!c || level === c.b.price || level < 0 || level > 2) return { player: p0 };
+  if (c.b.franchisor) return unchanged(p0, "Prices Set by Head Office", `${c.b.franchisor.brand} sets the prices. Your franchise agreement doesn't let you change them.`);
   if ((c.p.annual.bizprice ?? 0) >= 1) return unchanged(p0, "Prices Just Changed", "Changing prices more than once a year confuses customers.");
   c.p.annual.bizprice = 1;
   c.b.price = level;
@@ -368,6 +301,7 @@ export function upgradeProduct(p0: PlayerState): ActionResult {
 export function diversifyBusiness(p0: PlayerState): ActionResult {
   const c = open(p0);
   if (!c) return { player: p0 };
+  if (c.b.franchisor) return unchanged(p0, "Menu Locked", `${c.b.franchisor.brand} decides what you sell. A franchisee can't add product lines.`);
   if (c.b.diversified >= 2) return unchanged(p0, "Diversified Enough", "You already run several product lines.");
   const cost = businessCosts(c.b).diversify;
   if (!canSpend(c.p, c.b, cost)) return poor(p0, "A new product line", cost);
@@ -381,6 +315,7 @@ export function diversifyBusiness(p0: PlayerState): ActionResult {
 export function pivotBusiness(p0: PlayerState, rng: Rng): ActionResult {
   const c = open(p0);
   if (!c) return { player: p0 };
+  if (c.b.franchisor) return unchanged(p0, "Tied to the Brand", `You can't pivot a ${c.b.franchisor.brand} franchise. To change the concept you would have to leave the franchise first.`);
   const { b, k } = c;
   if (c.p.year - b.lastPivot < 3) return unchanged(p0, "Too Soon", "Customers need time to understand what you've become. Wait a few years between pivots.");
   const cost = businessCosts(b).pivot;
@@ -402,6 +337,8 @@ export function acquireCompetitor(p0: PlayerState, rng: Rng): ActionResult {
   const c = open(p0);
   if (!c) return { player: p0 };
   const { b } = c;
+  const target = strongestRival(b);
+  if (target) return buyOutRival(p0, rng, target.id);
   if (b.competition < 25) return unchanged(p0, "No Targets", "There are no rivals left worth buying.");
   if ((c.p.annual.bizacquire ?? 0) >= 1) return unchanged(p0, "Already Dealing", "One acquisition per year.");
   const cost = businessCosts(b).acquire;
@@ -453,20 +390,29 @@ export function investInBusiness(p0: PlayerState, amount: number): ActionResult 
   return done(c, "Capital Injected", `You put ${money(amount)} of your own money into ${c.b.name}'s bank account. It extends the runway but is not guaranteed to come back: only profits and an eventual sale return it.`);
 }
 
-export function takeBusinessLoan(p0: PlayerState, amount: number): ActionResult {
+/** Share of an unpaid shortfall the owner is personally chased for, given how much of the debt they guaranteed. */
+export function personalShare(b: Business): number {
+  const frac = b.debt > 0 ? clamp(b.guaranteed / b.debt, 0, 1) : 0;
+  return 0.1 + 0.6 * frac;
+}
+
+export function takeBusinessLoan(p0: PlayerState, amount: number, guaranteed = true): ActionResult {
   const c = open(p0);
   amount = Math.round(amount);
   if (!c) return { player: p0 };
-  const limit = loanLimit(c.p, c.b);
+  // Without a personal guarantee the bank wants more comfort: it lends far less.
+  const limit = Math.floor((loanLimit(c.p, c.b) * (guaranteed ? 1 : 0.55)) / 1000) * 1000;
   if (amount <= 0) return { player: p0 };
   if (amount > limit) {
     return unchanged(p0, "Loan Declined", limit > 0 ? `The bank will lend ${c.b.name} at most ${money(limit)} right now, based on its profits, collateral and your credit.` : `The bank won't lend to ${c.b.name} right now. Lenders want profits and collateral, and a track record.`, "bad");
   }
-  const rate = loanRateFor(c.p, c.b);
+  const rate = Math.max(0.045, loanRateFor(c.p, c.b) - (guaranteed ? 0.012 : 0));
   c.b.loanRate = Math.round(((c.b.debt * c.b.loanRate + amount * rate) / (c.b.debt + amount)) * 1000) / 1000;
   c.b.debt += amount;
   c.b.cash += amount;
-  return done(c, "Business Loan", `${c.b.name} borrowed ${money(amount)} at ${(rate * 100).toFixed(1)}%. Each year it must pay interest plus about 10% of the balance, and keep profit above its debt service or the bank may call the loan. You personally guarantee part of it.`);
+  if (guaranteed) c.b.guaranteed += amount;
+  c.p.annual.bizborrowed = 1;
+  return done(c, "Business Loan", `${c.b.name} borrowed ${money(amount)} at ${(rate * 100).toFixed(1)}%. Each year it must pay interest plus about 10% of the balance, and keep profit above its debt service or the bank may call the loan. ${guaranteed ? "You personally guaranteed it: the rate is lower, but if the company fails the bank comes after your own money." : "There is no personal guarantee, so the bank lent less and charged more, but your own money is safer if it fails."}`);
 }
 
 export function repayBusinessLoan(p0: PlayerState, amount: number): ActionResult {
@@ -479,8 +425,13 @@ export function repayBusinessLoan(p0: PlayerState, amount: number): ActionResult
   else if (c.b.cash >= pay) c.b.cash -= pay;
   else return poor(p0, "That repayment", pay);
   c.b.debt -= pay;
+  c.b.guaranteed = Math.min(c.b.guaranteed, c.b.debt);
   if (c.b.debt === 0) c.b.covenantBreaches = 0;
-  c.p.creditScore = clamp(c.p.creditScore + 3, 300, 850);
+  // Lenders reward a track record, not a same-year round trip: the bump needs a loan that has been carried.
+  if (!c.p.annual.bizborrowed && !c.p.annual.bizcredit) {
+    c.p.creditScore = clamp(c.p.creditScore + 3, 300, 850);
+    c.p.annual.bizcredit = 1;
+  }
   return done(c, "Loan Repaid", `You repaid ${money(pay)} of ${c.b.name}'s debt. Outstanding: ${money(c.b.debt)}.`);
 }
 
@@ -529,12 +480,13 @@ export function raiseFunding(p0: PlayerState, rng: Rng, stake: number): ActionRe
     return done(c, "Investors Passed", `You pitched ${t.vc ? "venture capitalists" : "angel investors"} for ${money(t.amount)} and they passed. Traction, reputation and the economy all matter.`, "bad");
   }
   b.cash += t.amount;
-  b.ownerShare = Math.round(b.ownerShare * (1 - stake) * 1000) / 1000;
+  const inv = makeInvestor(t.vc ? "vc" : "angel", stake, t.amount, c.p.year, rng);
+  sellShares(b, inv);
   b.rounds += 1;
   return done(
     c,
     t.vc ? "Funding Round Closed" : "Angel Investment",
-    `${t.vc ? "A venture fund" : "An angel investor"} put ${money(t.amount)} into ${b.name} for ${Math.round(stake * 100)}% at a ${money(t.preMoney)} pre-money valuation. You now own ${(b.ownerShare * 100).toFixed(0)}%. Investors share every payout and any exit, and their cash is the company's, not yours.`,
+    `${inv.name}${t.vc ? " (a venture fund)" : ""} put ${money(t.amount)} into ${b.name} for ${Math.round(stake * 100)}% at a ${money(t.preMoney)} pre-money valuation. You now own ${(b.ownerShare * 100).toFixed(0)}%. They share every payout and any exit${t.vc ? ", get their money back first on a weak sale," : ""} and expect ${inv.agenda === "growth" ? "fast growth" : inv.agenda === "profit" ? "steady profit" : "an exit within a few years"}. Their cash is the company's, not yours.`,
     "jackpot",
   );
 }
@@ -543,6 +495,7 @@ export function sellFranchise(p0: PlayerState, rng: Rng): ActionResult {
   const c = open(p0);
   if (!c) return { player: p0 };
   const { b, k } = c;
+  if (b.franchisor) return unchanged(p0, "Not Yours to Franchise", `The ${b.franchisor.brand} brand belongs to the franchisor, so you can't sell units under it.`);
   if (!k.franchise) return unchanged(p0, "Not Franchisable", `${k.name}s depend too much on the owner to franchise.`);
   const years = b.history.length;
   if (b.reputation < 60 || years < 2 || b.profitableYears < 2) return unchanged(p0, "Not Ready", "Franchisees pay for a proven brand: 60+ reputation and at least two profitable years.", "bad");
@@ -615,6 +568,23 @@ export function takePublic(p0: PlayerState, rng: Rng): ActionResult {
   return finishSale(c, q, "IPO!", `${c.b.name} went public.`, 0.4);
 }
 
+/** Leave the franchise and carry on as an independent. Costs a termination payment and much of the brand's goodwill. */
+export function breakAway(p0: PlayerState): ActionResult {
+  const c = open(p0);
+  if (!c?.b.franchisor) return { player: p0 };
+  const { p, b } = c;
+  const brand = b.franchisor!.brand;
+  const fee = Math.round(0.1 * Math.max(b.revenue, scale(b)));
+  if (!spend(p, b, fee, false)) b.cash -= fee;
+  b.franchisor = null;
+  b.reputation = Math.round(b.reputation * 0.8);
+  b.customers = Math.round(b.customers * 0.8);
+  b.compliance = clamp(b.compliance - 15);
+  b.morale = clamp(b.morale - 4);
+  b.name = `${p.lastName} ${kindOf(b).name}`;
+  return done(c, "Independent Again", `You left ${brand} and relaunched as ${b.name}, paying ${money(fee)} to end the agreement. No more royalties, but the brand's customers and supply deals stay behind. You can set your own prices and menu now.`, "neutral");
+}
+
 export function handToManager(p0: PlayerState): ActionResult {
   const c = open(p0);
   if (!c?.b.manager) return unchanged(p0, "No Successor", "Hire a general manager first, then you can sell the business to them.");
@@ -640,12 +610,12 @@ export function closeBusiness(p0: PlayerState): ActionResult {
   const left = proceeds - b.debt;
   let body: string;
   if (left >= 0) {
-    const gross = Math.round(left * b.ownerShare);
+    const gross = ownerProceeds(b, left);
     const tax = exitTax(p.residence.country, gross - b.basis);
     p.bankBalance += gross - tax;
     body = `You wound ${b.name} down. Assets fetched ${money(liquidationValue(b) * 0.9)} at liquidation prices; after paying staff and creditors you kept ${money(gross - tax)}.`;
   } else {
-    const personal = settleDebtShortfall(p, -left, 0.4);
+    const personal = settleDebtShortfall(p, -left, personalShare(b));
     p.creditScore = clamp(p.creditScore - 35, 300, 850);
     body = `You wound ${b.name} down, but the assets didn't cover its debts. The bank is chasing you personally for ${money(personal)}.`;
   }
@@ -663,11 +633,12 @@ export function bankruptcyOf(p: PlayerState, reason: string): Notices {
   let personal = 0;
   let extra = "";
   if (shortfall > 0) {
-    personal = settleDebtShortfall(p, shortfall, 0.4);
+    personal = settleDebtShortfall(p, shortfall, personalShare(b));
     extra = ` Creditors recovered what they could; you were personally liable for ${money(personal)} through guarantees.`;
   } else if (shortfall < 0) {
-    p.bankBalance += Math.round(-shortfall * b.ownerShare);
-    extra = ` A small surplus of ${money(Math.round(-shortfall * b.ownerShare))} came back to you.`;
+    const back = ownerProceeds(b, -shortfall);
+    p.bankBalance += back;
+    extra = ` A small surplus of ${money(back)} came back to you.`;
   }
   const body = `${b.name} went bankrupt (${reason}).${extra} Your credit is wrecked and you cannot found another company until ${p.year + COOLOFF_YEARS}.`;
   removeBusiness(p);
@@ -720,13 +691,21 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
   // businesses ride these out better.
   const shake = clamp(0.06 + 0.002 * (b.competition - 50) - 0.0008 * (b.reputation - 50) - 0.02 * b.diversified, 0.015, 0.14);
   if (rng.chance(shake)) {
-    const loss = rng.int(8, 20);
+    const named = b.rivals.length < 3 && rng.chance(0.6) ? spawnRival(b, p.year, rng) : null;
+    const loss = named ? rng.int(5, 12) : rng.int(8, 20);
     b.customers = clamp(b.customers - loss);
-    b.competition = clamp(b.competition + 8, 5, 95);
-    const cause = rng.pick(["A big-chain competitor opened a block away", "Roadworks cut off your street for months", "A scare in the local press hurt your whole sector", "A trendy rival poached your regulars"]);
-    const body = `${cause}. ${b.name} lost customers it will have to win back.`;
-    addLog(p, body);
-    notices.push(info("Market Shake-out", body, "bad"));
+    b.competition = clamp(b.competition + (named ? 3 : 8), 5, 95);
+    if (named) {
+      const how = { discounter: "slashing prices on everything you sell", premium: "with a glossy, expensive pitch to your best customers", chain: "backed by a national marketing budget", upstart: "with a hungry team and a lot of buzz" }[named.kind];
+      const body = `${named.name} opened nearby, ${how}. ${b.name} lost customers, and you can fight them, buy them out or out-serve them. See the Market tab.`;
+      addLog(p, body);
+      notices.push(info("New Rival", body, "bad"));
+    } else {
+      const cause = rng.pick(["Roadworks cut off your street for months", "A scare in the local press hurt your whole sector", "A trendy pop-up poached your regulars", "A supplier's recall dented trust across your sector"]);
+      const body = `${cause}. ${b.name} lost customers it will have to win back.`;
+      addLog(p, body);
+      notices.push(info("Market Shake-out", body, "bad"));
+    }
   }
   if (b.manager) {
     if (b.manager.skill < 85) b.manager.skill += rng.int(0, 3);
@@ -745,7 +724,10 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
       notices.push(info("Franchise Scandal", body, "bad"));
     }
   }
-  b.compliance = clamp(b.compliance - 8);
+  const ops = b.team.find((t) => t.role === "ops");
+  b.compliance = clamp(b.compliance - (8 - (ops ? ops.skill / 25 : 0)));
+  processMarket(p, b, rng, notices);
+  processPassive(p, b, rng, notices);
 
   if (sh.incident > 0) {
     const body = `${b.name} suffered an incident (fire, theft, a lawsuit or an accident) costing ${money(pnl.incidentNet)} after insurance.`;
@@ -762,6 +744,7 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
   b.ytdSpend = 0;
   b.cash += pnl.operating - interest - tax - principal;
   b.debt -= principal;
+  b.guaranteed = Math.min(b.guaranteed, b.debt);
   b.revenue = pnl.revenue + pnl.royalties;
   b.lastProfit = pretax;
   if (pretax > 0) {
@@ -852,6 +835,9 @@ export function processBusiness(p: PlayerState, rng: Rng, notices: Notices): num
   b.cash -= pool;
   const draw = Math.round(pool * b.ownerShare);
 
+  processTeam(p, b, rng, notices, pretax);
+  processBoard(p, b, notices, pretax);
+
   // --- records ---
   b.history.push({ year: p.year, revenue: b.revenue, profit: pretax, cash: Math.round(b.cash), reputation: Math.round(b.reputation) });
   if (b.history.length > 12) b.history.shift();
@@ -888,21 +874,26 @@ export interface BusinessInheritance {
  * discount. Adult heirs inherit it running, with its debts, under a caretaker manager if it had none, after estate
  * taxes and some loss of the founder's reputation.
  */
-export function inheritBusiness(old: PlayerState, heirAge: number, rng: Rng): BusinessInheritance {
+export function inheritBusiness(old: PlayerState, heirAge: number, rng: Rng, living = false): BusinessInheritance {
   if (!old.business) return { business: null, cash: 0, note: null };
   const b = ensureBusiness(clone(old.business));
   const k = kindOf(b);
   const stake = stakeValue(b);
   if (heirAge < 18) {
-    const cash = Math.round(stake * 0.78);
-    return { business: null, cash, note: `Trustees sold your parent's business, ${b.name}, and you received ${money(cash)} from the estate.` };
+    const cash = Math.round(stake * (living ? 0.92 : 0.78));
+    return { business: null, cash, note: living ? `Your parent's business, ${b.name}, was sold on your behalf while you are too young to run it, and you received ${money(cash)}.` : `Trustees sold your parent's business, ${b.name}, and you received ${money(cash)} from the estate.` };
   }
-  const estateTax = Math.round(Math.max(0, equityOf(b)) * 0.1);
+  // A founder who steps aside alive pays no estate tax and leaves the customers and the track record largely intact.
+  const estateTax = living ? 0 : Math.round(Math.max(0, equityOf(b)) * 0.1);
   b.cash = Math.max(0, b.cash - estateTax);
+  b.ousted = false;
+  b.boardHeat = Math.min(b.boardHeat, 30);
   if (!b.manager) b.manager = { name: `${rng.pick(["Pat", "Lee", "Chris", "Jamie"])} ${rng.pick(["Moreno", "Walsh", "Iyer", "Kowalski"])}`, skill: 45, wage: k.mgrWage, hired: old.deathYear ?? old.year };
-  b.reputation = Math.round(b.reputation * 0.85);
-  b.customers = Math.round(b.customers * 0.92);
-  b.morale = clamp(b.morale - 10);
+  b.reputation = Math.round(b.reputation * (living ? 0.95 : 0.85));
+  b.customers = Math.round(b.customers * (living ? 0.97 : 0.92));
+  b.morale = clamp(b.morale - (living ? 3 : 10));
+  // Key people stay unsure of the new boss.
+  for (const t of b.team) t.loyalty = Math.min(t.loyalty, living ? 70 : 55);
   b.neglect = 0;
   b.covenantBreaches = 0;
   b.basis = Math.max(0, equityOf(b));
@@ -911,11 +902,11 @@ export function inheritBusiness(old: PlayerState, heirAge: number, rng: Rng): Bu
   b.boost = 0;
   b.ytdSpend = 0;
   // The founder is gone: buyers and customers trust the track record less, so past results are written down.
-  b.history = b.history.slice(-3).map((r) => ({ ...r, revenue: Math.round(r.revenue * 0.9), profit: Math.round(r.profit * 0.7) }));
-  b.revenue = Math.round(b.revenue * 0.9);
+  b.history = b.history.slice(-3).map((r) => ({ ...r, revenue: Math.round(r.revenue * (living ? 0.97 : 0.9)), profit: Math.round(r.profit * (living ? 0.9 : 0.7)) }));
+  b.revenue = Math.round(b.revenue * (living ? 0.97 : 0.9));
   b.value = stakeValue(b);
   const debtNote = b.debt > 0 ? ` It still owes ${money(b.debt)} to the bank.` : "";
-  return { business: b, cash: 0, note: `You inherited the family business, ${b.name}, worth about ${money(b.value)}. A caretaker manager is keeping it running.${debtNote}` };
+  return { business: b, cash: 0, note: `You ${living ? "took over" : "inherited"} the family business, ${b.name}, worth about ${money(b.value)}. A caretaker manager is keeping it running.${debtNote}` };
 }
 
 /** Upgrade a business from an older save (adds fields, refreshes the valuation). */
@@ -946,6 +937,12 @@ export interface BizDelta {
   cashPctRevenue?: number;
   staff?: number;
   fit?: number;
+  /** Investor patience (positive = angrier, negative = calmer). */
+  heat?: number;
+  /** A named rival opens up (the kind, or true for a random one). */
+  rival?: RivalKind | true;
+  /** Loyalty of the key employee most at risk of leaving. */
+  keyLoyalty?: number;
 }
 
 /** Apply a change to the owned business from an event. Returns a short sentence describing money moved. */
@@ -963,6 +960,12 @@ export function bizApply(p: PlayerState, d: BizDelta): string | undefined {
   if (d.marketing) b.marketing = Math.max(0, b.marketing + d.marketing);
   if (d.fit) b.fit = clamp(b.fit + d.fit, 0.3, 1.8);
   if (d.staff) b.staff = Math.max(0, b.staff + d.staff);
+  if (d.heat) b.boardHeat = clamp(b.boardHeat + d.heat);
+  if (d.keyLoyalty) {
+    const t = flightRisk(b);
+    if (t) t.loyalty = clamp(t.loyalty + d.keyLoyalty);
+  }
+  if (d.rival) spawnRival(b, p.year, makeRng(hashString(`${p.id}${p.year}rival${b.rivals.length}`)), d.rival === true ? undefined : d.rival);
   let cash = d.cash ?? 0;
   if (d.cashPctRevenue) cash += Math.round(d.cashPctRevenue * Math.max(b.revenue, kindOf(b).baseRev * 0.25));
   let note: string | undefined;
@@ -1000,17 +1003,18 @@ export function bizSellInPlace(p: PlayerState, rng: Rng, mode: "acquired" | "ipo
 }
 
 /** Sell a minority stake to an investor. Returns a sentence describing the terms. */
-export function bizSellStake(p: PlayerState, stake: number, discount = 1): string | undefined {
+export function bizSellStake(p: PlayerState, stake: number, discount = 1, rng?: Rng, kind: InvestorKind = "angel"): string | undefined {
   const b = p.business;
   if (!b) return undefined;
   ensureBusiness(b);
   if (b.ownerShare <= 0.25) return "Investors weren't interested in what was left of the company.";
   const amount = Math.max(40_000, Math.round(((Math.max(0, equityOf(b)) * stake) / (1 - stake)) * discount / 1000) * 1000);
   b.cash += amount;
-  b.ownerShare = Math.round(b.ownerShare * (1 - stake) * 1000) / 1000;
+  const inv = makeInvestor(kind, stake, amount, p.year, rng ?? makeRng(hashString(`${p.id}${p.year}stake${b.rounds}`)));
+  sellShares(b, inv);
   b.rounds += 1;
   refresh(b);
-  return `The investor put ${money(amount)} into the company for ${Math.round(stake * 100)}%. You now own ${(b.ownerShare * 100).toFixed(0)}%.`;
+  return `${inv.name} put ${money(amount)} into the company for ${Math.round(stake * 100)}%. You now own ${(b.ownerShare * 100).toFixed(0)}%.`;
 }
 
 /** Buy back some of an investor's shares at a 10% premium to fair value. */
@@ -1028,7 +1032,7 @@ export function bizBuyShares(p: PlayerState, frac: number): string | undefined {
   } else {
     return "You couldn't raise the money to buy them out.";
   }
-  b.ownerShare = Math.round((b.ownerShare + add) * 1000) / 1000;
+  takeBackShares(b, add);
   refresh(b);
   return `You bought back ${(add * 100).toFixed(0)}% of the company for ${money(price)}. You now own ${(b.ownerShare * 100).toFixed(0)}%.`;
 }

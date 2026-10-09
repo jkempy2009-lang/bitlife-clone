@@ -1,5 +1,6 @@
 "use client";
 
+import BusinessDepth from "./BusinessDepth";
 import { useState, type ReactNode } from "react";
 import { useGame } from "@/context/GameStateContext";
 import {
@@ -470,6 +471,7 @@ function BusinessDashboard({ p, biz }: { p: PlayerState; biz: Business }) {
       <p className="text-xs text-slate-500">
         Company profit is taxed at {pct(CORP_TAX)}; payouts to you are taxed as personal income; gains above your invested capital are taxed at a capital-gains-style rate when you sell. Investors, lenders and the economy all have a say.
       </p>
+      <BusinessDepth />
     </div>
   );
 }

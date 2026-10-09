@@ -338,6 +338,78 @@ export interface BusinessYearRecord {
 
 export type BusinessPayout = "reinvest" | "balanced" | "salary";
 
+/** What a named key employee is hired to do. */
+export type KeyRole = "craft" | "sales" | "ops";
+
+/** A named key employee: the chef, the rainmaker, the operations lead. They can be poached, paid, given equity or lost. */
+export interface KeyPerson {
+  id: string;
+  name: string;
+  role: KeyRole;
+  title: string;
+  /** 0-100. Drives how much they lift quality, sales or operations. */
+  skill: number;
+  /** 0-100. Low loyalty means they are listening to recruiters. */
+  loyalty: number;
+  wage: number;
+  hired: number;
+  /** Holds a slice of the company: far stickier, but the slice is gone for good. */
+  partner: boolean;
+}
+
+export type RivalKind = "discounter" | "premium" | "chain" | "upstart";
+
+/** A named competitor. Each attacks a different weakness and can be fought, bought out or outlasted. */
+export interface BusinessRival {
+  id: string;
+  name: string;
+  kind: RivalKind;
+  /** 5-95. How hard they are pulling customers away. */
+  strength: number;
+  since: number;
+}
+
+/** A multi-year change in the whole industry (a craze, a squeeze, a wave of regulation). */
+export interface MarketShift {
+  id: string;
+  label: string;
+  blurb: string;
+  /** Yearly swing in demand (fraction of revenue, positive or negative). */
+  demand: number;
+  /** Yearly swing in cost of goods. */
+  cost: number;
+  yearsLeft: number;
+  /** The owner paid to lean into a tailwind or brace for a headwind. */
+  responded: boolean;
+}
+
+export type InvestorKind = "angel" | "vc" | "staff";
+export type InvestorAgenda = "growth" | "profit" | "exit";
+
+/** Outside shareholder. The sum of investor shares is always `1 - ownerShare`. */
+export interface BusinessInvestor {
+  id: string;
+  name: string;
+  kind: InvestorKind;
+  share: number;
+  agenda: InvestorAgenda;
+  /** Money they put in (VCs get it back first on a sale below their price). */
+  invested: number;
+  /** 1x non-participating liquidation preference. */
+  pref: boolean;
+  since: number;
+}
+
+/** A franchisee's agreement with the brand they bought into. */
+export interface FranchiseDeal {
+  brand: string;
+  /** Royalty as a share of revenue. */
+  royalty: number;
+  /** Mandatory brand-fund contribution as a share of revenue. */
+  adFund: number;
+  since: number;
+}
+
 export interface Business {
   kind: string;
   name: string;
@@ -410,6 +482,23 @@ export interface Business {
   lastPivot: number;
   profitableYears: number;
   history: BusinessYearRecord[];
+
+  // ---- business depth II: people, rivals, board, franchise (defaults in ensureBusiness) ----
+  /** Named key employees (at most one per role). */
+  team: KeyPerson[];
+  rivals: BusinessRival[];
+  shift: MarketShift | null;
+  investors: BusinessInvestor[];
+  /** 0-100. Investor patience running out. */
+  boardHeat: number;
+  /** The owner holds the shares but a professional runs the company, so it is not a full-time commitment. */
+  passive: boolean;
+  /** Pushed out by the board: cannot take the reins back. */
+  ousted: boolean;
+  /** Set when the owner bought into a franchise rather than inventing a concept. */
+  franchisor: FranchiseDeal | null;
+  /** Loan principal the owner has personally guaranteed. */
+  guaranteed: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
  * `business.ts` owns the actions and the yearly transaction; this file answers "what would happen" so the same math
  * drives the real year, the dashboard's projected ranges and the valuation.
  */
-import type { Business, BusinessPayout, PlayerState } from "@/types/game.types";
+import type { Business, BusinessPayout, KeyPerson, KeyRole, PlayerState } from "@/types/game.types";
 import { makeRng, type Rng } from "@/lib/rng";
 import { clamp } from "@/lib/format";
 import { incomeTaxFor } from "@/data/countries";
@@ -42,7 +42,47 @@ export function newBusiness(kind: BusinessType, name: string, year: number, rng:
     fit: drawFit(kind, rng), marketing: 1.2, insurance: 0, compliance: 35, payout: "balanced", revenue: 0,
     competition: clamp(kind.competition + rng.int(-10, 10), 5, 95), diversified: 0, franchises: 0, rounds: 0, neglect: 0,
     covenantBreaches: 0, rescue: true, ytdSpend: 0, lastPivot: -99, profitableYears: 0, history: [],
+    team: [], rivals: [], shift: null, investors: [], boardHeat: 0, passive: false, ousted: false, franchisor: null, guaranteed: 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Buying into a franchise
+// ---------------------------------------------------------------------------
+
+export const FRANCHISE_BRANDS: Record<string, string[]> = {
+  foodtruck: ["Taco Titan", "Wrap Republic", "Street Eats Co"],
+  boutique: ["Threadline", "Maison Lune", "Style Society"],
+  barcafe: ["Bean & Barrel", "Daily Grind", "Roast House"],
+  restaurant: ["Burger Barn", "Pasta Palace", "Grill & Co"],
+  gym: ["PulseFit", "Iron Works Fitness", "Anytime Strength"],
+};
+
+/** What a franchisor charges: an upfront fee, a royalty on revenue and a mandatory brand fund. */
+export function franchiseTerms(k: BusinessType): { fee: number; royalty: number; adFund: number } | null {
+  if (!k.franchise) return null;
+  return { fee: k.franchise.fee, royalty: Math.round((k.franchise.royalty / k.baseRev) * 1000) / 1000, adFund: 0.02 };
+}
+
+/**
+ * A franchised unit: the brand brings customers, a proven playbook (market fit lands in a narrow band instead of a
+ * lottery), supply deals and half the marketing bill, in return for an upfront fee, royalties on every dollar of
+ * revenue and a franchisor who sets the rules.
+ */
+export function newFranchise(kind: BusinessType, name: string, year: number, rng: Rng, brand?: string): Business | null {
+  const t = franchiseTerms(kind);
+  if (!t) return null;
+  const b = newBusiness(kind, name, year, rng);
+  const brandName = brand ?? rng.pick(FRANCHISE_BRANDS[kind.id] ?? ["Brand"]);
+  b.fit = clamp(1 + 0.07 * gauss(rng), 0.82, 1.2);
+  b.reputation = 55;
+  b.customers = Math.min(45, Math.round(kind.startCustomers * 1.6));
+  b.quality = 60;
+  b.compliance = 55;
+  b.marketing = 1.8;
+  b.basis = kind.cost + t.fee;
+  b.franchisor = { brand: brandName, royalty: t.royalty, adFund: t.adFund, since: year };
+  return b;
 }
 
 /** Fill any field missing from a business written by an older version of the game. Mutates and returns `b`. */
@@ -93,6 +133,22 @@ export function ensureBusiness(b: Business): Business {
   if (!d.payout || !(d.payout in PAYOUT_SHARE)) d.payout = "balanced";
   if (typeof d.rescue !== "boolean") d.rescue = true;
   if (!Array.isArray(d.history)) d.history = [];
+  num("boardHeat", 0);
+  num("guaranteed", 0);
+  if (!Array.isArray(d.team)) d.team = [];
+  if (!Array.isArray(d.rivals)) d.rivals = [];
+  if (!Array.isArray(d.investors)) d.investors = [];
+  if (d.shift === undefined) d.shift = null;
+  if (typeof d.passive !== "boolean") d.passive = false;
+  if (typeof d.ousted !== "boolean") d.ousted = false;
+  if (d.franchisor === undefined) d.franchisor = null;
+  // Older saves tracked only the owner's share: invent a backer so the ledger always adds up to the outside stake.
+  const outside = Math.max(0, 1 - clamp(d.ownerShare, 0, 1));
+  const ledger = d.investors.reduce((s, i) => s + i.share, 0);
+  if (outside > 0.001 && Math.abs(ledger - outside) > 0.002) {
+    if (d.investors.length === 0) d.investors.push({ id: "legacy-backers", name: "Early backers", kind: "angel", share: Math.round(outside * 1000) / 1000, agenda: "profit", invested: 0, pref: false, since: d.founded });
+    else d.investors[0].share = Math.max(0.001, Math.round((d.investors[0].share + outside - ledger) * 1000) / 1000);
+  } else if (outside <= 0.001 && d.investors.length) d.investors = [];
   return d;
 }
 
@@ -117,6 +173,10 @@ export interface Pnl {
   fixed: number;
   wages: number;
   manager: number;
+  /** Named key employees' pay. */
+  keyStaff: number;
+  /** Royalties and brand-fund contributions paid to a franchisor. */
+  franchisor: number;
   marketing: number;
   insurance: number;
   upkeep: number;
@@ -144,6 +204,7 @@ export function ownerLabour(p: PlayerState, b: Business): number {
   const effortMult = p.effort === "grind" ? 1.1 : p.effort === "coast" ? 0.65 : 1;
   const ability = clamp(0.9 + (p.smarts - 50) / 250, 0.7, 1.2);
   const strain = Math.max(0, b.locations - 1);
+  if (b.manager && b.passive) return 0.05;
   if (b.manager) return 0.15 * effortMult;
   // Older saves could hold a job and a business at once: the business only gets the owner's spare hours.
   const moonlight = p.currentJob ? 0.4 : 1;
@@ -158,9 +219,47 @@ export function managerLabour(b: Business): number {
 
 export const staffProductivity = (b: Business) => (0.78 + (0.22 * b.morale) / 100) * (0.85 + (0.3 * b.training) / 100);
 
+// ---------------------------------------------------------------------------
+// Key people, rivals and industry shifts (pure helpers; the actions live in businessPeople.ts / businessMarket.ts)
+// ---------------------------------------------------------------------------
+
+export const keyOf = (b: Business, role: KeyRole): KeyPerson | undefined => b.team.find((t) => t.role === role);
+export const teamWages = (b: Business) => b.team.reduce((s, t) => s + t.wage, 0);
+/** Labour a named key employee adds (each is worth about one hired hand, a bit more for the skilled). */
+export const teamLabour = (b: Business) => b.team.reduce((s, t) => s + staffProductivity(b) * (0.9 + t.skill / 500), 0);
+export const keySkill = (b: Business, role: KeyRole) => keyOf(b, role)?.skill ?? 0;
+
+/**
+ * How hard the named rivals are pulling customers away. Each kind attacks a different weakness: discounters hurt
+ * mid-priced shops, premium rivals hurt anyone with mediocre quality, chains hurt unknown names.
+ */
+export function rivalPull(b: Business): { customers: number; margin: number } {
+  let customers = 0;
+  let margin = 0;
+  for (const r of b.rivals) {
+    let m = 1;
+    if (r.kind === "discounter") {
+      m = b.price === 0 ? 0.7 : b.price === 2 ? 0.6 : 1.4;
+      margin += 0.012 * (r.strength / 50) * (b.price === 0 ? 1.3 : 1);
+    } else if (r.kind === "premium") m = b.quality < 55 ? 1.4 : 0.6;
+    else if (r.kind === "chain") m = b.reputation < 50 ? 1.4 : 0.8;
+    customers += r.strength * 0.07 * m;
+  }
+  return { customers: Math.min(14, customers), margin: Math.min(0.04, margin) };
+}
+
+/** This year's swing from a running industry shift (leaning in boosts a tailwind, bracing softens a headwind). */
+export function shiftEffect(b: Business): { demand: number; cost: number } {
+  const s = b.shift;
+  if (!s) return { demand: 0, cost: 0 };
+  const up = s.demand >= 0;
+  const k = s.responded ? (up ? 1.6 : 0.5) : 1;
+  return { demand: s.demand * k, cost: s.cost * (s.responded ? (s.cost >= 0 ? 0.5 : 1.6) : 1) };
+}
+
 export function capacityOf(p: PlayerState, b: Business): number {
   const k = kindOf(b);
-  const units = ownerLabour(p, b) + managerLabour(b) + b.staff * staffProductivity(b);
+  const units = (ownerLabour(p, b) + managerLabour(b) + b.staff * staffProductivity(b) + teamLabour(b)) * (1 + 0.06 * keySkill(b, "ops") / 100);
   return units / (k.ideal * b.locations);
 }
 
@@ -186,6 +285,7 @@ export function marketingEffect(stock: number) {
 
 /** How much the owner's personal presence (or a manager's) helps or hurts winning customers. */
 export function presence(p: PlayerState, b: Business): number {
+  if (b.manager && b.passive) return -0.14 + (b.manager.skill - 50) / 400;
   if (b.manager) return -0.1 + (b.manager.skill - 50) / 400;
   if (p.isInPrison) return -0.45;
   return p.effort === "coast" ? -0.25 : p.effort === "grind" ? 0.04 : 0;
@@ -200,6 +300,10 @@ export function customerTarget(p: PlayerState, b: Business, fit = b.fit): number
   t *= 1 - 0.003 * (b.competition - 30);
   t *= 1 + k.ownerDep * presence(p, b);
   if (b.facility < 35) t -= (6 * (35 - b.facility)) / 35;
+  const sales = keyOf(b, "sales");
+  if (sales) t += 2.5 + (sales.skill - 50) * 0.12;
+  if (b.franchisor) t += 4;
+  t -= rivalPull(b).customers;
   return clamp(t, 3, 100);
 }
 
@@ -222,43 +326,48 @@ export function stepYear(p: PlayerState, b: Business, sh: Shocks, fitOverride?: 
   const sales = Math.min(dem, 1.1 * cap);
   const climate = climateFactor(p, k);
   // Units sold are valued at the market price; the price decision scales revenue but not the cost of those units.
-  const units = k.baseRev * locs * sales * (1 + sh.demand) * climate * (1 + b.boost) * (1 + 0.05 * b.diversified);
+  const shift = shiftEffect(b);
+  const units = k.baseRev * locs * sales * (1 + sh.demand + shift.demand) * climate * (1 + b.boost) * (1 + 0.05 * b.diversified);
   const core = units * PRICE_MULT[b.price];
   const royalties = b.franchises * (k.franchise?.royalty ?? 0) * (0.5 + b.reputation / 100) * clamp(climate, 0.85, 1.1);
   const revenue = Math.max(0, core);
 
   // --- costs ---
-  const gm = clamp(k.margin - 0.002 * (b.quality - 50) - 0.0012 * (b.competition - 40), 0.1, 0.95);
-  const cogs = Math.max(0, units) * (1 - gm) * (1 + sh.cost);
+  const gm = clamp(k.margin - 0.002 * (b.quality - 50) - 0.0012 * (b.competition - 40) - rivalPull(b).margin + (keySkill(b, "ops") > 0 ? (keySkill(b, "ops") - 50) * 0.0006 : 0) + (b.franchisor ? 0.02 : 0), 0.1, 0.95);
+  const cogs = Math.max(0, units) * (1 - gm) * (1 + sh.cost + shift.cost);
   const fixed = k.fixed * locs;
   const wages = b.staff * k.wage;
   const manager = mgr?.wage ?? 0;
-  const marketing = Math.max(k.mktNeed * revenue, 2_000 * locs);
+  const keyStaff = teamWages(b);
+  const franchisor = b.franchisor ? revenue * (b.franchisor.royalty + b.franchisor.adFund) : 0;
+  const marketing = Math.max(k.mktNeed * revenue * (b.franchisor ? 0.5 : 1), 2_000 * locs);
   const insurance = b.insurance > 0 ? Math.max(INS_RATE[b.insurance] * revenue, 800 * locs * b.insurance) : 0;
   const upkeep = k.upkeep * k.cost * locs;
   const loss = sh.incident * revenue;
   const incidentNet = loss - INS_COVER[b.insurance] * Math.max(0, loss - 0.01 * revenue);
-  const operating = revenue + royalties * 0.9 - cogs - fixed - wages - manager - marketing - insurance - upkeep - incidentNet;
+  const operating = revenue + royalties * 0.9 - cogs - fixed - wages - manager - keyStaff - franchisor - marketing - insurance - upkeep - incidentNet;
 
   // --- soft state ---
   const neglected = !mgr && (prison || eff === "coast");
   const neglect = neglected ? b.neglect + 1 : Math.max(0, b.neglect - 1);
-  const supervision = mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0;
+  const supervision = (mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0) - (b.passive ? 2 : 0);
+  const craft = keyOf(b, "craft");
+  const craftQ = craft ? (craft.skill - 50) * 0.5 : 0;
   const service = (b.morale - 50) * 0.12 + (b.training - 50) * 0.08;
   const under = cap < 0.75 ? (0.75 - cap) * 35 : 0;
   const neglectPen = Math.min(18, neglect * 5);
   const stretched = !mgr && locs > 1 ? 4 * (locs - 1) : 0;
   const priceRepPen = b.price === 2 ? Math.max(0, 60 - b.quality) * 0.15 : 0;
-  const repTarget = clamp(22 + 0.62 * b.quality + service + supervision - under - neglectPen - priceRepPen - stretched + (b.facility < 40 ? -6 : 0), 5, 98);
+  const repTarget = clamp(22 + 0.62 * b.quality + (craft ? (craft.skill - 50) * 0.1 : 0) + service + supervision - under - neglectPen - priceRepPen - stretched + (b.facility < 40 ? -6 : 0), 5, 98);
   const reputation = clamp(b.reputation + (repTarget > b.reputation ? 0.2 : 0.4) * (repTarget - b.reputation), 0, 100);
-  const qBase = 28 + 0.3 * b.training + 0.22 * b.facility + 5 * b.upgrades + (mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0);
+  const qBase = 28 + 0.3 * b.training + 0.22 * b.facility + 5 * b.upgrades + craftQ + (mgr ? (mgr.skill - 50) * 0.15 : prison ? -8 : eff === "grind" ? 3 : eff === "coast" ? -8 : 0);
   const quality = clamp(b.quality + 0.3 * (qBase - b.quality), 0, 100);
   const overwork = cap < 0.8 ? (0.8 - cap) * 25 : 0;
   const mBase = 58 + (mgr ? (mgr.skill - 50) * 0.15 : eff === "grind" ? -3 : eff === "coast" ? -2 : 0) - overwork - neglectPen * 0.8 + 0.1 * (b.training - 30);
   const morale = clamp(b.morale + 0.35 * (mBase - b.morale), 0, 100);
 
   return {
-    pnl: { revenue: Math.round(revenue), royalties: Math.round(royalties), cogs: Math.round(cogs), fixed, wages, manager, marketing: Math.round(marketing), insurance: Math.round(insurance), upkeep, incidentNet: Math.round(incidentNet), operating: Math.round(operating) },
+    pnl: { revenue: Math.round(revenue), royalties: Math.round(royalties), cogs: Math.round(cogs), fixed, wages, manager, keyStaff, franchisor: Math.round(franchisor), marketing: Math.round(marketing), insurance: Math.round(insurance), upkeep, incidentNet: Math.round(incidentNet), operating: Math.round(operating) },
     capacity: cap,
     demand: dem,
     next: {
@@ -311,9 +420,31 @@ export function enterpriseValue(b: Business): number {
 
 export const equityOf = (b: Business) => enterpriseValue(b) + b.cash - b.debt;
 
+/**
+ * What the owner receives out of a given whole-company equity value. Without preferred investors this is simply
+ * `equity x ownerShare`. A venture investor with a 1x preference is paid back first when the company sells for less
+ * than their price (they convert to ordinary shares when that is worth more), which squeezes the founder in a weak exit.
+ */
+export function ownerProceeds(b: Business, equity: number): number {
+  if (equity <= 0) return 0;
+  const outside = b.investors ?? [];
+  let rest = equity;
+  let takenShare = 0;
+  for (const i of outside) {
+    if (!i.pref || i.invested <= 0) continue;
+    if (i.share * equity < i.invested) {
+      const take = Math.min(i.invested, rest);
+      rest -= take;
+      takenShare += i.share;
+    }
+  }
+  const pool = Math.max(0, 1 - takenShare);
+  return Math.max(0, Math.round(pool > 0 ? (rest * b.ownerShare) / pool : 0));
+}
+
 /** The owner's stake (what net worth counts). */
 export function stakeValue(b: Business): number {
-  return Math.max(0, Math.round(equityOf(b) * b.ownerShare));
+  return ownerProceeds(b, equityOf(b));
 }
 
 export function marketMood(p: PlayerState): number {
@@ -338,9 +469,10 @@ export interface SaleQuote {
 }
 
 export function saleQuote(p: PlayerState, b: Business, factor = 1, premium = 1): SaleQuote {
-  const ev = Math.round(enterpriseValue(b) * marketMood(p) * factor * premium);
+  // A franchisor must approve the buyer and takes a transfer fee.
+  const ev = Math.round(enterpriseValue(b) * marketMood(p) * factor * premium * (b.franchisor ? 0.95 : 1));
   const equity = ev + b.cash - b.debt;
-  const gross = Math.max(0, Math.round(equity * b.ownerShare));
+  const gross = ownerProceeds(b, equity);
   const fee = Math.round(gross * SALE_FEE);
   const tax = exitTax(p.residence.country, gross - fee - b.basis);
   const earn = normalizedEarnings(b);
@@ -447,8 +579,9 @@ export function riskNotes(p: PlayerState, b: Business): string[] {
 }
 
 /** Rough profit range for a business of this type once established (years 3+), for the "start a business" list. */
-export function typicalOutlook(kind: BusinessType, p: PlayerState): Range {
-  const proto = newBusiness(kind, "", p.year, makeRng(1));
+export function typicalOutlook(kind: BusinessType, p: PlayerState, franchise = false): Range {
+  const proto = (franchise ? newFranchise(kind, "", p.year, makeRng(1)) : null) ?? newBusiness(kind, "", p.year, makeRng(1));
+  const fits = franchise ? [0.9, 1, 1.1] : [0.65, 0.92, 1.2];
   proto.customers = 55;
   proto.reputation = 50;
   proto.quality = 50;
@@ -460,9 +593,9 @@ export function typicalOutlook(kind: BusinessType, p: PlayerState): Range {
     return stepYear(p, { ...b, staff }, sh).pnl.operating;
   };
   return {
-    low: at(0.65, { demand: -1.2 * kind.vol, cost: 0.06, incident: 0 }),
-    mid: at(0.92, NO_SHOCKS),
-    high: at(1.2, { demand: kind.vol, cost: -0.03, incident: 0 }),
+    low: at(fits[0], { demand: -1.2 * kind.vol, cost: 0.06, incident: 0 }),
+    mid: at(fits[1], NO_SHOCKS),
+    high: at(fits[2], { demand: kind.vol, cost: -0.03, incident: 0 }),
   };
 }
 

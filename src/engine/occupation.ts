@@ -38,7 +38,8 @@ export function bankruptcyCooloff(p: PlayerState): string | null {
 export function blockerFor(p: PlayerState, want: Commitment): string | null {
   const job = p.currentJob;
   const fullTimeJob = job && !job.partTime;
-  const biz = p.business;
+  // A passive stake (stepped back to chair, or pushed out by the board) is owned but not worked: it does not take your days.
+  const biz = p.business && !p.business.passive ? p.business : null;
   if (isRoyal(p) && want !== "office") return "Royal duties leave no room for that.";
   if (p.isInPrison) return "You're in prison.";
   const creatorFT = p.influencer.fullTime ? "You're a full-time creator. Step back to part-time creating first." : null;
@@ -97,7 +98,7 @@ export const EFFORT_INFO: Record<Effort, { label: string; emoji: string; blurb: 
 /** Does the player currently have anything that effort applies to? */
 export function hasCommitment(p: PlayerState): boolean {
   // A business with a general manager runs without you, so your effort setting doesn't drive it (or cost you).
-  return !!p.currentJob || (!!p.business && !p.business.manager) || isStudying(p) || p.music.signed || p.influencer.fullTime || isAmateurAthlete(p);
+  return !!p.currentJob || (!!p.business && !p.business.manager && !p.business.passive) || isStudying(p) || p.music.signed || p.influencer.fullTime || isAmateurAthlete(p);
 }
 
 /** Performance drift for jobs, per effort level (before smarts adjustment). */

@@ -153,7 +153,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
   const fresh = createNewPlayer({ scenario: "average", startYear: year, country: old.birthCountry }, rng);
   const [firstName, ...rest] = child.name.split(" ");
   const lastName = rest.join(" ") || old.lastName;
-  const bizHeir = inheritBusiness(old, child.age, rng);
+  const bizHeir = inheritBusiness(old, child.age, rng, living);
   const heirsLeft = heirs(old).filter((c) => c.id !== child.id);
   const will = hydrateDynasty(old).will;
   const claimants = heirs(old).map((c) => ({ id: c.id, age: c.age }));
