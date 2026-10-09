@@ -1,5 +1,6 @@
 "use client";
 
+import LegislatureCard from "./LegislatureCard";
 import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import {
@@ -79,6 +80,7 @@ export function PoliticsSection() {
   return (
     <div className="flex flex-col gap-3">
       <SectionTitle>Politics</SectionTitle>
+      <LegislatureCard />
 
       <Card>
         {job ? (

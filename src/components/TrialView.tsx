@@ -2,8 +2,7 @@
 
 import { useGame } from "@/context/GameStateContext";
 import { bribeChance, bribeCost, postBail, bribeOfficial, representationOptions, resolveTrial } from "@/engine/crime";
-import { RECORD_LABEL, bailFee, expectedYears, recordLevel } from "@/engine/justice";
-import { lawFor } from "@/data/justiceCountries";
+import { RECORD_LABEL, bailFee, expectedYears, lawOf, recordLevel } from "@/engine/justice";
 import { money } from "@/lib/format";
 import { StatBar } from "./ui";
 
@@ -19,7 +18,7 @@ export default function TrialView() {
   const bail = charge.bail;
   const fee = bail ? bailFee(bail.amount) : 0;
   const options = representationOptions(p);
-  const law = lawFor(p.residence.country);
+  const law = lawOf(p);
   const canBribe = !charge.juvenile && law.corruption >= 0.15;
   const bribeBlock = (p.annual.bribe ?? 0) >= 1 ? "You already tried this year." : bribeCost(p, charge) > p.bankBalance ? `You can't afford ${money(bribeCost(p, charge))}.` : null;
   return (
@@ -41,7 +40,7 @@ export default function TrialView() {
             </p>
             <p className="mt-1 text-xs text-slate-500">Your record: {RECORD_LABEL[recordLevel(p)]}.{charge.innocent ? " You are innocent, but that doesn't make it easy." : ""}</p>
             {charge.juvenile && <p className="mt-1 text-xs text-amber-300">Tried as a minor: detention instead of prison, no bail, and a record that may be sealed at 18.</p>}
-            {charge.capital && !charge.juvenile && <p className="mt-1 text-xs text-rose-300">This is a capital charge{lawFor(p.residence.country).deathPenalty ? ` and ${p.residence.country} has the death penalty.` : ", but the death penalty does not apply here."}</p>}
+            {charge.capital && !charge.juvenile && <p className="mt-1 text-xs text-rose-300">This is a capital charge{law.deathPenalty ? ` and ${p.residence.country} has the death penalty.` : ", but the death penalty does not apply here."}</p>}
           </div>
 
           {!charge.juvenile && bail && (

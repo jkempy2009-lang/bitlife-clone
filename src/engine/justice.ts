@@ -7,14 +7,42 @@ import type { ActionResult, CrimeCharge, PlayerState } from "@/types/game.types"
 import type { Rng } from "@/lib/rng";
 import { clamp } from "@/lib/format";
 import { CRIME_BY_ID, LAWYERS, crimeMeta, type LawyerDef } from "@/data/crimes";
-import { lawFor } from "@/data/justiceCountries";
+import { lawFor, type LawProfile } from "@/data/justiceCountries";
+import { LAW_BY_ID, TIER_SCALE } from "@/data/laws";
 import { addLog, changeStat, clone, hasFlag, netWorth } from "./state";
 
 // ---------------------------------------------------------------------------
 // Heat and detection
 // ---------------------------------------------------------------------------
 
-export const policingOf = (p: PlayerState) => lawFor(p.residence.country).policing;
+/**
+ * The justice system as it applies to you: the country's profile as reshaped by any laws you passed there.
+ * Everything that used to read `lawFor(country)` for the player should go through this.
+ */
+export function lawOf(p: PlayerState): LawProfile {
+  const base = lawFor(p.residence.country);
+  const laws = p.statecraft?.laws;
+  if (!laws?.length) return base;
+  const out = { ...base };
+  for (const l of laws) {
+    if (l.country !== p.residence.country) continue;
+    const d = LAW_BY_ID[l.id]?.law;
+    if (!d) continue;
+    const k = l.power * (TIER_SCALE[l.tier] ?? 1);
+    out.policing += (d.policing ?? 0) * k;
+    out.corruption += (d.corruption ?? 0) * k;
+    out.harshness += (d.harshness ?? 0) * k;
+    out.compensation += (d.compensation ?? 0) * k;
+    if (d.deathPenalty !== undefined) out.deathPenalty = d.deathPenalty;
+  }
+  out.policing = clamp(out.policing, 0.5, 1.6);
+  out.corruption = clamp(out.corruption, 0.02, 0.95);
+  out.harshness = clamp(out.harshness, 0.4, 1.8);
+  out.compensation = Math.max(0, Math.round(out.compensation));
+  return out;
+}
+
+export const policingOf = (p: PlayerState) => lawOf(p).policing;
 
 export function addHeat(p: PlayerState, n: number) {
   p.justice.heat = clamp(Math.round(p.justice.heat + n));
@@ -78,7 +106,7 @@ const JUVENILE_CAP = { minor: 1, serious: 3, heinous: 6 } as const;
 /** The sentence a conviction would carry before the judge's mood and your lawyer's mitigation. */
 export function expectedYears(p: PlayerState, charge: CrimeCharge): number {
   if (charge.juvenile) return Math.max(1, Math.min(charge.years, JUVENILE_CAP[charge.severity]));
-  const law = lawFor(p.residence.country);
+  const law = lawOf(p);
   let m = law.harshness * (1 + 0.2 * Math.min(4, p.justice.convictions));
   if (habitualOffender(p, charge)) m *= 1.35;
   return Math.max(1, Math.round(charge.years * m));

@@ -5,6 +5,7 @@
 import type { JusticeState, MobState, PlayerState, PrisonState, SpyState, StatecraftState } from "@/types/game.types";
 
 export const ISSUE_IDS = ["economy", "health", "environment", "security", "liberty"] as const;
+export const INDICATOR_IDS = ["prosperity", "health", "environment", "safety", "liberty", "finances"] as const;
 
 export const freshJustice = (): JusticeState => ({
   heat: 0,
@@ -23,6 +24,10 @@ export const freshJustice = (): JusticeState => ({
   programs: [],
   gangTies: null,
   exonerations: 0,
+  snitch: false,
+  housing: "stable",
+  officerTrust: 50,
+  cleanYears: 0,
 });
 
 export const freshMob = (): MobState => ({
@@ -37,6 +42,8 @@ export const freshMob = (): MobState => ({
   exposure: 0,
   witsec: false,
   marked: false,
+  crewList: [],
+  held: null,
 });
 
 export const freshSpy = (): SpyState => ({
@@ -51,7 +58,12 @@ export const freshSpy = (): SpyState => ({
   missions: 0,
   secrets: 0,
   partnerKnows: false,
+  conscience: 65,
+  dilemmas: 0,
 });
+
+/** Where the country stands before any of your laws: a middling 50 on everything. */
+export const freshIndicators = (): Record<string, number> => Object.fromEntries(INDICATOR_IDS.map((i) => [i, 50]));
 
 export const freshStatecraft = (): StatecraftState => ({
   machine: 20,
@@ -73,7 +85,15 @@ export const freshStatecraft = (): StatecraftState => ({
   removed: 0,
   electionsWon: 0,
   electionsLost: 0,
+  indicators: freshIndicators(),
+  laws: [],
+  evidence: 0,
 });
+
+const LEGACY_CREW = ["Sal", "Dmitri", "Benny", "Wei"];
+/** Saves from before named crews: turn the headcount into people. */
+const legacyCrew = (n: number): MobState["crewList"] =>
+  Array.from({ length: Math.min(4, Math.max(0, n)) }, (_, i) => ({ id: `legacy${i}`, name: LEGACY_CREW[i % LEGACY_CREW.length], loyalty: 60, skill: 45, years: 1 }));
 
 /** Default any new prison fields on a sentence that was saved before they existed. */
 export function hydratePrison(prison: PrisonState | null | undefined): PrisonState | null {
@@ -99,7 +119,7 @@ export function hydrateCrimeLife(p: PlayerState): Pick<PlayerState, "justice" | 
     : { convictions: p.criminalRecord?.length ?? 0, felonies: p.flags?.includes("ex_con") ? Math.max(1, Math.round((p.criminalRecord?.length ?? 0) / 2)) : 0 };
   return {
     justice: { ...freshJustice(), ...legacyRecord, ...(p.justice ?? {}), juvenileRecord: p.justice?.juvenileRecord ?? [], programs: p.justice?.programs ?? [] },
-    mob: { ...freshMob(), ...(p.mob ?? {}) },
+    mob: { ...freshMob(), ...(p.mob ?? {}), crewList: p.mob?.crewList ?? legacyCrew(p.mob?.crew ?? 0), held: p.mob?.held ?? null },
     spy: { ...freshSpy(), ...(p.spy ?? {}) },
     statecraft: {
       ...freshStatecraft(),
@@ -107,6 +127,8 @@ export function hydrateCrimeLife(p: PlayerState): Pick<PlayerState, "justice" | 
       donors: p.statecraft?.donors ?? [],
       stances: { ...freshStatecraft().stances, ...(p.statecraft?.stances ?? {}) },
       mood: { ...freshStatecraft().mood, ...(p.statecraft?.mood ?? {}) },
+      indicators: { ...freshIndicators(), ...(p.statecraft?.indicators ?? {}) },
+      laws: p.statecraft?.laws ?? [],
     },
     prison: hydratePrison(p.prison),
   };

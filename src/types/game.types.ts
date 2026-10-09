@@ -1261,6 +1261,14 @@ export interface JusticeState {
   programs: string[];
   gangTies: string | null;
   exonerations: number;
+  /** Turned state's evidence against people who do not forget. */
+  snitch: boolean;
+  /** Where you live after release: shapes supervision risk and relapse. */
+  housing: "stable" | "halfway" | "unstable";
+  /** Trust with your parole or probation officer, 0-100. */
+  officerTrust: number;
+  /** Years since you last committed a crime the police know of (drives early discharge). */
+  cleanYears: number;
 }
 
 export interface MobState {
@@ -1284,6 +1292,28 @@ export interface MobState {
   witsec: boolean;
   /** The family wants you gone. */
   marked: boolean;
+  /** Named people working under you. `crew` always equals the roster length. */
+  crewList: CrewMember[];
+  /** The place the family keeps for you while you serve time (null when you are not away). */
+  held: HeldPlace | null;
+}
+
+export interface CrewMember {
+  id: string;
+  name: string;
+  /** How much they will take for you before they take a deal, 0-100. */
+  loyalty: number;
+  /** Competence 0-100: improves the odds of jobs they join. */
+  skill: number;
+  /** Years in your crew. */
+  years: number;
+}
+
+export interface HeldPlace {
+  tier: number;
+  company: string;
+  /** Year the sentence began. */
+  year: number;
 }
 
 export interface SpyState {
@@ -1302,6 +1332,10 @@ export interface SpyState {
   secrets: number;
   /** Told your partner what you do. */
   partnerKnows: boolean;
+  /** Moral compass 0-100. Ruthless choices in the field wear it down; low conscience haunts you. */
+  conscience: number;
+  /** Operations that ended in a moral choice. */
+  dilemmas: number;
 }
 
 export interface Donor {
@@ -1358,6 +1392,24 @@ export interface StatecraftState {
   removed: number;
   electionsWon: number;
   electionsLost: number;
+  /** How the country is doing under your laws, 0-100 each (prosperity, health, environment, safety, liberty, finances). */
+  indicators: Record<string, number>;
+  /** Laws you passed that are still on the books. */
+  laws: EnactedLaw[];
+  /** The paper trail of your corruption, 0-100: what prosecutors can eventually prove. */
+  evidence: number;
+}
+
+/** A bill you got through the legislature. Effects ramp up over a few years. */
+export interface EnactedLaw {
+  id: string;
+  year: number;
+  /** Country whose statute book it changed. */
+  country: string;
+  /** 1 = passed as written, 0.5 = watered down in a compromise. */
+  power: number;
+  /** The office you held when it passed. */
+  tier: number;
 }
 
 export interface LifetimeStats {

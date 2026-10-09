@@ -5,10 +5,9 @@
 import type { ActionResult, PlayerState, PrisonState, Probation } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
-import { lawFor } from "@/data/justiceCountries";
 import { addLog, changeStat, clone, hasFlag, setFlag } from "./state";
 import { hydratePrison } from "./justiceState";
-import { addHeat, isViolentName, sealJuvenileRecord } from "./justice";
+import { addHeat, isViolentName, lawOf, sealJuvenileRecord } from "./justice";
 import { killPlayer } from "./mortality";
 
 type Notices = NonNullable<ActionResult["notices"]>;
@@ -100,7 +99,7 @@ export function releaseFromPrison(p: PlayerState, kind: ReleaseKind, rng: Rng, n
   let title = "Released!";
   let tone: "good" | "jackpot" = "good";
   if (kind === "exonerated") {
-    const law = lawFor(p.residence.country);
+    const law = lawOf(p);
     const pay = Math.round(served * law.compensation);
     p.bankBalance += pay;
     p.justice.exonerations += 1;
@@ -441,7 +440,7 @@ export function attemptEscape(p0: PlayerState, pathId: string, rng: Rng): Action
     return { player: p0, notices: [info("Too hot", "The guards are watching you closely this year.")] };
   }
   p.annual.escape = 1;
-  const lawGuards = 1 / lawFor(p.residence.country).policing;
+  const lawGuards = 1 / lawOf(p).policing;
   if (rng.chance(clamp((path.chance + (p.smarts - 50) / 800) * lawGuards + (pr.gang ? 0.04 : 0), 0.02, 0.4))) {
     p.isInPrison = false;
     p.isFugitive = true;

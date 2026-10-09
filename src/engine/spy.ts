@@ -9,7 +9,8 @@ import { clamp, money } from "@/lib/format";
 import { addLog, changeStat, clone, getPartner, setFlag } from "./state";
 import { applyForJob, promoteJob } from "./career";
 import { killPlayer } from "./mortality";
-import { startTrial, DEATH_PENALTY } from "./crime";
+import { startTrial } from "./crime";
+import { lawOf } from "./justice";
 import { freshSpy } from "./justiceState";
 import { COUNTRIES } from "@/data/countries";
 
@@ -356,7 +357,7 @@ export function processSpy(p: PlayerState, rng: Rng, notices: Notices) {
         description: "Counter-intelligence traced the leaks to you. The money trail was thorough.",
         years: 25,
         severity: "heinous",
-        capital: DEATH_PENALTY.has(p.residence.country),
+        capital: lawOf(p).deathPenalty,
         evidence: 88,
       });
       notices.push(info("Mole Caught", "Counter-intelligence found the leak. It was you.", "bad"));

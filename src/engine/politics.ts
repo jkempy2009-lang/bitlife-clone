@@ -14,6 +14,7 @@ import { blockerFor } from "./occupation";
 import { ISSUE_IDS } from "./justiceState";
 import { officeBlocker, recordLevel } from "./justice";
 import { startTrial } from "./crime";
+import { availableBills, billChance, nationApproval, nationFactor, processNation, pushBill } from "./legislature";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
@@ -30,21 +31,8 @@ export const MIN_TENURE = [0, 4, 4, 4, 8];
 /** Fame voters expect of a candidate for each office; below it, name recognition costs you. */
 export const FAME_NEEDED = [0, 8, 18, 32, 50];
 
-export const ISSUES = [
-  { id: "economy", name: "Economy", emoji: "💰", options: ["Tax the wealthy", "Balanced budget", "Cut taxes"] },
-  { id: "health", name: "Healthcare", emoji: "🏥", options: ["Universal care", "Mixed system", "Market-based"] },
-  { id: "environment", name: "Environment", emoji: "🌍", options: ["Green transition", "Gradual change", "Drill and grow"] },
-  { id: "security", name: "Policing", emoji: "🚓", options: ["Reform policing", "Status quo", "Tough on crime"] },
-  { id: "liberty", name: "Liberty", emoji: "🗽", options: ["Expand freedoms", "Balanced", "Order first"] },
-] as const;
-
-export const PARTIES = [
-  { id: "progressive", name: "Progressive Alliance", emoji: "🌹", blurb: "Strong in steady times. +4% odds when the economy is normal. Platform: left on every issue.", platform: [-1, -1, -1, -1, -1] },
-  { id: "conservative", name: "Conservative Union", emoji: "🏛️", blurb: "Trusted when the economy is stable or booming. +4% odds. Platform: right on every issue.", platform: [1, 1, 1, 1, 1] },
-  { id: "centrist", name: "Centrist Pact", emoji: "⚖️", blurb: "Moderate and dependable. +3% odds in any climate. Platform: stay in the middle.", platform: [0, 0, 0, 0, 0] },
-  { id: "populist", name: "People's Front", emoji: "📢", blurb: "Thrives in recessions (+8%), struggles in booms (−3%). Left on money, right on order.", platform: [-1, -1, 1, 1, 1] },
-  { id: "green", name: "Green Party", emoji: "🌿", blurb: "Rewards good character: +5% odds if your Karma is 60+. Greens on the environment and liberty.", platform: [-1, 0, -1, 0, -1] },
-] as const;
+import { ISSUES, PARTIES } from "@/data/politicsData";
+export { ISSUES, PARTIES };
 
 export function partyBonus(p: PlayerState): number {
   const c = p.economy.climate;
@@ -136,6 +124,7 @@ export function electionOdds(p: PlayerState, tier: number, mode: "run" | "reelec
     { label: "Opposition research", value: (annual["pol:oppo"] ?? 0) / 100 },
     { label: "Economy", value: mode === "reelect" ? (recession ? -0.06 : boom ? 0.03 : 0) : 0 },
     { label: "Incumbency", value: mode === "reelect" ? 0.07 : currentTier(p) >= 0 ? 0.03 : 0 },
+    { label: "State of the nation", value: sc.laws.length > 0 || mode === "reelect" ? nationFactor(p) : 0 },
     { label: "Scandal", value: sc.scandal ? -sc.scandal.severity * 0.08 : 0 },
     { label: "Criminal record", value: rec === "misdemeanor" ? -0.06 : rec === "clean" ? 0 : -0.3 },
     { label: "Name recognition", value: -Math.max(0, FAME_NEEDED[Math.min(4, tier)] - p.fame) / 250 },
@@ -487,45 +476,23 @@ export function inOffice(p: PlayerState): boolean {
   return p.currentJob?.lineId === "politics";
 }
 
-/** Chance a policy push passes this year. */
-export function policyChance(p: PlayerState, issueId: string): number {
-  const sc = p.statecraft;
-  const tier = Math.max(0, currentTier(p));
-  const stance = sc.stances[issueId] ?? 0;
-  const idx = ISSUE_IDS.indexOf(issueId as (typeof ISSUE_IDS)[number]);
-  const plat = platformOf(p)?.[idx];
-  const effort = p.effort === "grind" ? 8 : p.effort === "coast" ? -10 : 0;
-  const votes = sc.machine * 0.35 + sc.coalition * 0.35 + p.politics.popularity * 0.3 + effort;
-  const need = 38 + tier * 6;
-  return clamp((votes - need) / 60 + 0.5 + (plat !== undefined && stance === plat ? 0.05 : plat !== undefined && plat !== 0 && stance !== 0 ? -0.1 : 0), 0.1, 0.9);
+/** The bill a politician would table on an issue (the least contentious one they can), or undefined. */
+export function defaultBill(p: PlayerState, issueId: string) {
+  return availableBills(p, issueId as never).sort((x, y) => x.opposition - y.opposition)[0];
 }
 
+/** Chance a policy push on an issue passes this year (the least contentious bill available). */
+export function policyChance(p: PlayerState, issueId: string): number {
+  const bill = defaultBill(p, issueId);
+  return bill ? billChance(p, bill) : 0;
+}
+
+/** Push the easiest bill on an issue. The Politics tab lets you pick the bill and the approach; this is the shortcut. */
 export function pushPolicy(p0: PlayerState, rng: Rng, issueId: string): ActionResult {
-  const p = clone(p0);
-  if (!inOffice(p)) return { player: p0, notices: [info("Not in Office", "You need a seat to propose legislation.", "bad")] };
-  const issue = ISSUES.find((i) => i.id === issueId);
-  const sc = p.statecraft;
-  const stance = sc.stances[issueId] ?? 0;
-  if (!issue || stance === 0) return { player: p0, notices: [info("No Position", "Take a stance on that issue first.", "bad")] };
-  if ((p.annual["pol:policy"] ?? 0) >= 1) return { player: p0, notices: [info("Floor Time Used", "The legislature has no more time for your agenda this year.")] };
-  p.annual["pol:policy"] = 1;
-  const title = issue.options[stance + 1];
-  if (rng.chance(policyChance(p, issueId))) {
-    sc.policyWins += 1;
-    p.annual["pol:win"] = (p.annual["pol:win"] ?? 0) + 1;
-    const popular = stance * (sc.mood[issueId] ?? 0) > 0;
-    p.politics.popularity = clamp(p.politics.popularity + (popular ? 5 : 1));
-    sc.machine = clamp(sc.machine + 2);
-    changeStat(p, "fame", 1);
-    const body = `Your "${title}" bill passed. ${popular ? "Voters like it." : "Voters shrugged: it isn't what they're asking for right now."}`;
-    addLog(p, body);
-    return { player: p, notices: [info("Bill Passed", body, "good")] };
-  }
-  p.politics.popularity = clamp(p.politics.popularity - 3);
-  sc.machine = clamp(sc.machine - 2);
-  const body = `Your "${title}" bill died in committee. The opposition made sure of it.`;
-  addLog(p, body);
-  return { player: p, notices: [info("Bill Defeated", body, "bad")] };
+  if (!inOffice(p0)) return { player: p0, notices: [info("Not in Office", "You need a seat to propose legislation.", "bad")] };
+  const bill = defaultBill(p0, issueId);
+  if (!bill) return { player: p0, notices: [info("No Position", "Take a stance on that issue first, from an office that can act on it.", "bad")] };
+  return pushBill(p0, rng, bill.id);
 }
 
 export function buildCoalition(p0: PlayerState): ActionResult {
@@ -548,18 +515,28 @@ export function kickbackAmount(p: PlayerState): number {
   return Math.round((p.currentJob?.salary ?? 60_000) * 1.2);
 }
 
-/** A developer slips you an envelope. The money is real; so is the paper trail. */
-export function takeKickback(p0: PlayerState, rng: Rng): ActionResult {
+/** What prosecutors could prove today, as a plain word. */
+export const evidenceWord = (e: number) => (e >= 65 ? "damning" : e >= 35 ? "serious" : e >= 12 ? "thin" : "none");
+
+/**
+ * A developer slips you an envelope. The money is real; so is the paper trail, and it does not go away.
+ * Running it through a "charity" costs a fifth of it and leaves a far thinner trail.
+ */
+export function takeKickback(p0: PlayerState, rng: Rng, launder = false): ActionResult {
   const p = clone(p0);
   if (!inOffice(p)) return { player: p0 };
   if ((p.annual["pol:kickback"] ?? 0) >= 1) return { player: p0, notices: [info("Too Greedy", "One envelope a year is plenty.")] };
   p.annual["pol:kickback"] = 1;
-  const amount = Math.round(kickbackAmount(p) * rng.float(0.7, 1.4));
+  const gross = Math.round(kickbackAmount(p) * rng.float(0.7, 1.4));
+  const amount = launder ? Math.round(gross * 0.8) : gross;
   p.bankBalance += amount;
   p.statecraft.bribes += amount;
+  p.statecraft.evidence = clamp(p.statecraft.evidence + (launder ? rng.int(4, 9) : rng.int(12, 22)));
   p.justice.proceeds += amount;
-  changeStat(p, "karma", -8);
-  const body = `A developer's "consulting fee" of ${money(amount)} landed in your account in return for a zoning vote. Nobody will ever find out. Probably.`;
+  changeStat(p, "karma", launder ? -9 : -8);
+  const body = launder
+    ? `A developer's "consulting fee" went through a friendly charity and reached you as ${money(amount)}, a fifth lighter and much harder to trace. A zoning vote went his way.`
+    : `A developer's "consulting fee" of ${money(amount)} landed in your account in return for a zoning vote. Somebody, somewhere, kept a copy of the paperwork.`;
   addLog(p, body);
   return { player: p, notices: [info("Envelope", body, "bad")] };
 }
@@ -749,6 +726,7 @@ function newScandal(p: PlayerState, rng: Rng): StatecraftState["scandal"] {
 /** Yearly: approval drifts, the machine hums, scandals break, incumbents face the voters. */
 export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
   const sc = p.statecraft;
+  if (sc.laws.length > 0 || sc.highestTier >= 0) processNation(p, rng, notices);
   driftMood(p, rng);
   sc.endorsed = false;
   sc.coalition = clamp(sc.coalition - 12);
@@ -805,7 +783,14 @@ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
       p.bankBalance += Math.round(PUNDIT_PAY * 0.75);
       changeStat(p, "fame", 1);
     }
-    // A past corruption investigation can still catch up.
+    // A past corruption investigation can still catch up, and so can an incoming government's auditors.
+    sc.evidence = clamp(Math.round(sc.evidence * 0.96 - 1));
+    if (!sc.investigation && sc.bribes > 0 && sc.evidence >= 15 && rng.chance(sc.evidence / 500)) {
+      sc.investigation = { kind: "corruption", yearsLeft: rng.int(1, 2), evidence: clamp(Math.round(sc.evidence * 0.8) + rng.int(0, 15), 10, 90) };
+      const body = "The new government's auditors reopened the books on your time in office. Investigators have a subpoena for your accounts.";
+      addLog(p, body);
+      notices.push(info("Under Investigation", body, "bad"));
+    }
     if (sc.investigation) resolveInvestigationYear(p, rng, notices, false);
     if (sc.scandal && p.year - sc.scandal.year >= 2) sc.scandal = null;
     return;
@@ -821,7 +806,7 @@ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
   const effort = p.effort === "grind" ? 3 : p.effort === "coast" ? -4 : 0;
   const wins = (p.annual["pol:win"] ?? 0) * 3;
   const drag = sc.scandal ? -sc.scandal.severity * 5 : 0;
-  const delta = Math.round((45 - p.politics.popularity) * 0.2 + climate + effort + wins + (p.karma - 50) / 25 + drag - 2);
+  const delta = Math.round((45 - p.politics.popularity) * 0.2 + climate + effort + wins + (p.karma - 50) / 25 + drag - 2 + nationApproval(p));
   p.politics.popularity = clamp(p.politics.popularity + delta);
   if (effort < 0 && rng.chance(0.4)) {
     const body = "The press noticed you are barely showing up to work. Absentee politicians don't last.";
@@ -845,11 +830,12 @@ export function processPolitics(p: PlayerState, rng: Rng, notices: Notices) {
     }
   }
 
-  // Corruption investigations.
+  // Corruption investigations: the paper trail is what opens them. Witnesses forget slowly, documents never do.
+  sc.evidence = clamp(Math.round(sc.evidence * 0.96 - 1));
   if (!sc.investigation && sc.bribes > 0) {
-    const open = clamp(0.03 + sc.bribes / (job.salary * 25), 0.03, 0.3);
+    const open = clamp(0.02 + sc.evidence / 220 + sc.bribes / (job.salary * 40), 0.02, 0.5);
     if (rng.chance(open)) {
-      sc.investigation = { kind: "corruption", yearsLeft: rng.int(1, 3), evidence: clamp(20 + rng.int(0, 25) + Math.round((sc.bribes / (job.salary * 10)) * 15), 10, 90) };
+      sc.investigation = { kind: "corruption", yearsLeft: rng.int(1, 3), evidence: clamp(Math.round(sc.evidence * 0.8) + rng.int(0, 20), 10, 90) };
       const body = "Prosecutors opened a corruption investigation into your finances. Your lawyer says to say nothing.";
       addLog(p, body);
       notices.push(info("Under Investigation", body, "bad"));
@@ -930,6 +916,7 @@ function resolveInvestigationYear(p: PlayerState, rng: Rng, notices: Notices, in
   const tier = Math.max(0, sc.highestTier);
   if (inv.evidence >= 65) {
     sc.bribes = 0; // the proceeds booked when the money was taken are forfeited on conviction
+    sc.evidence = 0;
     if (inOfficeNow) removeFromOffice(p, 0, 6);
     startTrial(p, {
       name: "Corruption in Office",
@@ -942,12 +929,14 @@ function resolveInvestigationYear(p: PlayerState, rng: Rng, notices: Notices, in
   } else if (inv.evidence >= 35) {
     p.politics.popularity = clamp(p.politics.popularity - 15);
     sc.machine = clamp(sc.machine - 20);
+    sc.evidence = Math.round(sc.evidence * 0.7);
     const body = "The investigation ended without charges, but a formal censure was published. The stain stays.";
     addLog(p, body);
     notices.push(info("Censured", body, "bad"));
   } else {
     p.politics.popularity = clamp(p.politics.popularity + 6);
     sc.bribes = Math.round(sc.bribes * 0.5);
+    sc.evidence = Math.round(sc.evidence * 0.5);
     const body = "Investigators found nothing they could prove. You called it a witch hunt and the voters agreed.";
     addLog(p, body);
     notices.push(info("Cleared", body, "good"));
