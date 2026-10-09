@@ -1,5 +1,6 @@
 "use client";
 
+import { SchoolCard } from "./WorldPanels";
 import { careerStatus, sabbaticalBlocker, takeSabbatical, takeVacation, vacationCost } from "@/engine/careerLife";
 import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
@@ -131,6 +132,7 @@ function Academics() {
 
   return (
     <div className="flex flex-col gap-3">
+      <SchoolCard />
       <SectionTitle>Education</SectionTitle>
       <Card>
         <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 "use client";
 
-import { SchoolCard, TreatmentPlans } from "./WorldPanels";
+import { TreatmentPlans } from "./WorldPanels";
 import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import {
@@ -74,7 +74,6 @@ function MedicalCenter() {
   const { player: p, act } = useGame();
   return (
     <div className="flex flex-col gap-3">
-      <SchoolCard />
       <SectionTitle>Medical Center</SectionTitle>
       <Card>
         <div className="mb-2 text-sm font-semibold">Active conditions</div>
