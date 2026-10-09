@@ -93,3 +93,52 @@ describe("legislating", () => {
     }
   });
 });
+
+describe("skipping the ladder on star power", () => {
+  const celeb = (seed: number, fame: number) => {
+    const rng = makeRng(seed);
+    const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
+    p.age = 50;
+    p.birthYear = p.year - 50;
+    p.smarts = 70;
+    p.fame = fame;
+    p.bankBalance = 5_000_000;
+    return { rng, p };
+  };
+
+  it("a famous outsider can stand for governor with no record; an unknown cannot", async () => {
+    const { canRun, electionOdds, skipBlocker, starPower } = await import("../politics");
+    const star = celeb(1, 70).p;
+    expect(starPower(star)).toBeGreaterThan(60);
+    expect(canRun(star, 2).ok).toBe(true);
+    const odds = electionOdds(star, 2, "run");
+    expect(odds.factors.some((f) => f.label === "Inexperience" && f.value < 0)).toBe(true);
+    expect(odds.factors.some((f) => f.label === "Celebrity candidate" && f.value > 0)).toBe(true);
+    const nobody = celeb(2, 5).p;
+    expect(canRun(nobody, 2).ok).toBe(false);
+    expect(skipBlocker(nobody, 2)).toMatch(/star power/);
+    // Head of state needs more star power than governor.
+    const mid = celeb(3, 55).p;
+    expect(canRun(mid, 2).ok).toBe(true);
+    expect(canRun(mid, 4).ok).toBe(false);
+  });
+
+  it("skipping makes the race harder than climbing, and an outsider arrives with few allies", async () => {
+    const { electionOdds, runForOffice } = await import("../politics");
+    const { p } = celeb(4, 75);
+    expect(electionOdds(p, 2, "run").chance).toBeLessThan(electionOdds(p, 0, "run").chance + 0.5);
+    let wins = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const { rng, p: q } = celeb(seed + 50, 80);
+      q.politics.popularity = 70;
+      q.statecraft.funds = 1_000_000;
+      const out = runForOffice(q, rng, 2).player;
+      if (out.currentJob?.lineId === "politics" && out.currentJob.tier === 2) {
+        wins++;
+        expect(out.statecraft.coalition).toBeLessThan(30);
+      }
+    }
+    expect(wins).toBeGreaterThan(0);
+    expect(wins).toBeLessThan(40);
+  });
+});

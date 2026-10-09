@@ -8,7 +8,7 @@ import type { ActionResult, Donor, PlayerState, StatecraftState } from "@/types/
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { CAREER_BY_ID } from "@/data/careersRegistry";
-import { addLog, changeStat, clone, hasFlag, isRoyal, setFlag } from "./state";
+import { addLog, changeStat, clone, hasFlag, isRoyal, netWorth, setFlag } from "./state";
 import { makeJob } from "./career";
 import { blockerFor } from "./occupation";
 import { ISSUE_IDS } from "./justiceState";
@@ -30,6 +30,35 @@ export const TERM_LIMITS: (number | null)[] = [null, 3, 2, null, 2];
 export const MIN_TENURE = [0, 4, 4, 4, 8];
 /** Fame voters expect of a candidate for each office; below it, name recognition costs you. */
 export const FAME_NEEDED = [0, 8, 18, 32, 50];
+
+/**
+ * How much "star power" it takes to skip rungs of the ladder and stand for an office with no political record
+ * (the Schwarzenegger route). Fame is the main currency; a political dynasty and a great fortune count for part of it.
+ */
+export const OUTSIDER_POWER = [0, 25, 45, 60, 80];
+
+/** Fame, family political name and money, as one number comparable with OUTSIDER_POWER. */
+export function starPower(p: PlayerState): number {
+  const clout = p.dynasty?.clout?.political ?? 0;
+  const nw = Math.max(0, netWorth(p));
+  const wealth = nw >= 100_000_000 ? 20 : nw >= 10_000_000 ? 10 : nw >= 1_000_000 ? 3 : 0;
+  // Serving officials carry some of their record up the ladder with them.
+  const record = currentTier(p) >= 0 ? (currentTier(p) + 1) * 8 + Math.min(officeYears(p), 10) * 1.5 : 0;
+  return p.fame + clout * 0.4 + wealth + record;
+}
+
+/** Rungs skipped when standing for `tier` from where you are now. */
+export const skippedLevels = (p: PlayerState, tier: number) => Math.max(0, tier - nextTier(p));
+
+/** What stands in the way of skipping straight to `tier` (null = fine). Fame can do what a record normally does. */
+export function skipBlocker(p: PlayerState, tier: number): string | null {
+  const skipped = skippedLevels(p, tier);
+  if (skipped === 0) return null;
+  const need = OUTSIDER_POWER[Math.min(4, tier)];
+  const have = Math.round(starPower(p));
+  if (have < need) return `To skip ahead to ${CAREER_BY_ID.politics.ladder[tier].title} with no record you'd need about ${need} star power (fame, a political family name, a fortune); you have ${have}.`;
+  return null;
+}
 
 import { ISSUES, PARTIES } from "@/data/politicsData";
 export { ISSUES, PARTIES };
@@ -104,6 +133,7 @@ const costFor = (tier: number) => CAMPAIGN_COST[clamp(tier, 0, CAMPAIGN_COST.len
  */
 export function electionOdds(p: PlayerState, tier: number, mode: "run" | "reelect" = "run"): Odds {
   const sc = p.statecraft;
+  const skipped = mode === "run" ? skippedLevels(p, tier) : 0;
   const recession = p.economy.climate === "recession";
   const boom = p.economy.climate === "boom";
   const annual = p.annual;
@@ -127,6 +157,8 @@ export function electionOdds(p: PlayerState, tier: number, mode: "run" | "reelec
     { label: "State of the nation", value: sc.laws.length > 0 || mode === "reelect" ? nationFactor(p) : 0 },
     { label: "Scandal", value: sc.scandal ? -sc.scandal.severity * 0.08 : 0 },
     { label: "Criminal record", value: rec === "misdemeanor" ? -0.06 : rec === "clean" ? 0 : -0.3 },
+    { label: "Inexperience", value: -0.045 * skipped },
+    { label: "Celebrity candidate", value: skipped > 0 ? Math.min(0.12, starPower(p) / 700) : 0 },
     { label: "Name recognition", value: -Math.max(0, FAME_NEEDED[Math.min(4, tier)] - p.fame) / 250 },
     { label: "Office difficulty", value: -(0.07 * tier + 0.03 * tier * tier) * (mode === "reelect" ? 0.3 : 1) },
   ].filter((f) => Math.abs(f.value) >= 0.0005 || f.label === "Base appeal");
@@ -138,8 +170,8 @@ export function electionChance(p: PlayerState, tier: number): number {
   return electionOdds(p, tier, "run").chance;
 }
 
-export function canRun(p: PlayerState): { ok: boolean; reason?: string } {
-  const tier = nextTier(p);
+export function canRun(p: PlayerState, target?: number): { ok: boolean; reason?: string } {
+  const tier = Math.max(nextTier(p), target ?? nextTier(p));
   if (tier >= line().ladder.length) return { ok: false, reason: "You've reached the highest office." };
   if (isRoyal(p)) return { ok: false, reason: "Royals don't stand for election." };
   if (p.isInPrison || p.isFugitive || p.pendingTrial) return { ok: false, reason: "Not while you're on the wrong side of the law." };
@@ -149,7 +181,9 @@ export function canRun(p: PlayerState): { ok: boolean; reason?: string } {
   const blocked = blockerFor(p, "office");
   if (blocked) return { ok: false, reason: blocked };
   if (p.smarts < 45) return { ok: false, reason: "You need 45+ Smarts to run a credible campaign." };
-  if (tier > 0 && officeYears(p) < MIN_TENURE[tier]) {
+  const skip = skipBlocker(p, tier);
+  if (skip) return { ok: false, reason: skip };
+  if (tier > 0 && skippedLevels(p, tier) === 0 && officeYears(p) < MIN_TENURE[tier]) {
     return { ok: false, reason: `Voters want ${MIN_TENURE[tier]} years' experience as ${CAREER_BY_ID.politics.ladder[tier - 1].title} first (${officeYears(p)} so far).` };
   }
   if (p.statecraft.investigation) return { ok: false, reason: "You can't campaign under investigation." };
@@ -421,12 +455,13 @@ function debate(p: PlayerState, rng: Rng): { delta: number; text: string } {
   return { delta: 0, text: "The debate was a draw." };
 }
 
-export function runForOffice(p0: PlayerState, rng: Rng): ActionResult {
+export function runForOffice(p0: PlayerState, rng: Rng, target?: number): ActionResult {
   const p = clone(p0);
-  const check = canRun(p);
+  const check = canRun(p, target);
   if (!check.ok) return { player: p0, notices: [info("Can't Run", check.reason ?? "Not eligible.", "bad")] };
   if ((p.annual.campaign ?? 0) >= 1) return { player: p0, notices: [info("Campaign Fatigue", "You've already stood for election this year.")] };
-  const tier = nextTier(p);
+  const tier = Math.max(nextTier(p), target ?? nextTier(p));
+  const skipped = skippedLevels(p, tier);
   const sc = p.statecraft;
   p.annual.campaign = 1;
   const cost = CAMPAIGN_COST[tier];
@@ -447,7 +482,9 @@ export function runForOffice(p0: PlayerState, rng: Rng): ActionResult {
     p.politics.yearsInOffice = 0;
     p.politics.popularity = clamp(p.politics.popularity + 10);
     sc.termsInOffice = 0;
-    sc.coalition = 30;
+    // An outsider arrives without allies: a thin coalition and no machine behind them, however famous.
+    sc.coalition = skipped > 0 ? Math.max(10, 30 - skipped * 8) : 30;
+    if (skipped > 0) sc.machine = Math.min(sc.machine, 20);
     sc.lowYears = 0;
     sc.highestTier = Math.max(sc.highestTier, tier);
     sc.electionsWon += 1;
@@ -455,7 +492,9 @@ export function runForOffice(p0: PlayerState, rng: Rng): ActionResult {
     sc.retiredYear = null;
     changeStat(p, "fame", 4 + tier * 3);
     changeStat(p, "happiness", 14);
-    const body = `You WON the election and became ${title}!${debateNote} Salary: ${money(p.currentJob.salary)}.`;
+    const body = skipped > 0
+      ? `You WON the election and became ${title}, skipping ${skipped} rung${skipped === 1 ? "" : "s"} of the ladder on name alone!${debateNote} The party insiders are not thrilled: you have few allies to govern with. Salary: ${money(p.currentJob.salary)}.`
+      : `You WON the election and became ${title}!${debateNote} Salary: ${money(p.currentJob.salary)}.`;
     addLog(p, body);
     return { player: p, notices: [info("Elected!", body, "jackpot")] };
   }

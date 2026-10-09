@@ -61,3 +61,26 @@ describe("quitting an acting job under a TV contract", () => {
     expect(quitJob(broke).player).toBe(broke); // cannot afford to leave
   });
 });
+
+describe("the celebrity candidate", () => {
+  it("a famous newcomer is recruited, and saying yes can make them governor with no political record", () => {
+    const e = LIFE_EVENTS.find((x) => x.id === "px_celebrity_recruit")!;
+    let governors = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const rng = makeRng(seed);
+      const p = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, rng);
+      p.age = 48;
+      p.smarts = 70;
+      p.fame = 80;
+      p.politics.popularity = 70;
+      expect(e.requires!.custom!(p)).toBe(true);
+      const out = resolveEvent(p, e, 0, rng).player;
+      if (out.currentJob?.lineId === "politics" && out.currentJob.tier === 2) governors++;
+    }
+    expect(governors).toBeGreaterThan(0);
+    const unknown = createNewPlayer({ scenario: "average", startYear: 2026, talents: NEUTRAL }, makeRng(9));
+    unknown.age = 48;
+    unknown.fame = 5;
+    expect(e.requires!.custom!(unknown)).toBe(false);
+  });
+});

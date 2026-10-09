@@ -33,6 +33,7 @@ import {
   lobbyBlocker,
   memoirBlocker,
   nextTier,
+  starPower,
   officeYears,
   partyWork,
   platformFit,
@@ -65,9 +66,11 @@ export function PoliticsSection() {
   const line = CAREER_BY_ID.politics;
   const sc = p.statecraft;
   const job = inOffice(p) ? p.currentJob : null;
-  const tier = nextTier(p);
-  const next = line.ladder[tier];
-  const check = canRun(p);
+  const [pick, setPick] = useState<number | null>(null);
+  const first = nextTier(p);
+  const tier = Math.min(line.ladder.length - 1, Math.max(first, pick ?? first));
+  const next = first < line.ladder.length ? line.ladder[tier] : undefined;
+  const check = canRun(p, tier);
   const odds = next ? electionOdds(p, tier, "run") : null;
   const limit = job ? TERM_LIMITS[job.tier] : null;
   const party = PARTIES.find((x) => x.id === p.politics.party);
@@ -233,6 +236,22 @@ export function PoliticsSection() {
       {next && (
         <Card>
           <div className="font-semibold">Run for {next.title}</div>
+          {first < line.ladder.length - 1 && (
+            <div className="mt-1.5 mb-1">
+              <div className="mb-1 text-xs text-slate-400">Which office? You can skip rungs if you have the star power for it (fame, a political family, a fortune, a record). You have about {Math.round(starPower(p))}.</div>
+              <div className="flex flex-wrap gap-1.5">
+                {line.ladder.slice(first).map((l, i) => {
+                  const t = first + i;
+                  const ok = canRun(p, t).ok;
+                  return (
+                    <Button key={l.title} variant={t === tier ? "primary" : "secondary"} className={`px-2 py-1 text-xs ${ok ? "" : "opacity-60"}`} onClick={() => setPick(t)}>
+                      {l.title}{t > first ? " ⏩" : ""}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="text-xs text-slate-400">Campaign cost {money(CAMPAIGN_COST[tier])} · age {MIN_AGE[tier]}+ · salary {money(next.salary)}{TERM_LIMITS[tier] ? ` · ${TERM_LIMITS[tier]}-term limit` : ""}</div>
           {check.ok && odds ? (
             <button type="button" onClick={() => setShowOdds((v) => !v)} className="mt-1 text-left text-xs text-emerald-300 underline-offset-2 hover:underline">
@@ -257,7 +276,7 @@ export function PoliticsSection() {
             <ActionButton label="🔍 Research Rival" hint="+3% odds, clean" reason={annualUsed("pol:oppo") || annualUsed("pol:oppo_done") ? "File already assembled" : null} onClick={() => act((pl, rng) => researchOpponent(pl, rng, false))} />
             <ActionButton label="🕵️ Dig Dirt" hint="+7% odds, 25% blowback" variant="ghost" reason={annualUsed("pol:oppo") || annualUsed("pol:oppo_done") ? "File already assembled" : null} onClick={() => act((pl, rng) => researchOpponent(pl, rng, true))} />
           </div>
-          <Button variant="gold" className="mt-2 w-full" disabled={!check.ok || annualUsed("campaign")} onClick={() => act((pl, rng) => runForOffice(pl, rng))}>🏛️ Launch Campaign</Button>
+          <Button variant="gold" className="mt-2 w-full" disabled={!check.ok || annualUsed("campaign")} onClick={() => act((pl, rng) => runForOffice(pl, rng, tier))}>🏛️ Launch Campaign</Button>
           {check.ok && annualUsed("campaign") && <div className="mt-1 text-xs text-rose-300">🔒 You've already stood for election this year.</div>}
           {tier > 0 && sc.highestTier >= 0 && <div className="mt-1 text-xs text-slate-500">Tenure in your current office: {officeYears(p)} years.</div>}
         </Card>

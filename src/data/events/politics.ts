@@ -1,7 +1,8 @@
 import { ev, opt, risk } from "../eventBuilders";
 import type { LifeEvent } from "../lifeEventsEngine";
 import type { PlayerState } from "@/types/game.types";
-import { CAMPAIGN_COST, currentTier, inOffice } from "@/engine/politics";
+import { CAMPAIGN_COST, currentTier, inOffice, joinParty, runForOffice, starPower } from "@/engine/politics";
+import { PARTIES } from "@/data/politicsData";
 import { clamp } from "@/lib/format";
 
 const pop = (p: PlayerState, d: number) => {
@@ -14,7 +15,25 @@ const tierCost = (p: PlayerState) => CAMPAIGN_COST[clamp(currentTier(p) + 1, 0, 
 const active = (p: PlayerState) => p.politics.party !== null && p.age >= 25 && !p.isInPrison;
 
 // Politics: the machinery, the money and the temptations. Gated on a party card or an office.
+const OUTSIDER_MIN = 45;
 export const POLITICS_EVENTS: LifeEvent[] = [
+  // ---------- the celebrity candidate ----------
+  ev("px_celebrity_recruit", "fame", 35, 75, "The Party Wants You", "A party strategist asks for lunch and doesn't touch the food. 'Your name polls better than our entire front bench. Run for governor. We'll find the money, the staff and the policy people.'", [
+    opt("Say yes and run for governor", "You shook hands on it before you could think. The campaign was built around you, with a very thin team behind the name.", { apply: (p, rng) => {
+      const party = PARTIES[Math.floor(rng.next() * PARTIES.length)];
+      if (p.politics.party === null) Object.assign(p, joinParty(p, party.id).player);
+      p.statecraft.funds += 400_000;
+      const r = runForOffice(p, rng, 2);
+      Object.assign(p, r.player);
+    } }),
+    opt("Start smaller: run for mayor", "'Mayor first' was your own idea. The strategist looked disappointed, then did the arithmetic and looked pleased.", { apply: (p, rng) => {
+      if (p.politics.party === null) Object.assign(p, joinParty(p, PARTIES[Math.floor(rng.next() * PARTIES.length)].id).player);
+      p.statecraft.funds += 100_000;
+      Object.assign(p, runForOffice(p, rng, 1).player);
+    } }),
+    opt("Decline politely", "'I like my life,' you said. The strategist said they would ask again, and they might.", { karmaDelta: 1 }),
+  ], { once: true, weight: 1.2, requires: { custom: (p) => p.fame >= 50 && starPower(p) >= OUTSIDER_MIN && !inOffice(p) && p.statecraft.highestTier < 0 && p.age >= 35 && p.smarts >= 45 && !p.isInPrison && !p.isFugitive && p.criminalRecord.length === 0 } }),
+
   ev("px_donor_strings", "money", 25, 80, "A Very Generous Donor", "A well-dressed stranger offers to bundle a six-figure sum for your next campaign. 'No strings,' he says, in the tone of a man with several.", [
     opt("Take the money, strings and all", "The money was real and so were the expectations. He now expects a call about 'tax policy'.", { karmaDelta: -2, apply: (p, rng) => { const amt = Math.round(tierCost(p) * 0.35); p.statecraft.funds += amt; p.statecraft.donors.push({ id: rng.id(), name: "Anonymous Bundler", kind: "business", given: amt, issue: "economy", stance: 1, year: p.year }); } }),
     opt("Accept only small grassroots donations", "It took longer, and the campaign felt cleaner. You raised a modest sum from people who cared.", { karmaDelta: 2, apply: (p) => { p.statecraft.funds += Math.round(tierCost(p) * 0.08); pop(p, 2); } }),
