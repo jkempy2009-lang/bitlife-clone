@@ -11,6 +11,7 @@ import {
 } from "@/data/careersRegistry";
 import { addLog, changeStat, clone, hasAnyDegree, hasFlag, isRoyal, setFlag } from "./state";
 import { hiringModifier } from "./world";
+import { jobMarketShift } from "./visa";
 import { careerBlocker, hiringPenalty } from "./justice";
 import { PART_TIME_FACTOR, blockerFor, isStudyingFullTime, partTimeFriendly } from "./occupation";
 import { CERT_BY_ID } from "@/data/certificates";
@@ -134,7 +135,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   const referred = p.flags.includes("referral");
   if (referred) p.flags = p.flags.filter((f) => f !== "referral");
   const chance = clamp(
-    0.55 + (referred ? 0.2 : 0) + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - hiringPenalty(p) + hiringModifier(p.economy.climate),
+    0.55 + (referred ? 0.2 : 0) + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - hiringPenalty(p) + hiringModifier(p.economy.climate) + jobMarketShift(p),
     0.15,
     0.95,
   );

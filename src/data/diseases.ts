@@ -1,4 +1,5 @@
 import type { Disease, Severity } from "@/types/game.types";
+import type { Region } from "./countryProfiles";
 
 export interface DiseaseTemplate {
   id: string;
@@ -12,6 +13,14 @@ export interface DiseaseTemplate {
   baseChance: number;
   /** Fatal diseases: [min, max] years left. */
   fatalYears?: [number, number];
+  /** Spreads person to person: scaled by the country's sanitation and by outbreaks. */
+  infectious?: boolean;
+  /** Odds multiplier by region (malaria is an African disease, not a Swedish one). */
+  regional?: Partial<Record<Region, number>>;
+  /** Multiplier in regions not listed above (default 1). */
+  elsewhere?: number;
+  /** Only caught while this kind of world event is under way. */
+  gate?: "pandemic";
 }
 
 export const DISEASE_CATALOG: DiseaseTemplate[] = [
@@ -35,6 +44,10 @@ export const DISEASE_CATALOG: DiseaseTemplate[] = [
   { id: "chlamydia", name: "Chlamydia", severity: "mild", happinessImpact: 3, healthImpact: 3, minAge: 14, baseChance: 0 },
   { id: "herpes", name: "Herpes", severity: "chronic", incurable: true, happinessImpact: 3, healthImpact: 0, minAge: 14, baseChance: 0 },
   { id: "hiv", name: "HIV", severity: "chronic", incurable: true, happinessImpact: 4, healthImpact: 3, minAge: 14, baseChance: 0 },
+  { id: "malaria", name: "Malaria", severity: "mild", happinessImpact: 5, healthImpact: 11, minAge: 0, baseChance: 0.03, infectious: true, regional: { africa: 8, south_asia: 1.6, latin_america: 0.8 }, elsewhere: 0 },
+  { id: "waterborne", name: "Typhoid & Waterborne Illness", severity: "mild", happinessImpact: 4, healthImpact: 8, minAge: 0, baseChance: 0.02, infectious: true, regional: { africa: 4, south_asia: 4, latin_america: 1.5 }, elsewhere: 0.15 },
+  { id: "tuberculosis", name: "Tuberculosis", severity: "chronic", happinessImpact: 4, healthImpact: 5, minAge: 5, baseChance: 0.003, infectious: true, regional: { africa: 8, south_asia: 8, latin_america: 2, east_asia: 1.5 }, elsewhere: 0.1 },
+  { id: "pandemic_virus", name: "Pandemic Virus", severity: "mild", happinessImpact: 6, healthImpact: 13, minAge: 0, baseChance: 0.14, infectious: true, gate: "pandemic" },
   { id: "cancer", name: "Cancer", severity: "fatal", happinessImpact: 8, healthImpact: 10, minAge: 25, baseChance: 0.0016, fatalYears: [2, 6] },
   { id: "kidney_failure", name: "Kidney Failure", severity: "fatal", happinessImpact: 5, healthImpact: 8, minAge: 35, baseChance: 0.0015, fatalYears: [2, 5] },
   { id: "stroke", name: "Stroke Complications", severity: "fatal", happinessImpact: 6, healthImpact: 9, minAge: 55, baseChance: 0.004, fatalYears: [1, 4] },
@@ -60,9 +73,13 @@ export function instantiateDisease(
   };
 }
 
-/** Chance (0-1) that a single doctor visit cures a disease of this severity. */
+/**
+ * Chance (0-1) that a single doctor visit cures a disease of this severity. Chronic and terminal
+ * conditions are managed with a treatment plan (engine/treatment.ts), not cured by one appointment:
+ * a visit only occasionally turns up an easy fix.
+ */
 export const CURE_CHANCE: Record<Severity, number> = {
   mild: 0.75,
-  chronic: 0.35,
-  fatal: 0.1,
+  chronic: 0.05,
+  fatal: 0.02,
 };

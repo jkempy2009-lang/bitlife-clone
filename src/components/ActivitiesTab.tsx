@@ -1,5 +1,6 @@
 "use client";
 
+import { SchoolCard, TreatmentPlans } from "./WorldPanels";
 import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import {
@@ -70,6 +71,7 @@ function MedicalCenter() {
   const { player: p, act } = useGame();
   return (
     <div className="flex flex-col gap-3">
+      <SchoolCard />
       <SectionTitle>Medical Center</SectionTitle>
       <Card>
         <div className="mb-2 text-sm font-semibold">Active conditions</div>
@@ -78,7 +80,8 @@ function MedicalCenter() {
         ) : (
           <ul className="space-y-2">
             {p.diseases.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-900/50 p-2.5">
+              <li key={d.id} className="rounded-xl bg-slate-900/50 p-2.5">
+                <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-medium">{d.name}</div>
                   <div className="mt-0.5 flex gap-1.5">
@@ -89,6 +92,8 @@ function MedicalCenter() {
                 <Button variant="primary" className="shrink-0 px-3 py-1.5" onClick={() => act((pl, rng) => visitDoctor(pl, d.id, rng))}>
                   Treat ({money(medicalPrice(p, DOCTOR_COST))})
                 </Button>
+                </div>
+                <TreatmentPlans d={d} />
               </li>
             ))}
           </ul>

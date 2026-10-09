@@ -17,6 +17,14 @@ export interface Disease {
   healthImpact: number;
   /** Fatal diseases carry a countdown to death. */
   yearsLeft?: number;
+  /** Chosen long-term treatment plan (see engine/treatment.ts). Unset means monitoring only. */
+  plan?: string;
+  /** Calendar year the current plan began. */
+  planSince?: number;
+  /** The plan lapsed (unaffordable or abandoned): the condition runs unchecked. */
+  lapsed?: boolean;
+  /** Years this condition has been under treatment without a break (drives adherence and remission). */
+  treatedYears?: number;
 }
 
 export type Relation = "Parent" | "Sibling" | "Child" | "Partner" | "Friend" | "Grandparent" | "Grandchild" | "Nephew" | "Pet" | "Lover";
@@ -586,6 +594,73 @@ export interface Residence {
   city: string;
   /** 0 basic room, 1 standard apartment, 2 nice apartment, 3 luxury rental. */
   rentTier: number;
+}
+
+// ---------------------------------------------------------------------------
+// The wider world, school life and immigration (see engine/worldEvents.ts, school.ts, visa.ts)
+// ---------------------------------------------------------------------------
+
+/** A running world event: a pandemic, war, recession, policy change... `country` is where it started ("*" = everywhere). */
+export interface WorldEventState {
+  id: string;
+  country: string;
+  startYear: number;
+  endYear: number;
+  /** 1 mild, 2 serious, 3 severe. */
+  severity: number;
+}
+
+export interface WorldState {
+  /** Everything currently under way, in every country. */
+  events: WorldEventState[];
+  /** Excess cost-of-living pressure (1 = normal): rises with inflation shocks, then fades as wages catch up. */
+  prices: number;
+  /** Calendar year each kind of event last began, to space them out. */
+  lastStart: Record<string, number>;
+  /** Headlines that touched your countries, newest last. */
+  chronicle: Array<{ year: number; text: string }>;
+}
+
+export interface SchoolState {
+  /** 0-100: how well you fit in with classmates. */
+  social: number;
+  /** 0-100: how much you are being picked on right now. */
+  bullied: number;
+  /** 0-100: how you get on with teachers. */
+  teacher: number;
+  /** 0-100: exam and performance pressure. */
+  stress: number;
+  /** Extracurricular you stick with, if any. */
+  club: string | null;
+  clubYears: number;
+  /** Where you go to school. */
+  tier: "state" | "private";
+  /** A tutor is helping this year. */
+  tutor: boolean;
+  /** School years you skipped a lot of lessons. */
+  truancy: number;
+  /** Report cards: newest last (max 6). */
+  reports: Array<{ age: number; grade: string; note: string }>;
+  /** Highlights and scars that carry into adult life. */
+  honors: string[];
+}
+
+export type VisaStatus = "citizen" | "permanent" | "work" | "student" | "family" | "asylum" | "overstay";
+
+export interface ImmigrationState {
+  /** Countries you hold citizenship in (your birth country to begin with). */
+  citizenship: string[];
+  status: VisaStatus;
+  /** Years left on a temporary permit (0 for citizen and permanent). */
+  yearsLeft: number;
+  /** Consecutive years living in the current country. */
+  residenceYears: number;
+  /** 0-100 fluency in the language of the country you live in. */
+  fluency: number;
+  /** Visa applications refused. */
+  refused: number;
+  /** Years in a row on a work or student permit without the job or course it depends on. */
+  idle: number;
 }
 
 export interface Holding {
@@ -1344,6 +1419,12 @@ export interface PlayerState {
   residence: Residence;
   investments: Record<string, Holding>;
   vices: Vices;
+  /** Pandemics, wars, recessions and policy shifts around you. */
+  world: WorldState;
+  /** Report cards, friendships, bullying and clubs through your school years. */
+  school: SchoolState;
+  /** Your right to live and work where you are. */
+  immigration: ImmigrationState;
 
   // Justice
   probation: Probation | null;

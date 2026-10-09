@@ -1,5 +1,6 @@
 "use client";
 
+import { MoveAbroad } from "./WorldPanels";
 import { useMemo, useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import { buyCar, buyHouse, carInventory, houseInventory, maxLoan, renovate, repayLoan, sellCar, sellHouse, takeLoan } from "@/engine/assets";
@@ -7,7 +8,6 @@ import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/
 import { money } from "@/lib/format";
 import { SAVINGS_LEVELS, contributionFor, drawdownFor, withdrawRetirement, setSavingsLevel } from "@/engine/retirement";
 import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
-import { COUNTRIES } from "@/data/countries";
 import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, LIFESTYLES, RENT_TIERS, divest, invest, portfolioValue, livesWithParents, relocate, setLifestyle, setRentTier, toggleFamilyHome } from "@/engine/world";
 
 type Panel = "cars" | "homes" | "living" | "invest" | "bank";
@@ -100,21 +100,14 @@ function Living() {
 
       <SectionTitle hint="you'll leave your job behind">Relocate</SectionTitle>
       <Card>
-        <p className="mb-2 text-xs text-slate-400">Move within your country for {money(RELOCATE_DOMESTIC)} or abroad for {money(RELOCATE_ABROAD)}. Your tax rules change with where you live. Friends and family drift further away.</p>
+        <p className="mb-2 text-xs text-slate-400">Move house for {money(RELOCATE_DOMESTIC)}. Moving abroad costs {money(RELOCATE_ABROAD)} plus the fees for your visa route (below). Your tax rules change with where you live. Friends and family drift further away.</p>
         <div className="grid grid-cols-2 gap-2">
-          {COUNTRIES.map((c) => (
-            <Button
-              key={c.name}
-              variant={c.name === p.residence.country ? "primary" : "secondary"}
-              className="px-2 py-1.5 text-xs"
-              disabled={p.age < 18}
-              onClick={() => act((pl, rng) => relocate(pl, c.name, rng))}
-            >
-              {c.name === p.residence.country ? "📍 " : ""}{c.name}
-            </Button>
-          ))}
+          <Button variant="primary" className="col-span-2 px-2 py-1.5 text-xs" disabled={p.age < 18} onClick={() => act((pl, rng) => relocate(pl, p.residence.country, rng))}>
+            📍 Move house in {p.residence.country}
+          </Button>
         </div>
       </Card>
+      <MoveAbroad p={p} />
     </div>
   );
 }

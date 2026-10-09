@@ -4,7 +4,12 @@
  */
 import type { ActionResult, PlayerState, Vices } from "@/types/game.types";
 import { money } from "@/lib/format";
-import { addLog, changeStat, clone, getPartner } from "./state";
+import { addLog, changeStat, clone } from "./state";
+import { careSystem, hasInsurance, medicalCostFactor, medicalPrice, type CareSystem } from "./careCosts";
+import { activePlan, planYearlyCost } from "./treatment";
+
+export { careSystem, hasInsurance, medicalCostFactor, medicalPrice };
+export type { CareSystem };
 
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
   ({ kind: "info" as const, title, body, tone });
@@ -63,51 +68,21 @@ export function applyHabitEffects(p: PlayerState) {
   // Money is deducted by the caller (processFinance) via habitCost.
 }
 
-// ---------------------------------------------------------------------------
-// Care costs by country
-// ---------------------------------------------------------------------------
-
-type CareSystem = "universal" | "insured" | "private";
-
-const CARE_SYSTEM: Record<string, CareSystem> = {
-  "United States": "insured",
-  India: "private",
-  Brazil: "private",
-  Mexico: "private",
-  Nigeria: "private",
-};
-
-export const careSystem = (country: string): CareSystem => CARE_SYSTEM[country] ?? "universal";
-
-/** Employed (or married to someone who is) in an insurance-based system. */
-export function hasInsurance(p: PlayerState): boolean {
-  const sys = careSystem(p.residence.country);
-  if (sys === "universal") return true;
-  if (p.pension > 0 && p.age >= 65) return true;
-  if (p.currentJob && !p.currentJob.partTime) return true;
-  const partner = getPartner(p);
-  return !!partner && partner.partnerStatus === "married" && partner.incomeTier >= 2;
-}
-
-/** Multiplier on medical prices. */
-export function medicalCostFactor(p: PlayerState): number {
-  const sys = careSystem(p.residence.country);
-  if (sys === "universal") return 0.15;
-  if (sys === "insured") return hasInsurance(p) ? 0.3 : 1.8;
-  return 1;
-}
-
-export const medicalPrice = (p: PlayerState, base: number) => Math.max(5, Math.round(base * medicalCostFactor(p)));
-
-/** Yearly cost of living with chronic or terminal conditions (drugs, appointments, home care). */
+/** Yearly cost of living with chronic or terminal conditions: the treatment plan you chose, or else drugs, appointments and home care. */
 export function illnessCosts(p: PlayerState): number {
   let base = 0;
+  let plans = 0;
   for (const d of p.diseases) {
+    const plan = activePlan(d);
+    if (plan) {
+      plans += planYearlyCost(p, plan);
+      continue;
+    }
     if (d.severity === "chronic" && d.id !== "early_cancer") base += 700;
     else if (d.severity === "chronic") base += 4_000;
     else if (d.severity === "fatal") base += 9_000;
   }
-  return Math.round(base * medicalCostFactor(p));
+  return Math.round(base * medicalCostFactor(p)) + plans;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +105,8 @@ export function riskMultiplier(p: PlayerState, diseaseId: string): number {
     m *= (p.effort === "grind" ? 1.35 : p.effort === "coast" ? 0.85 : 1) * (1.4 - p.talents.resilience / 125);
     m *= p.habits.exercise === 2 ? 0.8 : p.habits.exercise === 0 ? 1.2 : 1;
     m *= 1 + p.vices.drugs / 80;
+    // Scars from school: years of being picked on make a lasting mark, and so does being cut off from other people.
+    m *= 1 + (p.school?.bullied ?? 0) / 160 + (p.school?.honors?.includes("scarred") ? 0.25 : 0);
   }
   if (diseaseId === "broken_bone") m *= (p.habits.exercise === 2 ? 1.3 : 1) * (1 + (p.talents.injuryProne - 50) / 60);
   return m;

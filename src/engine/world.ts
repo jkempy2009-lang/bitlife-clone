@@ -5,8 +5,11 @@ import type { ActionResult, Climate, PlayerState } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { COUNTRY_BY_NAME, getCountry } from "@/data/countries";
+import { profileOf } from "@/data/countryProfiles";
 import { addLog, changeStat, clone, isRoyal } from "./state";
 import { relocationBlocker } from "./justice";
+import { forcedClimate, worldMarketShift } from "./worldEvents";
+import { needsRoute, routeFor, settle, type RouteId } from "./visa";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -33,6 +36,16 @@ const HEADLINES: Record<Climate, string[]> = {
 };
 
 export function advanceClimate(p: PlayerState, rng: Rng, notices: Notices) {
+  // A war, pandemic or crisis where you live overrides the ordinary cycle.
+  const forced = forcedClimate(p);
+  if (forced && p.economy.climate !== forced) {
+    p.economy = { climate: forced, yearsLeft: 1 };
+    return;
+  }
+  if (forced) {
+    p.economy.yearsLeft = Math.max(1, p.economy.yearsLeft);
+    return;
+  }
   p.economy.yearsLeft -= 1;
   if (p.economy.yearsLeft > 0) return;
   const next = rng.weighted<Climate>(["boom", "normal", "recession"], (c) => (c === "normal" ? 0.56 : 0.22))!;
@@ -95,7 +108,7 @@ export function processInvestments(p: PlayerState, rng: Rng, notices: Notices) {
   const before = portfolioValue(p);
   if (before <= 0) return;
   for (const [id, h] of Object.entries(p.investments)) {
-    h.value = Math.max(0, Math.round(h.value * (1 + yearReturn(id, p.economy.climate, rng) + (p.talents.moneySense - 50) / 1000)));
+    h.value = Math.max(0, Math.round(h.value * (1 + yearReturn(id, p.economy.climate, rng) + (p.talents.moneySense - 50) / 1000 + (id === "bonds" ? 0 : worldMarketShift(p)))));
     if (h.value === 0 && h.basis === 0) delete p.investments[id];
   }
   const after = portfolioValue(p);
@@ -228,7 +241,7 @@ export function setRentTier(p0: PlayerState, tier: number): ActionResult {
 export const RELOCATE_DOMESTIC = 2_500;
 export const RELOCATE_ABROAD = 9_000;
 
-export function relocate(p0: PlayerState, country: string, rng: Rng): ActionResult {
+export function relocate(p0: PlayerState, country: string, rng: Rng, route?: RouteId): ActionResult {
   const p = clone(p0);
   const dest = COUNTRY_BY_NAME[country];
   if (!dest) return { player: p0 };
@@ -238,26 +251,48 @@ export function relocate(p0: PlayerState, country: string, rng: Rng): ActionResu
   const restricted = relocationBlocker(p, dest.name);
   if (restricted) return { player: p0, notices: [info("Can't Move", restricted, "bad")] };
   const abroad = dest.name !== p.residence.country;
-  const cost = abroad ? RELOCATE_ABROAD : RELOCATE_DOMESTIC;
-  if (p.bankBalance < cost) return { player: p0, notices: [info("Insufficient Funds", `Moving costs ${money(cost)}.`, "bad")] };
+  // Abroad, you need papers: citizens move freely, everyone else picks a route.
+  const needs = abroad && needsRoute(p, dest.name);
+  const info0 = needs && route ? routeFor(p, dest.name, route) : undefined;
+  if (needs && !info0) return { player: p0, notices: [info("You Need a Visa", `${dest.name} will not let you in without papers. Choose a route (work, study, family, investment, asylum) on the relocation screen.`, "bad")] };
+  if (info0?.blocker) return { player: p0, notices: [info("Not Eligible", info0.blocker, "bad")] };
+  const moveCost = route === "asylum" ? 2_000 : abroad ? RELOCATE_ABROAD : RELOCATE_DOMESTIC;
+  const fees = info0 ? info0.fee : 0;
+  if (p.bankBalance < moveCost + fees) return { player: p0, notices: [info("Insufficient Funds", `Moving${info0 ? ` and the ${info0.label.toLowerCase()}` : ""} costs ${money(moveCost + fees)}.`, "bad")] };
   if ((p.annual.relocate ?? 0) >= 1) return { player: p0, notices: [info("Boxes Everywhere", "You've already moved this year.")] };
   p.annual.relocate = 1;
-  p.bankBalance -= cost;
+  p.bankBalance -= moveCost + fees;
+  const refused = info0 && info0.id !== "investor" && !rng.chance(info0.chance);
+  if (refused && info0) {
+    p.immigration.refused += 1;
+    const body = info0.id === "undocumented" ? "The crossing failed. You lost the smugglers' fee and had to turn back." : `Your ${info0.label.toLowerCase()} application was refused. The fees are gone, and each refusal makes the next application harder.`;
+    addLog(p, body);
+    changeStat(p, "happiness", -5);
+    return { player: p, notices: [info("Application Refused", body, "bad")] };
+  }
+  const keepJob = route === "work" && !!p.currentJob && !["athlete", "mafia", "spy"].includes(p.currentJob.lineId);
+  const oldCountry = p.residence.country;
   const city = rng.pick(dest.cities.filter((c) => c !== p.residence.city).concat(dest.cities[0]));
   p.residence = { ...p.residence, country: dest.name, city };
+  if (abroad) settle(p, dest.name, needs ? (route ?? null) : null);
+  if (abroad) p.economy = { climate: rng.pick(["normal", "normal", "boom", "recession"] as const), yearsLeft: rng.int(1, 3) };
   for (const r of p.relatives) {
     if (!r.alive || r.partnerStatus === "ex") continue;
     if (r.relation === "Partner") continue;
     r.relationshipBar = clamp(r.relationshipBar - (abroad ? 18 : 8));
   }
-  if (p.currentJob) {
+  if (p.currentJob && !keepJob) {
     p.currentJob = null;
     p.annualSalary = 0;
   }
+  if (abroad && p.flags.includes("emigrant") === false && dest.name !== p.birthCountry) p.flags.push("emigrant");
+  if (dest.name === p.birthCountry) p.flags = p.flags.filter((f) => f !== "emigrant");
   const swing = rng.int(abroad ? -6 : -3, abroad ? 12 : 8);
   changeStat(p, "happiness", swing);
+  const status = p.immigration.status;
+  const how = !abroad ? "" : !needs ? ` You are a citizen there, so no papers were needed.` : ` You arrived on ${status === "permanent" ? "permanent residence" : status === "overstay" ? "no papers at all" : `a ${status === "asylum" ? "refugee" : status} permit`}.`;
   const body = abroad
-    ? `You emigrated to ${city}, ${dest.name}. New tax rules, new language, new life. You had to leave your job behind.`
+    ? `You emigrated from ${oldCountry} to ${city}, ${dest.name}. New tax rules, new language${profileOf(dest.name).language === profileOf(oldCountry).language ? "" : ` (${profileOf(dest.name).language}, which you barely speak)`}, new life.${how}${keepJob ? " Your employer transferred you, so you kept your job." : " You had to leave your job behind."}`
     : `You moved to ${city}. A fresh start in a familiar country. You left your job behind.`;
   addLog(p, body);
   return { player: p, notices: [info(abroad ? "New Country!" : "New City!", body, swing >= 0 ? "good" : "neutral")] };

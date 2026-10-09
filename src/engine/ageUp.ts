@@ -2,7 +2,7 @@ import type { ActionResult, PlayerState } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { incomeTaxFor } from "@/data/countries";
-import { DISEASE_CATALOG, instantiateDisease } from "@/data/diseases";
+import { DISEASE_BY_ID, DISEASE_CATALOG, instantiateDisease } from "@/data/diseases";
 import {
   CAR_LOAN_RATE,
   MORTGAGE_RATE,
@@ -33,7 +33,7 @@ import { processDynasty } from "./dynasty";
 import { settleNpcEstate } from "./estate";
 import { processCourt, royalFinance } from "./court";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
-import { selectEvents } from "./events";
+import { addDisease, selectEvents } from "./events";
 import { convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
 import { checkAchievements } from "./achievements";
 import { checkChallenge } from "./challenges";
@@ -51,6 +51,11 @@ import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupa
 import { applyHabitEffects, applyMoodEffects, habitCost, illnessCosts, riskMultiplier } from "./health";
 import { SHARED_LIVING_FACTOR, SPOUSE_TAX, childSupportDue, marriedPartner, spouseIncome } from "./household";
 import { LIFESTYLES, RENT_TIERS, livesWithParents, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
+import { advanceWorld, worldHousingShift, worldLayoff, worldPriceLevel, worldTaxFactor } from "./worldEvents";
+import { diseaseExposure, mortalityMultiplier } from "./demography";
+import { deathPhrase, diseaseToll, palliativeFarewell, processTreatment, slowsCountdown } from "./treatment";
+import { processSchoolYear } from "./school";
+import { processImmigration } from "./visa";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 
@@ -119,7 +124,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
       : rng.int(0, 3);
     r.relationshipBar = clamp(r.relationshipBar - Math.max(0, Math.round(decay * (1.25 - p.talents.empathy / 200))) - (p.isInPrison ? 3 : 0));
     // Mortality: spec asks for a death roll for the elderly; we use a graded curve so younger deaths are possible but rare.
-    if (r.age > 40 && rng.chance(deathChance(r.age, r.health))) {
+    if (r.age > 40 && rng.chance(deathChance(r.age, r.health, mortalityMultiplier(p, r.age)))) {
       r.alive = false;
       r.deathAge = r.age;
       r.deathYear = p.year;
@@ -177,7 +182,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
 // ---------------------------------------------------------------------------
 
 function processAssets(p: PlayerState, rng: Rng) {
-  const marketIndex = housingIndex(p.economy.climate, rng);
+  const marketIndex = housingIndex(p.economy.climate, rng) + worldHousingShift(p);
   if (p.properties.length > 0) {
     addLog(p, `The housing market ${marketIndex >= 0 ? "rose" : "fell"} ${(Math.abs(marketIndex) * 100).toFixed(1)}% this year.`);
   }
@@ -243,7 +248,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   p.retirementSavings -= draw;
   gross += draw;
   const { employee, employer } = contributionFor(p);
-  const tax = incomeTaxFor(p.residence.country, Math.max(0, gross - offBooks - employee));
+  const tax = Math.round(incomeTaxFor(p.residence.country, Math.max(0, gross - offBooks - employee)) * worldTaxFactor(p));
   p.taxesPaidThisYear = tax;
   p.bankBalance += gross - tax + allowance - employee;
   if (fin) {
@@ -262,7 +267,7 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
     // Lifestyle inflation: the more you earn, the more you spend.
     const dependents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18).length;
     const ls = LIFESTYLES[p.lifestyle] ?? LIFESTYLES[1];
-    living = (BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope) * (1 - (p.talents.moneySense - 50) / 700);
+    living = (BASE_LIVING * ls.base * (spouse ? 1 + SHARED_LIVING_FACTOR : 1) + housingCost(p) + dependents * CHILD_COST + Math.max(0, gross + spouseNet - 25_000) * ls.slope) * (1 - (p.talents.moneySense - 50) / 700) * worldPriceLevel(p);
     living += childSupportDue(p, gross) + schoolCosts(p);
   }
   living = Math.round(living);
@@ -321,26 +326,29 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
 
   for (const d of [...p.diseases]) {
     // Stat impacts are applied every year; mild and chronic conditions are dampened so a life on autopilot stays survivable.
-    const scale = d.severity === "fatal" ? 1 : d.severity === "chronic" ? 0.3 : 0.4;
+    // A treatment plan (engine/treatment.ts) lowers the toll further; going without raises it.
+    const scale = (d.severity === "fatal" ? 1 : d.severity === "chronic" ? 0.3 : 0.4) * diseaseToll(p, d);
     p.health -= d.healthImpact * scale;
     p.happiness -= d.happinessImpact * scale;
     if (d.severity === "mild" && rng.chance(0.8)) {
       p.diseases = p.diseases.filter((x) => x.id !== d.id);
       addLog(p, `You recovered from ${d.name}.`);
     } else if (d.severity === "fatal" && d.yearsLeft !== undefined) {
-      d.yearsLeft -= 1;
+      if (!slowsCountdown(d, rng)) d.yearsLeft -= 1;
       if (d.yearsLeft <= 0) {
-        killPlayer(p, d.name.toLowerCase());
+        palliativeFarewell(p, d);
+        killPlayer(p, deathPhrase(p, d));
         return;
       }
     }
   }
+  processTreatment(p, rng, notices, addDisease);
 
   // New diagnoses (at most one a year)
   const owned = new Set(p.diseases.map((d) => d.id));
   const healthFactor = clamp((100 - p.health) / 40 + 0.6, 0.5, 2.2);
-  const candidates = DISEASE_CATALOG.filter((d) => !owned.has(d.id) && p.age >= d.minAge);
-  const weight = (d: (typeof candidates)[number]) => d.baseChance * healthFactor * riskMultiplier(p, d.id);
+  const weight = (d: (typeof DISEASE_CATALOG)[number]) => d.baseChance * healthFactor * riskMultiplier(p, d.id) * diseaseExposure(p, d);
+  const candidates = DISEASE_CATALOG.filter((d) => !owned.has(d.id) && p.age >= d.minAge && weight(d) > 0);
   let roll = rng.weighted(candidates, (d) => weight(d) * (d.severity === "mild" ? 1 : 1 + (p.age - d.minAge) / 40));
   if (roll && rng.chance(Math.min(0.5, 0.45 * candidates.reduce((s, d) => s + weight(d), 0)))) {
     // Regular check-ups catch cancer early, when it is treatable.
@@ -352,10 +360,11 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
     }
     p.diseases.push(instantiateDisease(roll, (a, b) => rng.int(a, b)));
     addLog(p, `You were diagnosed with ${roll.name}${earlyCatch ? ", caught early at a routine check-up" : ""}.`);
+    const plansExist = roll.severity !== "mild" && p.age >= 18;
     notices.push(
       info(
         "Diagnosis",
-        `You were diagnosed with ${roll.name}.${earlyCatch ? " Your last check-up caught it early, which makes it far more treatable." : roll.severity === "fatal" ? " The prognosis is grim." : roll.severity === "chronic" ? " It's a chronic condition that will wear on you each year." : " It should pass in time."}`,
+        `You were diagnosed with ${roll.name}.${earlyCatch ? " Your last check-up caught it early, which makes it far more treatable." : roll.severity === "fatal" ? " The prognosis is grim." : roll.severity === "chronic" ? " It's a chronic condition that will wear on you each year." : " It should pass in time."}${plansExist ? " Choose a treatment plan in Activities → Medical." : ""}`,
         "bad",
       ),
     );
@@ -364,9 +373,10 @@ function processMedical(p: PlayerState, rng: Rng, notices: Notices) {
 
   p.health = clamp(Math.round(p.health));
   if (p.health <= 0) return; // finalize() handles the cause of death
-  if (rng.chance(deathChance(p.age, p.health))) {
+  if (rng.chance(deathChance(p.age, p.health, mortalityMultiplier(p)))) {
     const worst = [...p.diseases].filter((d) => d.severity !== "mild").sort((a, b) => b.healthImpact - a.healthImpact)[0];
-    killPlayer(p, worst && p.age >= 40 ? worst.name.toLowerCase() : naturalCause(p.age, rng));
+    const contagion = p.diseases.find((d) => DISEASE_BY_ID[d.id]?.infectious);
+    killPlayer(p, worst && p.age >= 40 ? deathPhrase(p, worst) : contagion && rng.chance(0.7) ? contagion.name.toLowerCase() : naturalCause(p.age, rng, p));
   }
 }
 
@@ -474,7 +484,7 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
     notices.push(info("You're Fired", body, "bad"));
     return;
   }
-  if (rng.chance(layoffChance(p.economy.climate))) {
+  if (rng.chance(layoffChance(p.economy.climate) + worldLayoff(p))) {
     const body = `${job.company} downsized and let you go. You received a small severance package.`;
     p.currentJob = null;
     p.bankBalance += Math.round(job.salary * 0.15);
@@ -603,7 +613,9 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   const prevAnnual = p.annual;
   p.annual = {};
   addLog(p, logHeader(p));
+  advanceWorld(p, rng, notices);
   advanceClimate(p, rng, notices);
+  processImmigration(p, rng, notices);
 
   processSocial(p, rng, notices); // 2. social graph
   processFriendLoans(p, rng, notices);
@@ -618,6 +630,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   if (p.alive) processLaterLife(p, notices);
   if (p.alive) {
     processEducation(p, rng, notices);
+    processSchoolYear(p, rng, notices);
     processCareer(p, rng, notices);
     applyEffortCosts(p, rng, notices);
     processEntertainment(p);

@@ -48,9 +48,17 @@ export function visitDoctor(p0: PlayerState, diseaseId: string | null, rng: Rng)
     addLog(p, body);
     return { player: p, notices: [info("Cured!", body, "good")] };
   }
-  const body = "The doctor couldn't find a cure.";
-  addLog(p, `You visited the doctor about your ${target.name}, but the doctor couldn't find a cure.`);
-  return { player: p, notices: [info("No Cure Found", body, "bad")] };
+  if (target.severity === "mild") {
+    const body = "The doctor couldn't find a cure.";
+    addLog(p, `You visited the doctor about your ${target.name}, but the doctor couldn't find a cure.`);
+    return { player: p, notices: [info("No Cure Found", body, "bad")] };
+  }
+  // Chronic and terminal: no quick fix, but there are ways to manage it.
+  const body = p.age >= 18
+    ? `There is no quick fix for ${target.name}, but the doctor laid out your options. Choose a treatment plan under Medical in the Activities tab; it makes a real difference.`
+    : `There is no quick fix for ${target.name}. Your parents will take charge of its treatment until you are 18.`;
+  addLog(p, `You saw the doctor about ${target.name}. There is no quick cure, but there are treatment plans.`);
+  return { player: p, notices: [info("No Quick Cure", body, "neutral")] };
 }
 
 export function visitWitchDoctor(p0: PlayerState, rng: Rng): ActionResult {

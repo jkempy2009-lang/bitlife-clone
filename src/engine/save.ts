@@ -6,6 +6,9 @@ import { hydrateCrimeLife } from "./justiceState";
 import { hydrateCreative } from "./creativeState";
 import { hydrateCourt } from "./courtState";
 import { hydrateDynasty } from "./dynastyState";
+import { hydrateWorld } from "./worldEvents";
+import { hydrateSchool } from "./school";
+import { hydrateImmigration } from "./visa";
 
 const KEY = "lifeline-save-v1";
 const PREV_KEY = "lifeline-save-prev";
@@ -90,6 +93,9 @@ export function hydrate(p: PlayerState): PlayerState {
     residence: p.residence ?? { country: p.birthCountry, city: p.birthCity, rentTier: 1 },
     investments: p.investments ?? {},
     vices: p.vices ?? { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
+    world: hydrateWorld(p.world),
+    school: hydrateSchool(p.school),
+    immigration: hydrateImmigration(p.immigration, p),
     probation: p.probation ?? null,
     ...hydrateCrimeLife(p),
     pregnancy: p.pregnancy ?? null,

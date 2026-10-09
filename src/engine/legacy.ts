@@ -282,6 +282,9 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
     politics: { popularity: 30, yearsInOffice: 0, party: null },
     economy: { ...old.economy },
     residence: { ...old.residence },
+    // The world carries on around the next generation; a child born abroad is a citizen of where they were born, too.
+    world: structuredClone(old.world),
+    immigration: { ...fresh.immigration, citizenship: [...new Set([old.birthCountry, old.residence.country, ...old.immigration.citizenship])] },
     investments: Object.fromEntries(
       Object.entries(old.investments).map(([k, h]) => [k, { value: Math.round(h.value * investmentFactor * (living ? 1 : 1 - ESTATE_TAX)), basis: Math.round(h.basis * investmentFactor * (living ? 1 : 1 - ESTATE_TAX)) }]),
     ),

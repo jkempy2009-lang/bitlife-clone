@@ -17,6 +17,9 @@ import { newDynasty } from "./dynastyState";
 import { newCourt, realmNamesFor } from "./courtState";
 import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
 import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
+import { freshWorld } from "./worldEvents";
+import { freshSchool } from "./school";
+import { freshImmigration } from "./visa";
 
 export const MAX_AGE = 120;
 
@@ -371,6 +374,9 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     residence: { country: country.name, city: "", rentTier: 1 },
     investments: {},
     vices: { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
+    world: freshWorld(),
+    school: freshSchool(),
+    immigration: freshImmigration(country.name),
     probation: null,
     pregnancy: null,
     blackjack: null,

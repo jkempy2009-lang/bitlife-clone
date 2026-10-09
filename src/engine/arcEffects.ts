@@ -8,6 +8,7 @@ import type { Rng } from "@/lib/rng";
 import { COUNTRIES, getCountry } from "@/data/countries";
 import { clamp } from "@/lib/format";
 import { addLog, changeStat, setFlag } from "./state";
+import { settle } from "./visa";
 
 /** How many calendar years past its due date an event may wait for eligibility before it lapses. */
 export const SCHEDULE_GRACE = 4;
@@ -124,6 +125,7 @@ export function emigrate(p: PlayerState, how: "abroad" | "home", rng: Rng) {
       : rng.pick(COUNTRIES.filter((c) => c.name !== p.residence.country));
   const city = rng.pick(target.cities);
   p.residence = { ...p.residence, country: target.name, city };
+  settle(p, target.name, how === "home" || p.immigration.citizenship.includes(target.name) ? null : "work");
   p.currentJob = null;
   p.annualSalary = 0;
   if (how === "abroad") {
