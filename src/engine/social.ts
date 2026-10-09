@@ -13,14 +13,26 @@ import {
   netWorth,
   partnerGenderFor,
   randomGender,
-  randomName,
 } from "./state";
 import { settleDivorce } from "./household";
-import { adultSpec } from "./people";
+import { adultSpec, freshFirstName } from "./people";
 import { royalStyleForChild } from "./royalty";
+import { addGrievance, introduce, meet, remember } from "./bonds";
+import { splitFamily } from "./partnership";
+import { ensureInLaws } from "./inlaws";
 
 export function firstName(r: Relative) {
   return r.name.split(" ")[0];
+}
+
+/**
+ * How old a new partner is. Adults only ever get adult partners; a teenager's partner is a classmate
+ * their own age (so neither of them is ever the adult in the pairing).
+ */
+export function partnerAge(p: PlayerState, range: [number, number] | undefined, offset: [number, number], rng: Rng): number {
+  if (p.age < 18) return Math.max(13, p.age);
+  if (range) return rng.int(Math.max(18, range[0]), Math.max(18, range[1]));
+  return Math.max(18, p.age + rng.int(offset[0], offset[1]));
 }
 
 export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Relative {
@@ -29,7 +41,7 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
   if (spec.relation === "Child") {
     const gender = randomGender(rng);
     const partner = getPartner(p);
-    const first = randomName(p.residence.country, gender, rng).first;
+    const first = freshFirstName(p, gender, rng);
     const named = spec.npc ? npcName(p, spec.npc).first : first; // storyline characters keep their name
     const kid = makeRelativeBase(rng, "Child", `${named} ${p.lastName}`, spec.age ?? 0, gender, tier, rng.int(70, 100));
     kid.smarts = clamp(Math.round((p.smarts + (partner?.smarts ?? 50)) / 2 + rng.int(-15, 15)));
@@ -40,8 +52,8 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
   if (spec.relation === "Partner") {
     const gender = spec.gender ?? partnerGenderFor(p, rng);
     const [lo, hi] = spec.ageOffset ?? [-4, 5];
-    const age = spec.ageRange ? rng.int(Math.max(18, spec.ageRange[0]), Math.max(18, spec.ageRange[1])) : Math.max(14, p.age + rng.int(lo, hi));
-    const first = randomName(p.residence.country, gender, rng).first;
+    const age = partnerAge(p, spec.ageRange, [lo, hi], rng);
+    const first = freshFirstName(p, gender, rng);
     const rel = makeRelativeBase(rng, "Partner", `${first} ${lastNameFor(p.residence.country, rng)}`, age, gender, rng.int(1, 5), rng.int(55, 85));
     rel.partnerStatus = spec.partnerStatus ?? "dating";
     if (rel.partnerStatus === "married") rel.marriedYear = p.year;
@@ -49,7 +61,7 @@ export function createRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng):
   }
   const gender = rng.pick(["Male", "Female"]);
   const [lo, hi] = spec.ageOffset ?? [-2, 3];
-  const first = randomName(p.residence.country, gender, rng).first;
+  const first = freshFirstName(p, gender, rng);
   const last = spec.relation === "Sibling" ? p.lastName : lastNameFor(p.residence.country, rng);
   const age = spec.age ?? Math.max(3, p.age + rng.int(lo, hi));
   return makeRelativeBase(rng, spec.relation, `${first} ${last}`, age, gender, rng.int(1, 4), rng.int(45, 80));
@@ -60,6 +72,7 @@ export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Re
   if (rel.relation === "Child") rel.royalTitle = royalStyleForChild(p, rel.gender);
   else if (rel.relation === "Sibling" && p.royal?.crown === "parent") rel.royalTitle = rel.gender === "Male" ? "Prince" : "Princess";
   p.relatives.push(rel);
+  introduce(p, rel, rel.relation === "Child" ? `${firstName(rel)} joined your family.` : rel.relation === "Partner" ? `You and ${firstName(rel)} got together.` : undefined);
   if (rel.relation === "Child") {
     p.stats.childrenBorn += 1;
     addLog(p, rel.age >= 2 ? `${rel.name} joined your family as your child.` : `A child, ${rel.name}, was born into your family.`);
@@ -75,10 +88,11 @@ export function addRelative(p: PlayerState, spec: NewRelativeSpec, rng: Rng): Re
 export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
   if (livingGrandchildren(p) >= 8) return null;
   const parents = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age >= 22 && r.age <= 38);
-  if (parents.length === 0 || !rng.chance(0.07 * parents.length)) return null;
+  const odds = parents.reduce((s, k) => s + (k.traits?.includes("Married") ? 0.13 : k.traits?.includes("Partnered") ? 0.07 : 0.04), 0);
+  if (parents.length === 0 || !rng.chance(odds)) return null;
   const parent = rng.pick(parents);
   const gender = randomGender(rng);
-  const first = randomName(p.residence.country, gender, rng).first;
+  const first = freshFirstName(p, gender, rng);
   const last = parent.name.split(" ").slice(1).join(" ") || p.lastName;
   const kid = makeRelativeBase(rng, "Grandchild", `${first} ${last}`, 0, gender, parent.incomeTier, rng.int(60, 95));
   kid.parentId = parent.id;
@@ -87,6 +101,7 @@ export function maybeGrandchild(p: PlayerState, rng: Rng): Relative | null {
   kid.smarts = clamp(Math.round((parent.smarts + 50) / 2 + rng.int(-12, 12)));
   kid.looks = clamp(Math.round((parent.looks + 50) / 2 + rng.int(-12, 12)));
   p.relatives.push(kid);
+  introduce(p, kid, `Born to ${parent.name.split(" ")[0]}.`);
   addLog(p, `${parent.name} had a baby: your grandchild ${kid.name}!`);
   return kid;
 }
@@ -133,9 +148,10 @@ export function adoptChild(p0: PlayerState, rng: Rng): ActionResult {
   p.annual.adopt = 1;
   p.bankBalance -= ADOPTION_COST;
   const gender = randomGender(rng);
-  const first = randomName(p.residence.country, gender, rng).first;
+  const first = freshFirstName(p, gender, rng);
   const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, rng.int(0, 8), gender, 2, 65);
   p.relatives.push(kid);
+  introduce(p, kid, `You adopted ${firstName(kid)} and brought them home.`);
   p.stats.childrenBorn += 1;
   if (!p.flags.includes("adopted")) p.flags.push("adopted");
   changeStat(p, "happiness", 14);
@@ -148,11 +164,17 @@ export function adoptChild(p0: PlayerState, rng: Rng): ActionResult {
 export function endRelationship(p: PlayerState, how: "breakup" | "divorce", atFault = false) {
   const partner = getPartner(p);
   if (!partner) return;
+  const years = partner.metYear !== undefined ? p.year - partner.metYear : null;
   partner.partnerStatus = "ex";
+  partner.lostYear = p.year;
+  partner.separatedYear = undefined;
+  remember(p, partner, "loss", how === "divorce" ? `The marriage ended in divorce${years ? ` after ${years} years together` : ""}.` : `You broke up${years ? ` after ${years} years` : ""}.`);
   if (how === "divorce") {
     if (!p.flags.includes("was_divorced")) p.flags.push("was_divorced");
     addLog(p, settleDivorce(p, partner, atFault));
   }
+  const line = splitFamily(p, partner);
+  if (line) addLog(p, line);
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +236,7 @@ export function interact(p0: PlayerState, relId: string, action: SocialAction, r
       body = fill(rng.pick(SPEND[rel.relation] ?? SPEND.Friend));
       changeStat(p, "happiness", rng.int(1, 3));
       p.annual[CAP_KEY(rel.id)] = used + 1;
+      meet(p, rel, "affection", ...(rel.relation === "Child" || rel.relation === "Parent" || rel.relation === "Grandchild" ? ["family"] : []));
       outcome = "good";
       break;
     }
@@ -223,6 +246,7 @@ export function interact(p0: PlayerState, relId: string, action: SocialAction, r
       rel.relationshipBar = clamp(rel.relationshipBar + (good ? d : -d));
       body = fill(rng.pick(CONVERSE[rel.relation] ?? CONVERSE.Friend)) + (good ? " It went well." : " It got awkward.");
       p.annual[CAP_KEY(rel.id)] = used + 1;
+      if (good) meet(p, rel, "security");
       outcome = good ? "good" : "bad";
       break;
     }
@@ -243,6 +267,10 @@ export function interact(p0: PlayerState, relId: string, action: SocialAction, r
       changeStat(p, "happiness", -5);
       changeStat(p, "karma", -2);
       body = fill(rng.pick(INSULT));
+      if (rel.relation !== "Pet") {
+        addGrievance(p, rel, "insult", 1, `a cruel thing you said to ${n}`);
+        remember(p, rel, "conflict", `You said something cruel and ${n} hasn't forgotten it.`);
+      }
       outcome = "bad";
       break;
     }
@@ -284,18 +312,27 @@ export function propose(p0: PlayerState, rng: Rng): ActionResult {
   if (partner.age < 18 || p.age < 18) {
     return { player: p0, notices: [{ kind: "info", title: "Too young", body: "You're both too young to marry.", tone: "neutral" }] };
   }
-  if (rng.chance(clamp(partner.relationshipBar / 110, 0.05, 0.95))) {
+  if ((p.annual.propose ?? 0) >= 1) {
+    return { player: p0, notices: [{ kind: "info", title: "Give Them Time", body: `You've already asked ${firstName(partner)} this year. Asking again so soon will only make them feel cornered.`, tone: "neutral" }] };
+  }
+  p.annual.propose = 1;
+  // A relationship with an open wound isn't ready to be a marriage.
+  const wounds = (partner.grievances ?? []).reduce((s, g) => s + g.weight, 0);
+  if (rng.chance(clamp(partner.relationshipBar / 110 - wounds * 0.06, 0.05, 0.95))) {
     partner.partnerStatus = "married";
     partner.marriedYear = p.year;
     partner.relationshipBar = clamp(partner.relationshipBar + 15);
     changeStat(p, "happiness", 12);
     p.queuedEvents.push("wedding_day");
+    remember(p, partner, "milestone", `You proposed and ${firstName(partner)} said yes.`);
+    ensureInLaws(p, partner, rng);
     const body = `${partner.name} said yes! Wedding planning begins.`;
     addLog(p, body);
     return { player: p, notices: [{ kind: "info", title: "Just Married!", body, tone: "good" }] };
   }
   partner.relationshipBar = clamp(partner.relationshipBar - 20);
   changeStat(p, "happiness", -8);
+  remember(p, partner, "hardship", `You proposed and ${firstName(partner)} wasn't ready.`);
   const body = `${partner.name} said they aren't ready. The silence was deafening.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Rejected", body, tone: "bad" }] };
@@ -318,6 +355,7 @@ export function tryForBaby(p0: PlayerState, rng: Rng): ActionResult {
   const p = clone(p0);
   const partner = getPartner(p);
   if (!partner) return { player: p0 };
+  if (partner.separatedYear) return { player: p0, notices: [{ kind: "info", title: "Not Now", body: `You and ${firstName(partner)} are living apart. This isn't the moment.`, tone: "neutral" }] };
   if ((p.annual.baby ?? 0) >= 1) {
     return { player: p0, notices: [{ kind: "info", title: "Patience", body: "You've already tried this year.", tone: "neutral" }] };
   }
@@ -357,6 +395,7 @@ export function dateNight(p0: PlayerState): ActionResult {
   p.bankBalance -= 100;
   partner.relationshipBar = clamp(partner.relationshipBar + 12);
   changeStat(p, "happiness", 4);
+  meet(p, partner, "affection");
   const body = `You took ${partner.name} out for a romantic evening.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Date Night", body, tone: "good" }] };
@@ -387,6 +426,7 @@ export function meetSomeone(p0: PlayerState, kind: "friend" | "date", rng: Rng):
   const candidate = createRelative(p, spec, rng);
   const places = ["at a coffee shop", "at a friend's party", "at the gym", "at the library", "online", "at a concert"];
   const place = rng.pick(places);
+  introduce(p, candidate, `You met ${firstName(candidate)} ${place}.`);
   const event: LifeEvent = {
     id: `meet_${candidate.id}`,
     title: kind === "date" ? "A Spark?" : "New Face",

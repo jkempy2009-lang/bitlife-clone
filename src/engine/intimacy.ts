@@ -10,9 +10,10 @@ import { addLog, changeStat, clone, getPartner } from "./state";
 import { createRelative, endRelationship, firstName } from "./social";
 import { addDisease } from "./events";
 import { startTrial } from "./crime";
-import { makeRelativeBase, randomGender, randomName } from "./state";
-import { adultSpec, tasteOf } from "./people";
+import { makeRelativeBase, randomGender } from "./state";
+import { adultSpec, freshFirstName, tasteOf } from "./people";
 import { royalStyleForChild } from "./royalty";
+import { addGrievance, introduce, meet, remember } from "./bonds";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" | "jackpot" = "neutral") =>
@@ -107,7 +108,9 @@ export function exposeAffair(p: PlayerState, rng: Rng, notices: Notices) {
   } else {
     partner.relationshipBar = clamp(partner.relationshipBar - 25);
     changeStat(p, "happiness", -8);
-    const body = `${partner.name} found out and was devastated, but chose to stay (for now). Trust is shattered.`;
+    addGrievance(p, partner, "betrayal", 3, "the affair");
+    remember(p, partner, "betrayal", `${firstName(partner)} found out about the affair and stayed. Nothing has been quite the same since.`);
+    const body = `${partner.name} found out and was devastated, but chose to stay (for now). Trust is shattered. Counselling and honesty are the only way back.`;
     addLog(p, body);
     notices.push(info("Caught!", body, "bad"));
   }
@@ -142,6 +145,18 @@ export function encounter(p: PlayerState, other: Relative, protectedSex: boolean
 
 export const LOVE_CAP = 6;
 
+/**
+ * Why someone isn't up for intimacy right now, or null if they are. A separated partner, one who feels
+ * betrayed or who has checked out, and anyone who barely knows you all say no, and that always stands.
+ */
+export function declines(other: Relative): string | null {
+  if (other.separatedYear) return "reminded you that you're living apart, and that this isn't what separation means";
+  if ((other.grievances ?? []).some((g) => g.kind === "betrayal" && g.weight >= 2)) return "said they can't be close to you while the betrayal is still raw";
+  if (other.relationshipBar < 20) return "said they weren't feeling close to you right now";
+  if ((other.grievances ?? []).reduce((s, g) => s + g.weight, 0) >= 4) return "said they needed the argument settled before anything else";
+  return null;
+}
+
 export function makeLove(p0: PlayerState, relId: string, protectedSex: boolean, rng: Rng): ActionResult {
   const blocked = gate(p0);
   if (blocked) return { ...blocked, player: p0 };
@@ -152,8 +167,15 @@ export function makeLove(p0: PlayerState, relId: string, protectedSex: boolean, 
   if ((p.annual[`love:${other.id}`] ?? 0) >= LOVE_CAP) {
     return { player: p0, notices: [info("Pace Yourselves", `You and ${firstName(other)} have been busy enough this year.`)] };
   }
-  const notices: Notices = [];
   const n = firstName(other);
+  // Wanting someone is never enough: they have to want you back, tonight. A no is a no, and nobody pushes.
+  const reason = declines(other);
+  if (reason) {
+    const body = `${n} ${reason}. You said you understood, and made tea instead.`;
+    addLog(p, body);
+    return { player: p, notices: [info("Not Tonight", body, "neutral")] };
+  }
+  const notices: Notices = [];
   const body = fill(rng.pick(LOVE_LINES), n);
   const affair = other.relation === "Lover" && other.partnerStatus === "affair";
   encounter(p, other, protectedSex, rng, notices, other.relation === "Partner" ? 0.004 : 0.12);
@@ -200,6 +222,7 @@ export function romanticGetaway(p0: PlayerState, relId: string): ActionResult {
   p.annual.getaway = 1;
   p.bankBalance -= GETAWAY_COST;
   other.relationshipBar = clamp(other.relationshipBar + 15);
+  meet(p, other, "adventure", "affection");
   changeStat(p, "happiness", 7);
   const body = `You whisked ${firstName(other)} away for a romantic weekend. Room service, sunsets, and no alarm clocks.`;
   addLog(p, body);
@@ -590,12 +613,14 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
     const { carrier, other } = p.pregnancy;
     p.pregnancy = null;
     const gender = randomGender(rng);
-    const first = randomName(p.residence.country, gender, rng).first;
+    const first = freshFirstName(p, gender, rng);
     const kid = makeRelativeBase(rng, "Child", `${first} ${p.lastName}`, 0, gender, 2, rng.int(70, 100));
     kid.smarts = clamp(Math.round((p.smarts + 50) / 2 + rng.int(-15, 15)));
     kid.looks = clamp(Math.round((p.looks + 50) / 2 + rng.int(-15, 15)));
     kid.health = rng.int(78, 100);
     kid.royalTitle = royalStyleForChild(p, gender);
+    if (other) kid.otherParent = other;
+    introduce(p, kid, `${first} was born.`);
     p.relatives.push(kid);
     p.stats.childrenBorn += 1;
     changeStat(p, "happiness", 12);
@@ -646,9 +671,14 @@ export function processIntimacy(p: PlayerState, prevAnnual: Record<string, numbe
       const strain = Math.round(others * (0.5 + (partner.jealousy ?? 50) / 100) * rng.int(0, 3));
       partner.relationshipBar = clamp(partner.relationshipBar - strain + (prevAnnual[`love:${partner.id}`] ?? 0) * 2);
       if (strain >= 4) {
-        const body = `${firstName(partner)} admitted that sharing your time is harder than they expected. A heart-to-heart is overdue.`;
-        addLog(p, body);
-        notices.push(info("Strain", body, "bad"));
+        const text = "how thinly your time is stretched";
+        const had = (partner.grievances ?? []).some((g) => g.text === text);
+        addGrievance(p, partner, "neglect", 1, text);
+        if (!had) {
+          const body = `${firstName(partner)} admitted that sharing your time is harder than they expected. It's on the list of things to clear the air about, and it won't fix itself.`;
+          addLog(p, body);
+          notices.push(info("Strain", body, "bad"));
+        }
       }
     }
   }

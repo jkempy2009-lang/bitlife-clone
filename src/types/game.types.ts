@@ -89,6 +89,37 @@ export interface Relative {
   groom?: HeirGroom;
   /** What this person did with their life, when they were once you (a parent who handed over, or an ancestor). */
   legacyNote?: string;
+  // ---- relationship depth (see engine/bonds.ts, partnership.ts, circle.ts, inlaws.ts) ----
+  /** Calendar year you met them (or they were born into your life). */
+  metYear?: number;
+  /** The moments worth remembering, oldest first (capped). */
+  memories?: Memory[];
+  /** Unresolved hurts that can resurface until you clear the air. */
+  grievances?: Grievance[];
+  /** What they need from a relationship (two of the VALUES in engine/bonds.ts). */
+  values?: string[];
+  /** Which of those you have worked out. */
+  knownValues?: string[];
+  /** Years in a row a particular need went unmet. */
+  unmet?: Record<string, number>;
+  /** Partners: living apart but not divorced. Calendar year it began. */
+  separatedYear?: number;
+  /** Partners: attended counselling together this many times. */
+  counselling?: number;
+  /** Partner's family, who you meet as the relationship deepens. */
+  inLaws?: InLaw[];
+  /** Children of a split couple: where they mostly live. */
+  custody?: "shared" | "you" | "them";
+  /** Name of the child's other parent when you are not together. */
+  otherParent?: string;
+  /** Children: what they are like (see engine/parenting.ts). */
+  temperament?: string;
+  /** Friends: how the friendship is labelled (best friend, old friend, work friend...). */
+  friendKind?: string;
+  /** Friends: calendar year of a falling-out that has not been mended. */
+  riftYear?: number;
+  /** Drifted away or estranged: calendar year it happened (used to offer a reunion). */
+  lostYear?: number;
 }
 
 // ---- Dynasty: the family across generations (engine: src/engine/dynasty.ts, estate.ts, familyTree.ts) ----
@@ -158,6 +189,40 @@ export interface DynastyState {
   /** A sporting name the family carries: opens doors (and weighs) for an heir who takes up the same sport. */
   sportLegacy?: { sport: string; club: string; tier: string; score: number; parent: string };
 }
+
+
+export type MemoryKind = "met" | "milestone" | "joy" | "hardship" | "conflict" | "betrayal" | "kindness" | "loss";
+
+/** A moment you and someone shared, kept so the relationship has a past. */
+export interface Memory {
+  year: number;
+  age: number;
+  kind: MemoryKind;
+  text: string;
+}
+
+export type GrievanceKind = "fight" | "betrayal" | "neglect" | "debt" | "insult";
+
+/** Something unresolved between you and another person. */
+export interface Grievance {
+  id: string;
+  year: number;
+  kind: GrievanceKind;
+  /** 1 (a sore spot) to 3 (a wound). */
+  weight: number;
+  text: string;
+}
+
+export interface InLaw {
+  name: string;
+  role: "Mother-in-law" | "Father-in-law" | "Sister-in-law" | "Brother-in-law";
+  age: number;
+  alive: boolean;
+  /** 0-100: how they feel about you. */
+  warmth: number;
+}
+
+export type ParentingStyle = "strict" | "balanced" | "permissive" | "handsoff";
 
 /** How a royal child is being brought up. Carries into the next generation if they inherit. */
 export interface RoyalTraining {
@@ -1417,6 +1482,8 @@ export interface PlayerState {
   blackjack: BlackjackHand | null;
   /** Who you're looking for and what you're open to (adult content only). */
   intimacy: IntimacyPrefs;
+  /** How you raise your children: a standing choice with trade-offs (see engine/parenting.ts). */
+  parentingStyle: ParentingStyle;
   /** Mature (18+) content: sexual choices, adult careers, and graphic-ish crime options. */
   matureContent: boolean;
 

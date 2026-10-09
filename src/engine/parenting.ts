@@ -2,7 +2,9 @@
 import type { ActionResult, PlayerState, Relative } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
-import { addLog, changeStat, clone } from "./state";
+import { addLog, changeStat, clone, getPartner } from "./state";
+import { hash01 } from "./people";
+import { meet, remember } from "./bonds";
 import { firstName } from "./social";
 import { occupationFor } from "@/data/occupations";
 
@@ -20,6 +22,53 @@ export const INTERESTS = [
   { id: "art", label: "Art", emoji: "🎨" },
   { id: "science", label: "Science club", emoji: "🔬" },
 ] as const;
+
+export const TEMPERAMENTS = [
+  { id: "bold", label: "Bold", blurb: "Fearless, pushes every boundary." },
+  { id: "shy", label: "Shy", blurb: "Watches first, speaks later." },
+  { id: "curious", label: "Curious", blurb: "Asks why about everything." },
+  { id: "stubborn", label: "Stubborn", blurb: "Has opinions, and keeps them." },
+  { id: "gentle", label: "Gentle", blurb: "Kind, easily hurt." },
+  { id: "mischievous", label: "Mischievous", blurb: "Always up to something." },
+  { id: "driven", label: "Driven", blurb: "Sets goals and chases them." },
+  { id: "sensitive", label: "Sensitive", blurb: "Feels everything deeply." },
+] as const;
+
+/** A child's nature. Stable for life; it decides how they respond to the way you raise them. */
+export function temperamentOf(kid: Relative): (typeof TEMPERAMENTS)[number] {
+  const found = TEMPERAMENTS.find((t) => t.id === kid.temperament);
+  return found ?? TEMPERAMENTS[Math.floor(hash01(`${kid.id}:temper`) * TEMPERAMENTS.length)];
+}
+
+export const STYLES: { id: PlayerState["parentingStyle"]; label: string; emoji: string; blurb: string }[] = [
+  { id: "strict", label: "Strict", emoji: "📏", blurb: "Clear rules and high expectations. Driven kids thrive; defiant ones rebel; sensitive ones withdraw." },
+  { id: "balanced", label: "Balanced", emoji: "⚖️", blurb: "Warm but firm. No big wins, no big risks." },
+  { id: "permissive", label: "Easy-going", emoji: "🌈", blurb: "Closer bonds and creativity; bold kids run wild." },
+  { id: "handsoff", label: "Hands-off", emoji: "🪁", blurb: "More time for you. Kids drift, and trouble finds them." },
+];
+
+export function setParentingStyle(p0: PlayerState, style: PlayerState["parentingStyle"]): ActionResult {
+  if (p0.parentingStyle === style) return { player: p0 };
+  const p = clone(p0);
+  p.parentingStyle = style;
+  return { player: p };
+}
+
+/** Yearly effect of your parenting style on one child: bond, smarts, and the chance of trouble. */
+export function styleEffect(style: PlayerState["parentingStyle"], temper: string): { bond: number; smarts: number; trouble: number } {
+  const defiant = temper === "bold" || temper === "stubborn" || temper === "mischievous";
+  const tender = temper === "shy" || temper === "sensitive" || temper === "gentle";
+  switch (style) {
+    case "strict":
+      return defiant ? { bond: -3, smarts: 0, trouble: 0.1 } : tender ? { bond: -2, smarts: 1, trouble: 0 } : temper === "driven" ? { bond: 0, smarts: 2, trouble: -0.04 } : { bond: -1, smarts: 1, trouble: -0.02 };
+    case "permissive":
+      return defiant ? { bond: 2, smarts: 0, trouble: 0.1 } : tender ? { bond: 3, smarts: 0, trouble: 0 } : { bond: 2, smarts: temper === "curious" ? 1 : 0, trouble: 0.01 };
+    case "handsoff":
+      return { bond: -3, smarts: -1, trouble: 0.08 };
+    default:
+      return { bond: 1, smarts: 0, trouble: 0 };
+  }
+}
 
 export type ChildAction = "tutor" | "activity" | "family" | "school" | "talk";
 
@@ -70,6 +119,8 @@ export function childAction(p0: PlayerState, kidId: string, action: ChildAction,
     p.annual[key] = 1;
     kid.relationshipBar = clamp(kid.relationshipBar + 10);
     changeStat(p, "happiness", 3);
+    const mate = getPartner(p);
+    if (mate) meet(p, mate, "family");
     const body = `A whole weekend with ${n}, no phones. They talked about everything.`;
     addLog(p, body);
     return { player: p, notices: [info("Family Time", body, "good")] };
@@ -101,7 +152,11 @@ export function processChildren(p: PlayerState, rng: Rng, notices: Notices) {
     const n = firstName(kid);
     if (kid.age < 18) {
       kid.smarts = clamp(kid.smarts + rng.int(0, 2) + (kid.school === "private" ? 1 : 0));
-      if (kid.age >= 12 && kid.relationshipBar < 40 && rng.chance(0.12 + (kid.trouble ?? 0) * 0.05)) {
+      // How you raise them, and who they are, shape the bond. (Kids who live mostly elsewhere are not shaped by your style.)
+      const fx = kid.age >= 3 && !kid.custody ? styleEffect(p.parentingStyle ?? "balanced", temperamentOf(kid).id) : { bond: 0, smarts: 0, trouble: 0 };
+      kid.relationshipBar = clamp(kid.relationshipBar + fx.bond);
+      kid.smarts = clamp(kid.smarts + fx.smarts);
+      if (kid.age >= 12 && (kid.relationshipBar < 40 || fx.trouble >= 0.08) && rng.chance(Math.max(0, 0.12 + (kid.trouble ?? 0) * 0.05 + fx.trouble))) {
         kid.trouble = (kid.trouble ?? 0) + 1;
         const cost = rng.int(300, 2_500);
         p.bankBalance = Math.max(0, p.bankBalance - cost);
@@ -112,12 +167,40 @@ export function processChildren(p: PlayerState, rng: Rng, notices: Notices) {
       }
     }
     if (kid.age === 18) {
-      const bonus = (kid.school === "private" ? 0.4 : 0) + (kid.interest === "science" ? 0.2 : 0);
+      const bonus = (kid.school === "private" ? 0.4 : 0) + (kid.interest === "science" ? 0.2 : 0) + (kid.traits?.includes("College fund") ? 0.5 : 0);
       kid.incomeTier = Math.min(5, Math.max(1, Math.round(1 + (kid.smarts - 30) / 20 + bonus + (tier - 3) * 0.3 - (kid.trouble ?? 0) * 0.3)));
       kid.occupation = kid.smarts >= 62 && (kid.trouble ?? 0) < 2 ? `University student (${occupationFor(kid.incomeTier, rng).toLowerCase()} in the making)` : occupationFor(Math.max(1, kid.incomeTier - 1), rng);
       const body = `${n} turned 18 and set out on their own: ${kid.occupation}.`;
       addLog(p, body);
+      remember(p, kid, "milestone", `${n} turned 18 and left home.`);
       notices.push(info("All Grown Up", body, "good"));
+    }
+  }
+  const minorsNow = p.relatives.filter((r) => r.relation === "Child" && r.alive && r.age < 18 && !r.custody).length;
+  if (minorsNow > 0 && p.parentingStyle === "handsoff") changeStat(p, "happiness", 1);
+  processAdultChildren(p, rng, notices);
+}
+
+/** Grown children have lives: partners, weddings, and the grandchildren that follow. */
+function processAdultChildren(p: PlayerState, rng: Rng, notices: Notices) {
+  for (const kid of p.relatives) {
+    if (kid.relation !== "Child" || !kid.alive || kid.age < 22 || kid.age > 45) continue;
+    const traits = (kid.traits = kid.traits ?? []);
+    const n = firstName(kid);
+    const close = kid.relationshipBar >= 45;
+    if (!traits.includes("Married") && !traits.includes("Partnered") && rng.chance(0.07)) {
+      traits.push("Partnered");
+      remember(p, kid, "milestone", `${n} brought someone home.`);
+      const body = close ? `${n} called to say they've met someone, and asked if they could bring them to Sunday lunch.` : `You heard through a cousin that ${n} is seeing someone. They hadn't told you.`;
+      addLog(p, body);
+      notices.push(info("Your Child Is in Love", body, close ? "good" : "bad"));
+    } else if (traits.includes("Partnered") && !traits.includes("Married") && kid.age >= 24 && rng.chance(0.18)) {
+      traits.splice(traits.indexOf("Partnered"), 1, "Married");
+      remember(p, kid, "milestone", `${n} got married.`);
+      changeStat(p, "happiness", close ? 4 : 1);
+      const body = close ? `${n} got married. You gave a toast, cried, and danced badly.` : `${n} got married. You were invited, but sat at the far end of the room, and it showed.`;
+      addLog(p, body);
+      notices.push(info("A Wedding in the Family", body, close ? "good" : "neutral"));
     }
   }
 }

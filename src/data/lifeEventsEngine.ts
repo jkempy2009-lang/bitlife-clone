@@ -31,6 +31,7 @@ import { POLITICS_EVENTS } from "./events/politics";
 import { ARC_EVENTS } from "./events/arcs";
 import { COURT_EVENTS } from "./events/court";
 import { DYNASTY_EVENTS } from "./events/dynasty";
+import { RELATIONSHIP_EVENTS } from "./events/relationships";
 
 export type EventCategory =
   | "general"
@@ -230,6 +231,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   ...ARC_EVENTS,
   ...COURT_EVENTS,
   ...DYNASTY_EVENTS,
+  ...RELATIONSHIP_EVENTS,
 ];
 
 export const EVENT_BY_ID: Record<string, LifeEvent> = Object.fromEntries(

@@ -46,6 +46,8 @@ import { HANDOVER_CASH_SHARE, handoverBlocker } from "@/engine/legacy";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
 import FamilyView from "./FamilyView";
+import { CustodyPicker, InLawsCard, ParentingCard, PartnerCare, PastPeople, RelationshipCard } from "./BondsPanels";
+import { relationshipHealth } from "@/engine/bonds";
 
 const RELATION_ORDER = ["Partner", "Lover", "Parent", "Child", "Grandchild", "Sibling", "Nephew", "Grandparent", "Friend", "Pet"] as const;
 const ICONS: Record<string, string> = {
@@ -111,7 +113,7 @@ export default function RelationshipsTab() {
       <div>
         <SectionTitle hint={`${living.length} living`}>Family & Friends</SectionTitle>
         <div className="flex flex-col gap-2">
-          {RELATION_ORDER.flatMap((rel) => living.filter((r) => r.relation === rel)).map((r) => (
+          {RELATION_ORDER.flatMap((rel) => living.filter((r) => r.relation === rel).sort((a, b) => (rel === "Child" || rel === "Sibling" ? b.age - a.age : 0))).map((r) => (
             <button
               key={r.id}
               type="button"
@@ -123,8 +125,13 @@ export default function RelationshipsTab() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate font-semibold">{r.name}</span>
-                    <span className="shrink-0 text-xs text-slate-400">{label(r)}{r.royalTitle ? ` · ${r.royalTitle}` : ""} · {r.age}</span>
+                    <span className="shrink-0 text-xs text-slate-400">{r.relation === "Friend" && r.friendKind ? r.friendKind : label(r)}{r.royalTitle ? ` · ${r.royalTitle}` : ""} · {r.age}</span>
                   </div>
+                  {(r.grievances?.length ?? 0) > 0 || r.separatedYear || r.riftYear ? (
+                    <div className="mt-0.5 text-xs text-rose-300">{r.separatedYear ? "Living apart" : r.riftYear ? "Fallen out" : "⚠ Something unresolved"}</div>
+                  ) : r.relation === "Partner" ? (
+                    <div className="mt-0.5 text-xs text-slate-500">{relationshipHealth(p, r).label}</div>
+                  ) : null}
                   <div className="mt-1.5">
                     <MiniBar value={r.relationshipBar} color={barColor(r.relationshipBar)} />
                   </div>
@@ -135,6 +142,8 @@ export default function RelationshipsTab() {
           {living.length === 0 && <Card><p className="text-sm text-slate-400">You're all alone in the world. Go meet someone!</p></Card>}
         </div>
       </div>
+
+      <ParentingCard />
 
       <div>
         <SectionTitle>Meet People</SectionTitle>
@@ -217,18 +226,7 @@ export default function RelationshipsTab() {
         </div>
       )}
 
-      {past.length > 0 && (
-        <details className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-400">In memory & past relationships ({past.length})</summary>
-          <ul className="mt-2 space-y-1.5 text-sm text-slate-400">
-            {past.map((r) => (
-              <li key={r.id}>
-                {r.alive ? "💔" : "🕯️"} {r.name} — {r.alive ? `Ex (${r.age})` : `${label(r)}, died at ${r.deathAge ?? r.age}`}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <PastPeople past={past} labelOf={label} />
     </div>
   );
 }
@@ -497,6 +495,7 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
           {(rel.relation === "Partner" || rel.relation === "Lover" || rel.relation === "Friend") && rel.traits?.map((t) => <Pill key={t} tone="slate">{t}</Pill>)}
         </div>
       </Card>
+      <RelationshipCard rel={rel} />
 
       <SectionTitle hint={capped ? "Take a breather until next year" : `${INTERACTION_CAP - used} left this year`}>Interact</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
@@ -551,6 +550,8 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
         </>
       )}
 
+      {rel.relation === "Child" && rel.age < 18 && <CustodyPicker kid={rel} />}
+
       {rel.relation === "Child" && rel.alive && <HandOver rel={rel} />}
 
       {rel.relation === "Partner" && (
@@ -571,15 +572,18 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
                 onBack();
               }}
             >
-              {rel.partnerStatus === "married" ? "⚖️ Divorce (−30% cash)" : "💔 Break Up"}
+              {rel.partnerStatus === "married" ? `⚖️ Divorce (settlement ≈ ${Math.round(Math.min(0.5, 0.1 + 0.04 * (rel.marriedYear ? Math.max(0, p.year - rel.marriedYear) : 5)) * 100)}% of assets)` : "💔 Break Up"}
             </Button>
           </div>
+          <PartnerCare rel={rel} />
+          <InLawsCard rel={rel} />
         </>
       )}
 
       {mature && (rel.relation === "Partner" || rel.relation === "Lover") && (
-        <>
-          <SectionTitle hint="18+ · consent matters">Intimacy</SectionTitle>
+        <details className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-200">🔞 Intimacy · 18+, consent matters</summary>
+          <div className="mt-3 flex flex-col gap-3">
           <Card className="p-3">
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" checked={safe} onChange={(e) => setSafe(e.target.checked)} className="h-4 w-4 accent-emerald-500" />
@@ -611,7 +615,8 @@ function InteractionPanel({ rel, safe, setSafe, onBack }: { rel: Relative; safe:
           {rel.relation === "Partner" && (
             <p className="text-xs text-slate-500">Your partner's personality ({rel.traits?.join(", ") ?? "unknown"}) shapes how they'll react. Asking is always their choice, and no means no.</p>
           )}
-        </>
+          </div>
+        </details>
       )}
 
       {rel.relation === "Lover" && (

@@ -7,6 +7,7 @@ import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { addLog, changeStat, clone } from "./state";
 import { firstName } from "./social";
+import { addGrievance, remember } from "./bonds";
 
 type Notices = NonNullable<ActionResult["notices"]>;
 const info = (title: string, body: string, tone: "good" | "bad" | "neutral" = "neutral") =>
@@ -49,6 +50,7 @@ export function supportAction(p0: PlayerState, relId: string, action: SupportAct
     p.bankBalance -= amount;
     p.flags.push(`lent:${rel.id}:${amount}:${p.year}`);
     rel.relationshipBar = clamp(rel.relationshipBar + 8);
+    remember(p, rel, "kindness", `You lent ${n} ${money(amount)} when they needed it.`);
     const body = `You lent ${n} ${money(amount)}. They promised to pay it back as soon as they can.`;
     addLog(p, body);
     return { player: p, notices: [info("A Loan Between Friends", body, "neutral")] };
@@ -61,6 +63,7 @@ export function supportAction(p0: PlayerState, relId: string, action: SupportAct
     if (warm) {
       rel.relationshipBar = clamp(rel.relationshipBar + 6);
       changeStat(p, "happiness", 4);
+      if (rel.relationshipBar >= 60) remember(p, rel, "kindness", `You opened up to ${n} when it mattered.`);
       const body = `You told ${n} what's been weighing on you. They listened properly and didn't try to fix everything.`;
       addLog(p, body);
       return { player: p, notices: [info("Opening Up", body, "good")] };
@@ -113,6 +116,8 @@ export function processFriendLoans(p: PlayerState, rng: Rng, notices: Notices) {
       notices.push(info("Repaid", body, "good"));
     } else if (p.year - year >= 3) {
       rel.relationshipBar = clamp(rel.relationshipBar - 25);
+      addGrievance(p, rel, "debt", 2, `the ${money(amt)} they never paid back`);
+      remember(p, rel, "hardship", `${firstName(rel)} never repaid the ${money(amt)} you lent.`);
       const body = `You've given up on ever seeing the ${money(amt)} ${firstName(rel)} borrowed. The friendship has cooled.`;
       addLog(p, body);
       notices.push(info("Never Repaid", body, "bad"));

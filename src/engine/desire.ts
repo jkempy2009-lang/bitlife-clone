@@ -8,7 +8,7 @@ import type { Rng } from "@/lib/rng";
 import { clamp, money } from "@/lib/format";
 import { EXPERIENCE_BY_ID, INTERESTS, INTEREST_BY_ID } from "@/data/experiences";
 import { addLog, changeStat, clone } from "./state";
-import { encounter, fill, gate, isAdult, isOpen, recordCheating } from "./intimacy";
+import { declines, encounter, fill, gate, isAdult, isOpen, recordCheating } from "./intimacy";
 import { firstName } from "./social";
 import { MAX_PREF_AGE, MIN_ADULT_AGE, knows, tasteOf } from "./people";
 
@@ -98,6 +98,8 @@ export function shareExperience(p0: PlayerState, relId: string, expId: string, p
   const exp = EXPERIENCE_BY_ID[expId];
   const rel = findPartnerLike(p, relId);
   if (!exp || !rel || !isAdult(rel)) return { player: p0 };
+  const no = declines(rel);
+  if (no) return { player: p0, notices: [info("Not Tonight", `${firstName(rel)} ${no}. You respected that.`)] };
   if (exp.partnerOnly && rel.relation !== "Partner") return { player: p0, notices: [info("Not Casual", "That needs the trust of a real relationship.")] };
   if (!p.intimacy.interests.includes(exp.tag)) return { player: p0, notices: [info("Not On Your List", `Add "${INTEREST_BY_ID[exp.tag].label}" to your interests (Preferences) first.`)] };
   if (rel.relationshipBar < exp.minBar) return { player: p0, notices: [info("Not There Yet", `${firstName(rel)} would want a stronger bond first (relationship ${exp.minBar}+).`)] };
@@ -236,6 +238,8 @@ export function playScene(p0: PlayerState, relId: string, plan: ScenePlan, prote
   const p = clone(p0);
   const rel = findPartnerLike(p, relId);
   if (!rel || !isAdult(rel)) return { player: p0 };
+  const no = declines(rel);
+  if (no) return { player: p0, notices: [info("Not Tonight", `${firstName(rel)} ${no}. You respected that.`)] };
   const setting = pick(SCENE_SETTINGS, plan.setting);
   const mood = pick(SCENE_MOODS, plan.mood);
   const extra = pick(SCENE_EXTRAS, plan.extra) ?? SCENE_EXTRAS[0];

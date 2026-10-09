@@ -5,6 +5,7 @@
 import type { PlayerState, Relative } from "@/types/game.types";
 import { money } from "@/lib/format";
 import { addLog, changeStat, getPartner } from "./state";
+import { supportShare } from "./partnership";
 
 /** Typical annual income by incomeTier 1-5. */
 const TIER_INCOME = [0, 16_000, 34_000, 58_000, 95_000, 160_000];
@@ -24,7 +25,8 @@ export const SHARED_LIVING_FACTOR = 0.55;
 
 export function marriedPartner(p: PlayerState): Relative | undefined {
   const partner = getPartner(p);
-  return partner && partner.partnerStatus === "married" ? partner : undefined;
+  // A separated spouse is still legally married, but you no longer share a household budget.
+  return partner && partner.partnerStatus === "married" && !partner.separatedYear ? partner : undefined;
 }
 
 export function yearsMarried(p: PlayerState, partner: Relative): number {
@@ -65,24 +67,24 @@ export function divorceSettlement(p: PlayerState, partner: Relative, atFault: bo
 export function settleDivorce(p: PlayerState, partner: Relative, atFault = false): string {
   const total = divorceSettlement(p, partner, atFault);
   const kids = minorChildren(p).length;
-  if (kids > 0) {
-    if (!p.flags.includes("child_support")) p.flags.push("child_support");
-  }
   changeStat(p, "happiness", -4);
-  return `Your divorce from ${partner.name} cost you ${money(total)} in the settlement${kids > 0 ? `, and you'll pay child support for ${kids} child${kids > 1 ? "ren" : ""} until they turn 18` : ""}.`;
+  return `Your divorce from ${partner.name} cost you ${money(total)} in the settlement${kids > 0 ? `, and there will be child support for ${kids} child${kids > 1 ? "ren" : ""} until they turn 18` : ""}.`;
 }
 
-/** Yearly maintenance for children after a divorce, as a share of your income. */
+/**
+ * Yearly maintenance for children of a couple that has split, as a share of your income. It depends on
+ * where the children live (see partnership.ts): none if they live with you, less if custody is shared.
+ */
 export function childSupportDue(p: PlayerState, gross: number): number {
   if (!p.flags.includes("child_support")) return 0;
-  const kids = minorChildren(p).length;
-  if (kids === 0) {
+  const kids = minorChildren(p);
+  if (kids.length === 0) {
     p.flags = p.flags.filter((f) => f !== "child_support");
     return 0;
   }
-  const married = marriedPartner(p);
-  if (married) return 0;
-  return Math.round(gross * Math.min(0.25, 0.08 * kids));
+  // Children from before custody existed have no record: treat them under the old flat rule.
+  const unsettled = kids.filter((k) => !k.custody).length;
+  return Math.round(gross * Math.min(0.25, supportShare(p) + (unsettled > 0 && !marriedPartner(p) ? 0.08 * unsettled : 0)));
 }
 
 /** Income a lender will count: wages, pensions, a share of a spouse's pay and of recent business profit. */

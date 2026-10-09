@@ -29,6 +29,9 @@ import { exposeAffair } from "./intimacy";
 import { promoteJob } from "./career";
 import { cancelScheduled, emigrate, relativeDies, scheduleAll, takeDueEvents } from "./arcEffects";
 import { fillNpcTokens } from "./npc";
+import { fillFamilyTokens } from "./cast";
+import { remember } from "./bonds";
+import { ensureInLaws } from "./inlaws";
 
 // ---------------------------------------------------------------------------
 // Token substitution: {mother}, {father}, {partner}, {sibling}, {friend}, {child}, {name}
@@ -53,7 +56,7 @@ export function fillTokens(text: string, p: PlayerState): string {
     .replaceAll("{child}", ch ? firstName(ch) : "your child")
     .replaceAll("{biz}", p.business?.name ?? "your business")
     .replaceAll("{name}", p.firstName);
-  return fillNpcTokens(out, p);
+  return fillNpcTokens(fillFamilyTokens(out, p), p);
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +215,8 @@ export function applyEffects(p: PlayerState, e: ChoiceEffects, rng: Rng): string
       partner.partnerStatus = "married";
       partner.marriedYear = p.year;
       p.queuedEvents.push("wedding_day");
+      remember(p, partner, "milestone", `You and ${firstName(partner)} got married.`);
+      ensureInLaws(p, partner, rng);
     }
   }
   if (e.endRelationship) endRelationship(p, e.endRelationship === "auto" ? (getPartner(p)?.partnerStatus === "married" ? "divorce" : "breakup") : e.endRelationship);

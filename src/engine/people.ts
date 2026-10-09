@@ -6,7 +6,7 @@ import type { PlayerState, Relative } from "@/types/game.types";
 import type { Rng } from "@/lib/rng";
 import { INTEREST_BY_ID } from "@/data/experiences";
 import { clamp } from "@/lib/format";
-import { partnerGenderFor } from "./state";
+import { partnerGenderFor, randomName } from "./state";
 
 export const MIN_ADULT_AGE = 18;
 export const MAX_PREF_AGE = 99;
@@ -39,7 +39,7 @@ export function sampleAge(p: PlayerState, rng: Rng, shift = 0): number {
 }
 
 /** Deterministic 0-1 hash so tastes never need storing or re-rolling. */
-function hash01(text: string): number {
+export function hash01(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);
@@ -71,4 +71,16 @@ export const knows = (rel: Relative, tag: string) => !!rel.knownTastes?.includes
 export function adultSpec(p: PlayerState, rng: Rng, shift = 0): { gender: string; ageRange: [number, number]; age: number } {
   const age = sampleAge(p, rng, shift);
   return { gender: candidateGender(p, rng), ageRange: [age, age], age };
+}
+
+/**
+ * A first name nobody in your life already has, so "Anna" always means one person. Re-rolls a few
+ * times and only gives up (accepting a repeat) in a small name pool.
+ */
+export function freshFirstName(p: PlayerState, gender: string, rng: Rng, country = p.residence.country): string {
+  const used = new Set(p.relatives.map((r) => r.name.split(" ")[0]));
+  used.add(p.firstName);
+  let first = randomName(country, gender, rng).first;
+  for (let i = 0; i < 8 && used.has(first); i++) first = randomName(country, gender, rng).first;
+  return first;
 }

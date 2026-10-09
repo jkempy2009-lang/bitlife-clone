@@ -25,6 +25,8 @@ import {
 import { deathChance, killPlayer, naturalCause } from "./mortality";
 import { endRelationship, maybeGrandchild } from "./social";
 import { processFriendLoans } from "./friends";
+import { processRelationships } from "./relations";
+import { remember } from "./bonds";
 import { processTemper } from "./talentEffects";
 import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
@@ -166,13 +168,15 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
     changeStat(p, "happiness", -10);
     notices.push(info(married ? "Divorce" : "Breakup", body, "bad"));
   }
-  p.relatives = p.relatives.filter((r) => {
-    if (r.relation === "Friend" && r.alive && r.relationshipBar <= 0) {
+  // Friends you stop caring for drift away, but they stay findable: you can reach out again later (see circle.ts).
+  for (const r of p.relatives) {
+    if (r.relation === "Friend" && r.alive && r.partnerStatus !== "ex" && r.relationshipBar <= 0) {
+      r.partnerStatus = "ex";
+      r.lostYear = p.year;
+      remember(p, r, "loss", `You and ${r.name.split(" ")[0]} drifted apart.`);
       addLog(p, `You and ${r.name} drifted apart.`);
-      return false;
     }
-    return true;
-  });
+  }
   if (p.age < 18 && !hasFlag(p, "orphan") && livingRelatives(p, "Parent").length === 0) {
     p.flags.push("orphan");
     changeStat(p, "happiness", -12);
@@ -588,6 +592,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   processTemper(p, rng, notices);
   processChildren(p, rng, notices);
   processIntimacy(p, prevAnnual, rng, notices);
+  processRelationships(p, prevAnnual, rng, notices);
   processAssets(p, rng, notices); // 3. asset economics
   processFinance(p, rng, notices); // 4. financial balance sheet
   processDistress(p, notices); // collections, repossession, foreclosure, forced bankruptcy
