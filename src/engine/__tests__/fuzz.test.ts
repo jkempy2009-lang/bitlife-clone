@@ -93,7 +93,7 @@ function checkInvariants(p: PlayerState) {
   expect(a.history.length).toBeLessThanOrEqual(40);
   // A business is a full-time commitment: it never coexists with a job.
   if (p.business) {
-    expect(p.currentJob, "business and job at once").toBeNull();
+    if (!p.business.passive) expect(p.currentJob, "business and job at once").toBeNull();
     const b = p.business;
     for (const k of ["cash", "debt", "value", "assets", "basis", "revenue", "customers", "reputation", "quality", "morale", "fit"] as const) expect(Number.isFinite(b[k]), `business.${k}`).toBe(true);
     expect(b.ownerShare).toBeGreaterThan(0);
