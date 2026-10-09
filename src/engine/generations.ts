@@ -288,7 +288,7 @@ export function applyFamilyLegacy(next: PlayerState, old: PlayerState, child: Re
 
   // Opening beats: the memorial now, the will and the letter soon.
   next.queuedEvents.push("legacy_memorial");
-  if (siblings.length > 0 && next.bankBalance > 5_000) next.scheduled.push({ id: "estate_heir_will", dueYear: year + 1 });
+  // The reading of the will is booked by continueAsChild once it knows how the estate was divided (see estate.ts).
   next.scheduled.push({ id: "legacy_letter_note", dueYear: year + Math.max(1, 12 - next.age) });
 
   // Intro notice for the new generation.

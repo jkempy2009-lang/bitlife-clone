@@ -29,6 +29,8 @@ import { processTemper } from "./talentEffects";
 import { processChildren, schoolCosts } from "./parenting";
 import { processLaterLife } from "./later";
 import { ensureSuccession, processRoyalFamily } from "./royalty";
+import { processDynasty } from "./dynasty";
+import { settleNpcEstate } from "./estate";
 import { processCourt, royalFinance } from "./court";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
 import { selectEvents } from "./events";
@@ -128,7 +130,9 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
       if (r.relation === "Partner" && r.partnerStatus === "married" && !p.flags.some((f) => f.startsWith("grief:"))) p.flags.push(`grief:${p.year}`);
       const chance =
         r.relation === "Parent" || r.relation === "Partner" ? 0.1 + 0.12 * r.incomeTier : 0.04 * r.incomeTier;
-      if (rng.chance(chance)) {
+      // A parent who once handed their life over leaves the estate they kept, divided under their will.
+      const settled = (r.relation === "Parent" || r.relation === "Grandparent") && settleNpcEstate(p, r, notices);
+      if (!settled && rng.chance(chance)) {
         const estate = r.incomeTier * r.incomeTier * 20_000;
         const share = Math.round(estate * (r.relation === "Parent" || r.relation === "Partner" ? rng.float(0.5, 1) : 0.15));
         p.bankBalance += share;
@@ -619,6 +623,7 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
     processEntertainment(p);
     processCelebrity(p, rng, notices);
     processRoyalty(p, rng, notices);
+    processDynasty(p, rng, notices);
     processJustice(p, rng, notices);
     processMilestones(p, notices);
     driftStats(p, rng);

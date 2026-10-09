@@ -20,6 +20,7 @@ import {
 import { athleteJob, dropContract, exitAmateur, info, retireAthlete, signContract } from "./athleteCareer";
 import { inSport, isContractedAthlete } from "./athleteState";
 import { processAthlete } from "./athleteSeason";
+import { applyFamilySport } from "./dynasty";
 
 export { SPORTS, SPORT_INFO };
 export { processAthlete };
@@ -76,12 +77,14 @@ export function signWithClub(p0: PlayerState, sport: string, rng: Rng): ActionRe
   a.offers = [];
   a.athMirror = p.skills.athletics;
   setFlag(p, "athlete_dream");
+  const familyName = applyFamilySport(p, sport); // a famous surname in the same sport opens doors (and weighs)
   const late = p.age >= 18;
   const body = late
     ? `You joined an amateur ${sport.toLowerCase()} club at ${p.age}. Late starters face long odds: scouts recruit the young. Your training load is set to ${p.effort}.`
     : `You committed to ${sport.toLowerCase()}. Expect years of training with no guarantee: your training load (${p.effort}), health, grades and a bit of luck decide whether this goes anywhere.`;
-  addLog(p, body);
-  return { player: p, notices: [info(`${sinfo.emoji} Committed to ${sport}`, body, "good")] };
+  const full = familyName ? `${body} ${familyName}` : body;
+  addLog(p, full);
+  return { player: p, notices: [info(`${sinfo.emoji} Committed to ${sport}`, full, "good")] };
 }
 export const commitToSport = signWithClub;
 

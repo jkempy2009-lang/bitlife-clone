@@ -2,6 +2,7 @@ import { ev, opt, risk } from "../eventBuilders";
 import type { LifeEvent } from "../lifeEventsEngine";
 import type { PlayerState } from "@/types/game.types";
 import { beat, begin, entry, fin, later, type Arc } from "./arcKit";
+import { equaliseWithSiblings, giftSiblings } from "@/engine/estate";
 
 /**
  * Generations: the estate that families fight over, and the first years of an heir's life.
@@ -30,9 +31,9 @@ const ESTATE: LifeEvent[] = [
   entry("estate", "estate_heir_will", "family", 0, 90, "The Reading of the Will",
     "The solicitor's office smells of old paper and carpet shampoo. {lateparent}'s will names you as the main heir, the one to carry the name, and your siblings as 'also beneficiaries'. Nobody is smiling. {sibling} is counting something on their fingers, and the pen the solicitor hands you is heavier than it looks.", [
       opt("Split the estate equally with your siblings", "You told the solicitor to redraw the numbers. {sibling} stared at you for a long moment, and then cried into a tissue the solicitor, who's seen it all, silently provided.",
-        begin("estate", later("estate_peace", 1, 2, { bankMultiplier: 0.6, karmaDelta: 5, relationshipDelta: { target: "Sibling", delta: 15 }, setFlags: ["arc_estate_fair"] }))),
+        begin("estate", later("estate_peace", 1, 2, { apply: (pl) => equaliseWithSiblings(pl), karmaDelta: 5, relationshipDelta: { target: "Sibling", delta: 15 }, setFlags: ["arc_estate_fair"] }))),
       opt("Give each sibling a generous gift and keep the rest", "A fair gesture, if not quite a fair share. It took the sting out of the room, mostly.",
-        begin("estate", later("estate_peace", 1, 2, { bankMultiplier: 0.85, karmaDelta: 2, relationshipDelta: { target: "Sibling", delta: 7 }, setFlags: ["arc_estate_fair"] }))),
+        begin("estate", later("estate_peace", 1, 2, { apply: (pl) => giftSiblings(pl, 0.08), karmaDelta: 2, relationshipDelta: { target: "Sibling", delta: 7 }, setFlags: ["arc_estate_fair"] }))),
       opt("Keep it all: it was left to you", "You signed. The pen scratched like a fingernail. {sibling} left the room without a word and the door did the speaking.",
         begin("estate", later("estate_lawyers", 1, 2, { karmaDelta: -5, relationshipDelta: { target: "Sibling", delta: -25 }, happinessDelta: -2, setFlags: ["arc_estate_greedy"] }))),
     ], { scheduledOnly: true, requires: { hasSibling: true } }),

@@ -45,6 +45,7 @@ import { money } from "@/lib/format";
 import { HANDOVER_CASH_SHARE, handoverBlocker } from "@/engine/legacy";
 import { spouseIncome } from "@/engine/household";
 import { Button, Card, MiniBar, Pill, SectionTitle } from "./ui";
+import FamilyView from "./FamilyView";
 
 const RELATION_ORDER = ["Partner", "Lover", "Parent", "Child", "Grandchild", "Sibling", "Nephew", "Grandparent", "Friend", "Pet"] as const;
 const ICONS: Record<string, string> = {
@@ -85,6 +86,7 @@ export default function RelationshipsTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [safe, setSafe] = useState(true);
   const [intent, setIntent] = useState<Intent>("casual");
+  const [familyOpen, setFamilyOpen] = useState(false);
 
   const living = p.relatives.filter((r) => r.alive && r.partnerStatus !== "ex");
   const past = p.relatives.filter((r) => !r.alive || r.partnerStatus === "ex");
@@ -96,8 +98,11 @@ export default function RelationshipsTab() {
     return <InteractionPanel rel={selected} safe={safe} setSafe={setSafe} onBack={() => setSelectedId(null)} />;
   }
 
+  if (familyOpen) return <FamilyView onBack={() => setFamilyOpen(false)} />;
+
   return (
     <div className="flex flex-col gap-3">
+      <Button variant="secondary" onClick={() => setFamilyOpen(true)}>🌳 Family tree & dynasty</Button>
       {p.pregnancy && (
         <Card className="border-pink-500/40 bg-pink-950/20 p-3 text-sm text-pink-100">
           🤰 {p.pregnancy.carrier === "self" ? "You're" : "Your partner is"} expecting a baby. The birth is due when you next age up.

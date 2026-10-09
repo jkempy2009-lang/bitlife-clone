@@ -58,7 +58,7 @@ export function jobChance(p: PlayerState, job: MobJobDef, plan: number, crew: nu
 }
 
 export function joinChance(p: PlayerState): number {
-  return clamp(0.3 + (50 - p.karma) / 150 + p.stats.crimesCommitted * 0.03 + (hasFlag(p, "ex_con") ? 0.15 : 0) + (p.justice.gangTies ? 0.1 : 0), 0.1, 0.85);
+  return clamp(0.3 + (50 - p.karma) / 150 + p.stats.crimesCommitted * 0.03 + (hasFlag(p, "ex_con") ? 0.15 : 0) + (p.justice.gangTies ? 0.1 : 0) + (p.dynasty?.clout.crime ?? 0) / 400, 0.1, 0.85); // a family name they know helps
 }
 
 export function joinMob(p0: PlayerState, rng: Rng): ActionResult {

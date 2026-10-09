@@ -13,6 +13,7 @@ import { CAREER_BY_ID } from "@/data/careersRegistry";
 import { occupationFor } from "@/data/occupations";
 import { newRoyalLife, royalStyleText } from "./royalty";
 import { newAthleteState } from "./athleteState";
+import { newDynasty } from "./dynastyState";
 import { newCourt, realmNamesFor } from "./courtState";
 import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
 import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
@@ -412,6 +413,7 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
       yearsWorked: 0,
     },
     generation: 1,
+    dynasty: newDynasty(lastName, opts.startYear),
     alive: true,
     causeOfDeath: null,
     deathYear: null,

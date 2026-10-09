@@ -17,6 +17,9 @@ import {
   netWorth,
 } from "./state";
 import { applyFamilyLegacy } from "./generations";
+import { describeLife, inheritDynasty } from "./dynasty";
+import { hydrateDynasty } from "./dynastyState";
+import { ESTATE_TAX, divideEstate, fairness, settleDebts, type Division } from "./estate";
 
 export interface DeathSummary {
   highestCareer: string;
@@ -105,6 +108,38 @@ export function handoverBlocker(p: PlayerState, child: Relative): string | null 
   return null;
 }
 
+/** Brothers and sisters judge how the estate was divided; an unfair will can start a dispute. */
+function divideAmongSiblings(next: PlayerState, living: boolean, division: Division, idMap: Map<string, string>) {
+  let grudge = false;
+  for (const [oldId, newId] of idMap) {
+    if (division.siblingCash[oldId] === undefined) continue;
+    const sib = next.relatives.find((r) => r.id === newId);
+    if (!sib || !sib.alive) continue;
+    const f = fairness(division, oldId);
+    if (f < 0.75) {
+      sib.relationshipBar = Math.max(0, sib.relationshipBar - 14);
+      grudge = true;
+    } else if (f > 1.15) sib.relationshipBar = Math.min(100, sib.relationshipBar + 6);
+  }
+  const trust = next.dynasty.trust?.balance ?? 0;
+  const alive = [...idMap.values()].filter((id) => next.relatives.find((r) => r.id === id)?.alive);
+  if (alive.length > 0 && trust >= 100_000 && trust > division.heirCash) {
+    for (const id of alive) {
+      const s = next.relatives.find((r) => r.id === id)!;
+      s.relationshipBar = Math.max(0, s.relationshipBar - 6);
+    }
+    addLog(next, `Your siblings have learned that most of the family's money sits in a trust that only your line will ever see. Nobody has said anything yet.`);
+  }
+  if (alive.length > 0 && division.charity > 0) addLog(next, `${money(division.charity)} of the estate went to charity, as the will asked.`);
+  if (alive.length > 0 && !living) {
+    const total = Object.values(division.siblingCash).reduce((s, v) => s + v, 0);
+    if (total > 0) addLog(next, `Under the will your ${alive.length === 1 ? "sibling" : "siblings"} received ${money(total)} in cash.`);
+  }
+  if (living || alive.length === 0) return;
+  if (grudge && next.bankBalance > 5_000) next.scheduled.push({ id: "estate_heir_will", dueYear: next.year + 1 });
+  else if (division.heirWeight < division.equalWeight * 0.75) next.scheduled.push({ id: "estate_short_changed", dueYear: next.year + 1 });
+}
+
 /**
  * Take over as one of your children. After death (default) the old character is gone and the estate passes on with
  * 10% tax. With `living`, the old character steps aside but stays in the family as a living parent.
@@ -119,29 +154,70 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
   const [firstName, ...rest] = child.name.split(" ");
   const lastName = rest.join(" ") || old.lastName;
   const bizHeir = inheritBusiness(old, child.age, rng);
-  const inherited = Math.round(Math.max(0, old.bankBalance) * (living ? HANDOVER_CASH_SHARE : 0.9)) + bizHeir.cash; // 10% estate tax after death
   const heirsLeft = heirs(old).filter((c) => c.id !== child.id);
-  const survivingPartner = old.relatives.find((r) => r.relation === "Partner" && r.alive && r.partnerStatus !== "ex");
+  const will = hydrateDynasty(old).will;
+  const claimants = heirs(old).map((c) => ({ id: c.id, age: c.age }));
+  const equity = (x: { currentValue: number; mortgageBalance?: number; loanBalance?: number }) => x.currentValue - (x.mortgageBalance ?? 0) - (x.loanBalance ?? 0);
+  const portfolio = Object.values(old.investments).reduce((s, h) => s + h.value, 0);
+
+  // The money. After a death, debts come off the top (an insolvent estate is written off: heirs are not liable),
+  // then the will divides the cash. Houses, cars, investments and any business go to the heir you play.
+  let division: Division;
+  let investmentFactor = 1;
+  let taxPaid = 0;
+  let writtenOff = 0;
+  let retained = 0;
+  const propertyEquity = old.properties.reduce((s, x) => s + equity(x), 0) + old.vehicles.reduce((s, x) => s + equity(x), 0);
+  if (living) {
+    const gift = Math.round(Math.max(0, old.bankBalance) * HANDOVER_CASH_SHARE);
+    division = divideEstate(gift, propertyEquity + portfolio + (bizHeir.business?.value ?? 0), will.plan, child.id, claimants, will.chosenId);
+    // What the old character keeps (a quarter of their cash and their pension pot, less debts) is their own estate, divided when they die.
+    retained = Math.max(0, Math.round(old.bankBalance - gift + old.retirementSavings * 0.85 - old.outstandingLoans));
+  } else {
+    const settled = settleDebts(old, Math.max(0, old.bankBalance + (old.alive ? 0 : old.retirementSavings * 0.85)));
+    investmentFactor = settled.investmentKeep;
+    writtenOff = settled.writtenOff;
+    taxPaid = Math.round(settled.cash * ESTATE_TAX);
+    division = divideEstate(settled.cash - taxPaid, propertyEquity + portfolio * investmentFactor * (1 - ESTATE_TAX) + (bizHeir.business?.value ?? 0), will.plan, child.id, claimants, will.chosenId);
+  }
+  const inherited = division.heirCash + bizHeir.cash;
+  const survivingPartner = old.relatives.find((r) => r.relation === "Partner" && r.alive && r.partnerStatus === "married");
+  const life = describeLife(old);
 
   const relatives: Relative[] = [];
   relatives.push({
     ...makeRelativeBase(rng, "Parent", `${old.firstName} ${old.lastName}`, old.age, old.gender, Math.min(5, Math.max(1, Math.round(1 + netWorth(old) / 400_000))), 80),
     ...(living ? { alive: true, relationshipBar: Math.max(70, child.relationshipBar) } : { alive: false, deathAge: old.age, deathYear: year }),
+    // The old character's own story, not a random job: what they did and what they left.
+    occupation: life.headline,
+    legacyNote: life.honours.slice(0, 3).join(" · ") || undefined,
+    ...(living ? { wealth: retained, willPlan: will.plan } : {}),
     // Where this royal stood in line, so the family can work out who is crowned next once the reign ends.
     ...(old.royal && (old.royal.crown === "parent" || old.royal.crown === "grandparent") ? { royalLine: old.royal.line } : {}),
     ...(living && isRoyal(old) ? { royalTitle: old.royal?.crown === "self" ? (old.gender === "Female" ? "Queen" : "King") : old.gender === "Female" ? "Princess" : "Prince" } : {}),
     ...(living && (old.isInPrison || old.pendingTrial || old.isFugitive) ? { traits: [old.isInPrison ? "In prison" : old.isFugitive ? "On the run" : "Awaiting trial"] } : {}),
   });
   if (survivingPartner) {
-    relatives.push({ ...survivingPartner, id: rng.id(), relation: "Parent", partnerStatus: undefined, relationshipBar: Math.max(60, survivingPartner.relationshipBar) });
+    // Only a spouse becomes a step-parent: a girlfriend of a few months does not become your mother.
+    const stepParent = survivingPartner.age - child.age < 16;
+    relatives.push({
+      ...survivingPartner,
+      id: rng.id(),
+      relation: "Parent",
+      partnerStatus: undefined,
+      relationshipBar: Math.max(60, survivingPartner.relationshipBar),
+      traits: [...(survivingPartner.traits ?? []).filter((t) => t !== "Step-parent"), ...(stepParent ? ["Step-parent"] : [])],
+    });
   }
   // Brothers and sisters, including any who died (their children keep their place in the line of succession).
   const idMap = new Map<string, string>();
   for (const s of old.relatives.filter((r) => r.relation === "Child" && r.id !== child.id)) {
     const nid = rng.id();
     idMap.set(s.id, nid);
-    relatives.push({ ...s, id: nid, relation: "Sibling", partnerStatus: undefined });
+    const cut = division.siblingCash[s.id] ?? 0;
+    relatives.push({ ...s, id: nid, relation: "Sibling", partnerStatus: undefined, ...(cut > 0 ? { wealth: (s.wealth ?? 0) + cut } : {}) });
   }
+  if (living) relatives[0].willHeirId = will.chosenId === child.id ? "self" : will.chosenId ? idMap.get(will.chosenId) : undefined;
   // Your parent's grandchildren: your own children if they came through you, your nephews and nieces if through a sibling.
   for (const g of old.relatives.filter((r) => r.relation === "Grandchild" && r.alive && r.parentId)) {
     if (g.parentId === child.id) relatives.push({ ...g, id: rng.id(), relation: "Child", parentId: undefined });
@@ -176,7 +252,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
     looks: child.looks,
     diseases: [],
     bankBalance: inherited,
-    outstandingLoans: living ? 0 : old.outstandingLoans,
+    outstandingLoans: 0, // debts die with the estate (or stay with the parent who stepped aside): the heir starts clean
     creditScore: 600,
     annualSalary: 0,
     taxesPaidThisYear: 0,
@@ -207,7 +283,7 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
     economy: { ...old.economy },
     residence: { ...old.residence },
     investments: Object.fromEntries(
-      Object.entries(old.investments).map(([k, h]) => [k, { value: Math.round(h.value * 0.9), basis: Math.round(h.basis * 0.9) }]),
+      Object.entries(old.investments).map(([k, h]) => [k, { value: Math.round(h.value * investmentFactor * (living ? 1 : 1 - ESTATE_TAX)), basis: Math.round(h.basis * investmentFactor * (living ? 1 : 1 - ESTATE_TAX)) }]),
     ),
     vices: { smoking: 0, alcohol: 0, drugs: 0, gambling: 0 },
     probation: null,
@@ -242,8 +318,11 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
   if (old.properties.length || old.vehicles.length) {
     addLog(next, living
       ? `Your parent also signed over ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}.`
-      : `You also inherited ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}. The estate tax took ${money(Math.round(Math.max(0, old.bankBalance) * 0.1))}.`);
+      : `You also inherited ${old.properties.length} propert${old.properties.length === 1 ? "y" : "ies"} and ${old.vehicles.length} vehicle${old.vehicles.length === 1 ? "" : "s"}.`);
   }
+  if (!living && taxPaid > 0) addLog(next, `Estate tax took ${money(taxPaid)}.`);
+  if (!living && writtenOff > 0) addLog(next, `The estate could not cover its debts. Creditors took everything liquid and ${money(writtenOff)} of what was owed died with your parent. You are not liable for it.`);
+  else if (!living && old.outstandingLoans > 0) addLog(next, `Your parent's loans of ${money(old.outstandingLoans)} were paid off from the estate before it was divided.`);
   if (bizHeir.business) next.flags.push("business_owner");
   if (bizHeir.note) addLog(next, bizHeir.note);
   if (royalHeir) addLog(next, royalHeir.log);
@@ -253,6 +332,8 @@ export function continueAsChild(old: PlayerState, childId: string, rng: Rng, liv
     else if (old.royal.crown === "self") beginMourning(next);
   }
   applyFamilyLegacy(next, old, child, rng); // family continuity: upbringing, reputation, traits, flags, opening events
+  inheritDynasty(next, old, child, living, epitaph(old), rng); // chronicle, name clout, trust, grooming
+  divideAmongSiblings(next, living, division, idMap);
   if (living) {
     // Nobody died: no grief, no memorial, no reading of the will. Your old self carries on as a living parent.
     for (const r of next.relatives) if (r.relation === "Parent" && r.traits?.includes("Grieving")) r.traits = r.traits.filter((t) => t !== "Grieving");

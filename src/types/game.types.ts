@@ -68,6 +68,84 @@ export interface Relative {
   trouble?: number;
   /** Royal children: how they are being raised for public life (see engine/courtFamily.ts). */
   royalTraining?: RoyalTraining;
+  /** Money this person holds from the family estate (see engine/estate.ts): a parent who handed over their life, or a sibling's share. */
+  wealth?: number;
+  /** The old character who handed their life over: how they meant the estate to be split when they die (see engine/estate.ts). */
+  willPlan?: WillPlan;
+  /** Their chosen heir (relative id), when `willPlan` is "chosen". */
+  willHeirId?: string;
+  /** Children: the family path they are being groomed for (see engine/dynasty.ts). */
+  groom?: HeirGroom;
+  /** What this person did with their life, when they were once you (a parent who handed over, or an ancestor). */
+  legacyNote?: string;
+}
+
+// ---- Dynasty: the family across generations (engine: src/engine/dynasty.ts, estate.ts, familyTree.ts) ----
+
+/** The fields a family name can be known in. */
+export type DynastyField = "political" | "business" | "sport" | "crime" | "arts" | "royal" | "academic";
+export type WillPlan = "equal" | "eldest" | "chosen" | "charity";
+
+export interface Will {
+  plan: WillPlan;
+  /** The child named as chief heir when `plan` is "chosen". */
+  chosenId: string | null;
+}
+
+/** An heir being raised for a family path: how far along they are and how hard they've been pushed. */
+export interface HeirGroom {
+  track: DynastyField;
+  /** 0-100: how far along they are. */
+  level: number;
+  /** 0-100: how much they resent the push. High pressure risks a rebellion. */
+  pressure: number;
+  /** Year of the last session (one a year per family). */
+  lastYear: number;
+}
+
+/** One generation of the family, written down when the next one takes over. */
+export interface GenerationRecord {
+  generation: number;
+  name: string;
+  gender: string;
+  born: number;
+  /** Null when they handed the family over while alive. */
+  died: number | null;
+  age: number;
+  headline: string;
+  honours: string[];
+  netWorth: number;
+  fame: number;
+  children: number;
+  reputation: number;
+  /** What this life added to the family's standing. */
+  score: number;
+  epitaph: string;
+  handedOver: boolean;
+}
+
+/** Wealth held by the family line, outside any one person's estate: not taxed at death, not seizable by creditors. */
+export interface FamilyTrust {
+  balance: number;
+  founded: number;
+  /** Lifetime distributions paid to the line. */
+  paid: number;
+}
+
+export interface DynastyState {
+  /** The family name when the line began. */
+  name: string;
+  founded: number;
+  /** Earlier generations, oldest first. */
+  chronicle: GenerationRecord[];
+  /** How strongly the family name carries in each field (0-100), fading unless each generation keeps it alive. */
+  clout: Partial<Record<DynastyField, number>>;
+  trust: FamilyTrust | null;
+  will: Will;
+  /** Highest combined wealth the family has held at a handover. */
+  peakFortune: number;
+  /** A sporting name the family carries: opens doors (and weighs) for an heir who takes up the same sport. */
+  sportLegacy?: { sport: string; club: string; tier: string; score: number; parent: string };
 }
 
 /** How a royal child is being brought up. Carries into the next generation if they inherit. */
@@ -1298,6 +1376,8 @@ export interface PlayerState {
   lifeLog: string[];
   stats: LifetimeStats;
   generation: number;
+  /** The family line across generations: chronicle, name clout, trust and will. */
+  dynasty: DynastyState;
   alive: boolean;
   causeOfDeath: string | null;
   deathYear: number | null;
