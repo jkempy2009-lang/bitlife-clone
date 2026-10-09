@@ -184,7 +184,12 @@ export function buildFamilyTree(p: PlayerState): FamilyTree {
     tags: [`Generation ${p.generation}`],
   };
   const score = dynastyScore(p);
-  const [, tier, blurb] = dynastyTier(score);
+  let [, tier, blurb] = dynastyTier(score);
+  // A royal house is a house whatever its score yet: birth gives the standing, deeds add to it.
+  if ((p.royal || p.royalRank !== "none") && score < 180) {
+    tier = "A Royal House";
+    blurb = "Born to the crown: your place is set by birth, your reputation by what you do with it.";
+  }
   return {
     chronicle: d.chronicle,
     elders,

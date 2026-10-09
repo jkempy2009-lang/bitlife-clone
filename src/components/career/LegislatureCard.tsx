@@ -23,7 +23,7 @@ export default function LegislatureCard() {
       <Card>
         <div className="flex flex-col gap-1.5">
           {INDICATORS.map((i) => (
-            <StatBar key={i.id} label={`${i.emoji} ${i.name}`} value={sc.indicators[i.id] ?? 50} color={(sc.indicators[i.id] ?? 50) < 30 ? "red" : (sc.indicators[i.id] ?? 50) < 55 ? "yellow" : "green"} compact />
+            <StatBar key={i.id} label={`${i.emoji} ${i.name}`} value={sc.indicators[i.id] ?? 50} color={(sc.indicators[i.id] ?? 50) < 30 ? "red" : (sc.indicators[i.id] ?? 50) < 55 ? "amber" : "green"} compact />
           ))}
         </div>
       </Card>

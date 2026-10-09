@@ -128,6 +128,7 @@ export function MovieStarSection() {
       )}
       {a.yearsSinceWork >= 2 && job && <Banner tone="amber">{a.yearsSinceWork} years without screen work. Your reputation is slipping.</Banner>}
       {!job && <Banner tone="blue">You no longer have a performing job. Reapply to start working again; your credits and reputation stay.</Banner>}
+      {!job && a.awardsRun && <AwardsPanel />}
 
       <Card>
         <div className="grid grid-cols-1 gap-2">

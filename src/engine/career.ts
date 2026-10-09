@@ -1,3 +1,4 @@
+import { leaveSeries } from "./actingActions";
 import type { ActionResult, EducationStage, Job, PlayerState } from "@/types/game.types";
 import type { LifeEvent } from "@/data/lifeEventsEngine";
 import type { Rng } from "@/lib/rng";
@@ -230,6 +231,13 @@ export function askForRaise(p0: PlayerState, rng: Rng): ActionResult {
 }
 
 export function quitJob(p0: PlayerState): ActionResult {
+  // Walking away from a TV contract is a breach: the damages and the showrunner's memory come with it.
+  if (p0.currentJob && p0.acting?.series) {
+    const left = leaveSeries(p0);
+    if (left.player === p0) return left; // can't afford the damages: you're still under contract
+    const rest = quitJob(left.player);
+    return { player: rest.player, notices: [...(left.notices ?? []), ...(rest.notices ?? [])] };
+  }
   const p = clone(p0);
   if (!p.currentJob) return { player: p0 };
   const body = `You quit your job as a ${p.currentJob.title}.`;

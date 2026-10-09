@@ -1,3 +1,4 @@
+import { leaveBand } from "@/engine/musicBand";
 import { ev, opt, risk } from "../eventBuilders";
 import type { LifeEvent } from "../lifeEventsEngine";
 
@@ -93,11 +94,11 @@ export const EXTRA_EVENTS: LifeEvent[] = [
     opt("Livestream it", "You livestreamed the whole thing. Engagement exploded.", { fameDelta: 4, happinessDelta: 5 }),
     opt("Send a video message instead", "Fans were politely disappointed.", { fameDelta: -1 }),
   ], { requires: { flagsAll: ["influencer"], minStat: { fame: 30 } }, cooldown: 4 }),
-  ev("influencer_scandal", "fame", 14, 60, "Cancelled?", "An old post resurfaced. The comments are not kind.", [
-    opt("Apologise sincerely", "Your apology video won people over.", { fameDelta: -2, karmaDelta: 4, happinessDelta: -2 }),
-    opt("Double down", "You doubled down. It either made you or broke you.", { fameDelta: 5, karmaDelta: -4, happinessDelta: -3 }),
-    opt("Go offline for a while", "You logged off and touched grass.", { fameDelta: -6, happinessDelta: 5, healthDelta: 2 }),
-  ], { requires: { flagsAll: ["influencer"], minStat: { fame: 30 } }, cooldown: 6 }),
+  ev("influencer_scandal", "fame", 14, 60, "Cancelled?", "An old post resurfaced. The comments are not kind, and two of your sponsors are asking for a call.", [
+    opt("Apologise sincerely", "Your apology video won people over, slowly. Trust took a dent, followers a small one.", { fameDelta: -2, karmaDelta: 4, happinessDelta: -2, apply: (p) => { p.influencer.authenticity = Math.max(0, p.influencer.authenticity - 6); p.influencer.followers = Math.round(p.influencer.followers * 0.97); } }),
+    opt("Double down", "You doubled down. It either made you or broke you: the algorithm loves a fight, sponsors do not.", { fameDelta: 5, karmaDelta: -4, happinessDelta: -3, apply: (p, rng) => { p.influencer.authenticity = Math.max(0, p.influencer.authenticity - 14); p.influencer.followers = Math.round(p.influencer.followers * (rng.chance(0.5) ? 1.12 : 0.85)); p.influencer.deals = p.influencer.deals.slice(1); } }),
+    opt("Go offline for a while", "You logged off and touched grass. The story moved on, and so did some of your audience.", { fameDelta: -6, happinessDelta: 5, healthDelta: 2, apply: (p) => { p.influencer.onBreak = true; p.influencer.burnout = Math.max(0, p.influencer.burnout - 25); p.influencer.followers = Math.round(p.influencer.followers * 0.93); } }),
+  ], { requires: { minStat: { fame: 20 }, custom: (p) => p.influencer.active && p.influencer.followers >= 20_000 }, cooldown: 6 }),
   ev("reality_tv", "fame", 18, 55, "Reality TV Offer", "A producer wants you on a new reality show: 'Love Island Cooking Rescue'.", [
     risk("Accept", 0.6, ["You became a breakout star. The memes are everywhere.", { fameDelta: 12, bankBalanceDelta: 40000, happinessDelta: 8 }], ["You were edited as the villain. Ouch.", { fameDelta: 4, karmaDelta: -4, happinessDelta: -8 }], "looks"),
     opt("Decline", "You kept your dignity.", { karmaDelta: 1 }),
@@ -110,11 +111,11 @@ export const EXTRA_EVENTS: LifeEvent[] = [
     risk("Headline the show", 0.65, ["You electrified 80,000 people. The encore lasted an hour.", { fameDelta: 8, bankBalanceDelta: 250000, happinessDelta: 12, skillDeltas: { music: 3 } }], ["Your amp blew up and you forgot the lyrics.", { fameDelta: -4, happinessDelta: -8 }], "looks"),
     opt("Decline", "You skipped the festival and slept in.", {}),
   ], { requires: { careers: ["musician"] }, cooldown: 4 }),
-  ev("band_breakup", "fame", 20, 60, "Creative Differences", "Your bandmates are arguing about the next album.", [
-    opt("Mediate", "You brokered peace over pizza. The band lives.", { happinessDelta: 4, karmaDelta: 2 }),
-    opt("Go solo", "You broke up the band and went solo. The tabloids went wild.", { fameDelta: 3, happinessDelta: -3, skillDeltas: { music: 2 } }),
-    opt("Walk out", "You quit mid-rehearsal. Bridges burned.", { fameDelta: -4, happinessDelta: -4 }),
-  ], { requires: { careers: ["musician"] }, cooldown: 8 }),
+  ev("band_breakup", "fame", 20, 60, "Creative Differences", "Your bandmates are arguing about the next album, and nobody is listening any more.", [
+    opt("Mediate", "You brokered peace over pizza. The band lives, for now.", { happinessDelta: 4, karmaDelta: 2, apply: (p) => { for (const m of p.music.members) { m.loyalty = Math.min(100, m.loyalty + 8); m.grievance = null; m.grievanceYears = 0; } } }),
+    opt("Go solo", "You broke up the band and went solo, on reasonably good terms. The tabloids went wild.", { fameDelta: 3, happinessDelta: -3, skillDeltas: { music: 2 }, apply: (p, rng) => { const r = leaveBand(p, rng, true); Object.assign(p, r.player); } }),
+    opt("Walk out", "You quit mid-rehearsal. Bridges burned, and everyone will remember how.", { fameDelta: -4, happinessDelta: -4, apply: (p, rng) => { const r = leaveBand(p, rng, false); Object.assign(p, r.player); } }),
+  ], { requires: { custom: (p) => p.music.status === "band" && p.music.members.length > 0 }, cooldown: 8 }),
   ev("director_couch", "fame", 18, 50, "Shady Producer", "A powerful producer suggests you 'get to know him better' for a big role.", [
     opt("Report him", "You reported him. It cost you work, but the truth came out.", { karmaDelta: 10, happinessDelta: -3, fameDelta: 2 }),
     opt("Walk out and keep your dignity", "You left immediately. You lost the role but kept your integrity.", { karmaDelta: 4, happinessDelta: -2 }),
