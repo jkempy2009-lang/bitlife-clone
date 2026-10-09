@@ -15,7 +15,7 @@ import type { Rng } from "@/lib/rng";
 import { freshSeed } from "@/lib/rng";
 import { initialState, reducer } from "@/engine/reducer";
 import { recordAchievements, recordChallenge, recordLife } from "@/engine/hall";
-import { clearSave, exportSave, exportShareCode, hasSaveSnapshot, loadGame, parseSave, saveGame, subscribeSave } from "@/engine/save";
+import { clearSave, exportSave, exportShareCode, hasSaveSnapshot, loadGame, loadPending, parseSave, saveGame, savePending, subscribeSave } from "@/engine/save";
 import type { NewLifeOptions } from "@/engine/state";
 import { consumeIntro } from "@/lib/prefs";
 
@@ -61,6 +61,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     if (state.screen === "game" && state.player) saveGame(state.player, state.rngState);
   }, [state.player, state.rngState, state.screen]);
 
+  // Keep unanswered decisions next to the save so a reload doesn't swallow them.
+  useEffect(() => {
+    if (state.screen === "game" && state.player) savePending(state.player, state.notices);
+  }, [state.notices, state.player, state.screen]);
+
   // Immortalise finished lives and unlocked achievements in the Hall of Lives.
   useEffect(() => {
     const pl = state.player;
@@ -90,7 +95,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       },
       continueSave: () => {
         const data = loadGame();
-        if (data) dispatch({ type: "LOAD", player: data.player, rngState: data.rngState });
+        if (data) dispatch({ type: "LOAD", player: data.player, rngState: data.rngState, notices: loadPending(data.player) });
       },
       continueAsChild: (childId) => {
         dispatch({ type: "CONTINUE_AS_CHILD", childId });

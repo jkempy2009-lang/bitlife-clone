@@ -10,7 +10,7 @@ import { CHALLENGE_BY_ID } from "@/data/challenges";
 
 export type Action =
   | { type: "NEW_GAME"; opts: NewLifeOptions; seed: number; intro?: boolean }
-  | { type: "LOAD"; player: PlayerState; rngState: number }
+  | { type: "LOAD"; player: PlayerState; rngState: number; notices?: Notice[] }
   | { type: "AGE_UP" }
   | { type: "FAST_FORWARD"; years?: number }
   | { type: "RUN"; run: (p: PlayerState, rng: Rng) => ActionResult }
@@ -58,7 +58,7 @@ export function reducer(state: GameState, action: Action): GameState {
       return { ...initialState, screen: "game", player, rngState: rng.state(), notices };
     }
     case "LOAD":
-      return { ...initialState, screen: "game", player: action.player, rngState: action.rngState, tab: action.player.isInPrison ? "prison" : "dashboard" };
+      return { ...initialState, screen: "game", player: action.player, rngState: action.rngState, notices: action.notices ?? [], tab: action.player.isInPrison ? "prison" : "dashboard" };
     case "QUIT_TO_MENU":
       return { ...initialState };
     case "SET_TAB":

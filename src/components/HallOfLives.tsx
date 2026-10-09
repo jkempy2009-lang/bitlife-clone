@@ -5,7 +5,7 @@ import { ACHIEVEMENTS } from "@/data/achievements";
 import { CHALLENGES } from "@/data/challenges";
 import { clearHall, hallServerSnapshot, readHall, subscribeHall } from "@/engine/hall";
 import { money } from "@/lib/format";
-import { Button, Card, SectionTitle } from "./ui";
+import { Button, Card, Modal, SectionTitle } from "./ui";
 
 export function useHall() {
   return useSyncExternalStore(subscribeHall, readHall, hallServerSnapshot);
@@ -34,11 +34,11 @@ export function AchievementGrid({ unlocked }: { unlocked: string[] }) {
 export default function HallOfLives({ onClose }: { onClose: () => void }) {
   const hall = useHall();
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/95">
-      <div className="mx-auto max-w-md p-4">
+    <Modal label="Hall of Lives" onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/95">
+      <div className="mx-auto max-w-md p-4 sm:max-w-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xl font-black">🏆 Hall of Lives</h2>
-          <Button variant="ghost" className="px-3 py-1.5" onClick={onClose}>Close</Button>
+          <Button variant="ghost" className="px-3 py-1.5" onClick={onClose} data-autofocus>Close</Button>
         </div>
         <SectionTitle hint={`${hall.achievements.length}/${ACHIEVEMENTS.length} unlocked`}>Achievements</SectionTitle>
         <AchievementGrid unlocked={hall.achievements} />
@@ -79,6 +79,6 @@ export default function HallOfLives({ onClose }: { onClose: () => void }) {
           </button>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -4,7 +4,7 @@ import { useGame } from "@/context/GameStateContext";
 import { bribeChance, bribeCost, postBail, bribeOfficial, representationOptions, resolveTrial } from "@/engine/crime";
 import { RECORD_LABEL, bailFee, expectedYears, lawOf, recordLevel } from "@/engine/justice";
 import { money } from "@/lib/format";
-import { StatBar } from "./ui";
+import { Modal, StatBar } from "./ui";
 
 const strength = (e: number) => (e >= 75 ? "Overwhelming" : e >= 60 ? "Strong" : e >= 40 ? "Moderate" : "Weak");
 
@@ -22,7 +22,7 @@ export default function TrialView() {
   const canBribe = !charge.juvenile && law.corruption >= 0.15;
   const bribeBlock = (p.annual.bribe ?? 0) >= 1 ? "You already tried this year." : bribeCost(p, charge) > p.bankBalance ? `You can't afford ${money(bribeCost(p, charge))}.` : null;
   return (
-    <div className="fixed inset-0 z-30 overflow-y-auto bg-gradient-to-b from-slate-950 via-rose-950/60 to-slate-950">
+    <Modal label={charge.juvenile ? "Juvenile court" : "Your trial"} className="fixed inset-0 z-30 overflow-y-auto bg-slate-950 bg-gradient-to-b from-slate-950 via-rose-950/60 to-slate-950">
       <div className="mx-auto flex min-h-full max-w-md flex-col justify-center p-5">
         <div className="pop-in">
           <div className="text-center text-5xl">{charge.juvenile ? "🧒" : "⚖️"}</div>
@@ -110,6 +110,6 @@ export default function TrialView() {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

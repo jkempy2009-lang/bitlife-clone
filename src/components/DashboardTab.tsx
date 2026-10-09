@@ -1,30 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import { money } from "@/lib/format";
 import { netWorth, playerTitle } from "@/engine/state";
 import { Card, Pill, SectionTitle, StatBar } from "./ui";
 import { ACHIEVEMENTS } from "@/data/achievements";
 import { AchievementGrid } from "./HallOfLives";
-import { suggestTips } from "@/lib/tips";
+import { groupJournal } from "@/lib/journal";
+import { CoachCard, GlossarySheet, GuideCard } from "./Guide";
+import { JournalSheet, YearBlock } from "./Journal";
 import { CHALLENGE_BY_ID } from "@/data/challenges";
 import { activeStorylines } from "@/engine/storylines";
-
-interface YearGroup {
-  header: string;
-  entries: string[];
-}
-
-function groupLog(log: string[]): YearGroup[] {
-  const groups: YearGroup[] = [];
-  for (const line of log) {
-    if (line.startsWith("## ")) groups.push({ header: line.slice(3), entries: [] });
-    else if (groups.length) groups[groups.length - 1].entries.push(line);
-    else groups.push({ header: "Prologue", entries: [line] });
-  }
-  return groups.reverse();
-}
 
 function Delta({ label, v, isMoney }: { label: string; v: number; isMoney?: boolean }) {
   if (v === 0) return null;
@@ -52,10 +39,12 @@ function LastYear({ y }: { y: NonNullable<ReturnType<typeof useGame>["player"]["
 }
 
 export default function DashboardTab() {
-  const { player: p, setTab } = useGame();
-  const tips = suggestTips(p);
+  const { player: p } = useGame();
+  const [glossary, setGlossary] = useState(false);
+  const [journal, setJournal] = useState(false);
   const stories = activeStorylines(p);
-  const groups = useMemo(() => groupLog(p.lifeLog), [p.lifeLog]);
+  const years = useMemo(() => groupJournal(p.lifeLog), [p.lifeLog]);
+  const recent = years.slice(0, 3);
   const nw = netWorth(p);
   const showFame = p.fame > 0 || p.specialCareers.length > 0 || p.royalRank !== "none";
 
@@ -101,6 +90,11 @@ export default function DashboardTab() {
 
       {/* Status bars */}
       <Card>
+        <div className="-mt-1 mb-1.5 flex justify-end">
+          <button type="button" onClick={() => setGlossary(true)} className="rounded-lg px-2 py-1 text-xs font-semibold text-sky-300 hover:bg-slate-700/60">
+            ⓘ What do these mean?
+          </button>
+        </div>
         <div className="grid grid-cols-2 gap-x-4">
           <StatBar label="😊 Happiness" value={p.happiness} color="green" />
           <StatBar label="❤️ Health" value={p.health} color="teal" />
@@ -114,6 +108,9 @@ export default function DashboardTab() {
       </Card>
 
       {p.lastYear && p.lastYear.age === p.age && <LastYear y={p.lastYear} />}
+
+      <CoachCard onGlossary={() => setGlossary(true)} />
+      <GuideCard />
 
       <div className="grid grid-cols-3 gap-2 text-center">
         <Card className="p-3">
@@ -145,23 +142,6 @@ export default function DashboardTab() {
         );
       })()}
 
-      {tips.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          {tips.map((t) => (
-            <button
-              key={t.text}
-              type="button"
-              onClick={() => setTab(t.tab)}
-              className="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-left text-sm text-sky-100 transition-colors hover:bg-sky-500/20"
-            >
-              <span className="text-lg">{t.emoji}</span>
-              <span className="flex-1">{t.text}</span>
-              <span className="text-xs text-sky-300">Go →</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {stories.length > 0 && (
         <div>
           <SectionTitle hint="your choices echo">Ongoing storylines</SectionTitle>
@@ -188,24 +168,21 @@ export default function DashboardTab() {
       {/* Core feed */}
       <div>
         <SectionTitle hint="newest first">Life Story</SectionTitle>
-        <div className="scroll-thin max-h-[52vh] overflow-y-auto rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3" aria-live="polite">
-          {groups.map((g, i) => (
-            <div key={`${g.header}-${i}`} className={i === 0 ? "" : "opacity-80"}>
-              <div className={`sticky top-0 z-10 -mx-3 mb-1.5 mt-3 bg-slate-800/95 px-3 py-1 text-xs font-bold uppercase tracking-wider first:mt-0 ${i === 0 ? "text-emerald-300" : "text-slate-400"}`}>
-                {g.header}
-              </div>
-              <ul className="space-y-1.5">
-                {g.entries.map((e, j) => (
-                  <li key={j} className="text-[14px] leading-snug text-slate-200">
-                    {e}
-                  </li>
-                ))}
-                {g.entries.length === 0 && <li className="text-sm italic text-slate-500">Nothing notable happened.</li>}
-              </ul>
-            </div>
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-3" aria-live="polite">
+          {recent.map((y, i) => (
+            <YearBlock key={`${y.header}-${i}`} year={y} current={i === 0} />
           ))}
+          <button
+            type="button"
+            onClick={() => setJournal(true)}
+            className="mt-3 w-full rounded-xl border border-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-700/60"
+          >
+            📖 Open the full journal · {years.length} {years.length === 1 ? "year" : "years"}
+          </button>
         </div>
       </div>
+      {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
+      {journal && <JournalSheet log={p.lifeLog} onClose={() => setJournal(false)} />}
     </div>
   );
 }

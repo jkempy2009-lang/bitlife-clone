@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import { epitaph, heirs, lifeStoryText, summarize } from "@/engine/legacy";
 import { money } from "@/lib/format";
-import { Button } from "./ui";
+import { Button, Modal } from "./ui";
 import LifeChart from "./LifeChart";
+import { JournalSheet } from "./Journal";
 
 /** Endgame overlay: pauses all engine operations until the player chooses what to do next. */
 export default function TombstoneOverlay() {
@@ -27,7 +28,8 @@ export default function TombstoneOverlay() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-gradient-to-b from-slate-950 via-slate-900 to-black">
+    <>
+    <Modal label={`${p.firstName} ${p.lastName} has died`} className="fixed inset-0 z-50 overflow-y-auto bg-slate-950 bg-gradient-to-b from-slate-950 via-slate-900 to-black">
       <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center p-5">
         <div className="pop-in w-full">
           {/* Tombstone */}
@@ -86,16 +88,17 @@ export default function TombstoneOverlay() {
               <Button variant="primary" className="w-full" onClick={() => { quitToMenu(); }}>
                 🌱 Start a New Life
               </Button>
-              <Button variant="ghost" className="w-full" onClick={() => setShowLog((s) => !s)}>
-                {showLog ? "Hide" : "Read"} your life story
+              <Button variant="ghost" className="w-full" onClick={() => setShowLog(true)}>
+                📖 Read your life story
               </Button>
               <Button variant="secondary" className="w-full" onClick={copyStory}>
                 {copied ? "✅ Copied!" : "📋 Copy life story"}
               </Button>
               <button
                 type="button"
-                className="text-xs text-slate-500 underline"
+                className="py-2.5 text-xs text-slate-400 underline"
                 onClick={() => {
+                  if (!confirm("Delete this save for good? Your Hall of Lives keeps this life, but you can't continue it.")) return;
                   deleteSave();
                   quitToMenu();
                 }}
@@ -123,17 +126,10 @@ export default function TombstoneOverlay() {
             </div>
           )}
 
-          {showLog && (
-            <div className="scroll-thin mt-4 max-h-72 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900/80 p-3 text-sm">
-              {[...p.lifeLog].reverse().map((l, i) => (
-                <div key={i} className={l.startsWith("## ") ? "mt-2 text-xs font-bold uppercase text-emerald-300" : "text-slate-300"}>
-                  {l.startsWith("## ") ? l.slice(3) : l}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
-    </div>
+    </Modal>
+    {showLog && <JournalSheet log={p.lifeLog} onClose={() => setShowLog(false)} />}
+    </>
   );
 }

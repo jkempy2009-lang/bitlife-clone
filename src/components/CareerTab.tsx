@@ -33,6 +33,7 @@ import { royalStyleText } from "@/engine/royalty";
 import { EFFORT_INFO, hasCommitment } from "@/engine/occupation";
 import { CERTIFICATES, CERT_BY_ID } from "@/data/certificates";
 import { money } from "@/lib/format";
+import { useSection } from "@/lib/nav";
 import { Button, Card, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
 import { MovieStarSection } from "./career/MovieStarSection";
 import { MusicSection } from "./career/MusicSection";
@@ -40,11 +41,13 @@ import { CourtSection, FormerRoyalCard } from "./career/CourtSection";
 import { AdultWorkSection, AthleteSection, BusinessSection, InfluencerSection, PoliticsSection, SpySection, UnderworldSection } from "./CareerPaths";
 
 type Section = "work" | "school" | "business" | "sports" | "online" | "politics" | "underworld" | "spy" | "adult" | "stardom" | "music";
+/** Sections the guide can deep-link to and the tab remembers (keep in step with `Section`). */
+const SECTION_IDS: readonly Section[] = ["work", "school", "business", "sports", "online", "politics", "underworld", "spy", "adult", "stardom", "music"];
 
 export default function CareerTab() {
   const { player: p } = useGame();
   const royal = isRoyal(p);
-  const [section, setSection] = useState<Section>(royal ? "work" : p.education.stage !== "None" && !p.currentJob ? "school" : "work");
+  const [picked, setSection] = useSection<Section>("career", SECTION_IDS, royal ? "work" : p.education.stage !== "None" && !p.currentJob ? "school" : "work");
 
   if (p.age < 5) return <TooYoung>No career yet — your job is to nap, eat, and be adorable.</TooYoung>;
   const options: { id: Section; label: string }[] = [
@@ -56,10 +59,12 @@ export default function CareerTab() {
     ...(royal ? [] : [{ id: "stardom" as const, label: "🎬 Movie Star" }]),
     { id: "music", label: "🎸 Rock Star" },
   ];
+  // A remembered section can vanish (mature content switched off, a crown acquired): fall back to Work.
+  const section: Section = options.some((o) => o.id === picked) ? picked : "work";
   return (
     <div>
       <EffortCard />
-      <Segmented<Section> value={section} onChange={setSection} options={options} />
+      <Segmented<Section> label="Career sections" value={section} onChange={setSection} options={options} />
       {section === "work" && (royal ? <RoyalDuties /> : <CorporateCareer />)}
       {section === "school" && <Academics />}
       {section === "business" && <BusinessSection />}

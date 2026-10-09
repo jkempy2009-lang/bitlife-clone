@@ -1,4 +1,6 @@
-import type { PlayerState, Talents } from "@/types/game.types";
+import type { Notice, PlayerState, Talents } from "@/types/game.types";
+import { EVENT_BY_ID } from "@/data/lifeEventsEngine";
+import { netWorth, playerTitle } from "./state";
 import { TALENT_KEYS } from "@/data/talents";
 import { hydrateAthlete } from "./athleteState";
 import { upgradeBusiness } from "./business";
@@ -30,7 +32,49 @@ export const subscribeSave = (cb: () => void) => {
     listeners.delete(cb);
   };
 };
-export const hasSaveSnapshot = () => loadGame() !== null;
+/**
+ * "Is there a save?" is asked on every render of the game provider, so it must be cheap: a sniff of the stored text,
+ * not a parse + hydrate of the whole life. A damaged save still fails safely in `loadGame`.
+ */
+export const hasSaveSnapshot = () => {
+  try {
+    return (localStorage.getItem(KEY) ?? "").startsWith('{"v":1,');
+  } catch {
+    return false;
+  }
+};
+
+export interface SaveSummary {
+  name: string;
+  age: number;
+  year: number;
+  generation: number;
+  alive: boolean;
+  title: string;
+  netWorth: number;
+}
+
+let summaryCache: { raw: string | null; summary: SaveSummary | null } = { raw: null, summary: null };
+
+/** A one-line description of the saved life for the Continue button. Cached per stored text so it is stable for React. */
+export function saveSummary(): SaveSummary | null {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(KEY);
+  } catch {
+    return null;
+  }
+  if (raw === summaryCache.raw) return summaryCache.summary;
+  const data = raw ? loadGame() : null;
+  const p = data?.player;
+  summaryCache = {
+    raw,
+    summary: p
+      ? { name: `${p.firstName} ${p.lastName}`, age: p.age, year: p.year, generation: p.generation, alive: p.alive, title: playerTitle(p), netWorth: netWorth(p) }
+      : null,
+  };
+  return summaryCache.summary;
+}
 
 export function saveGame(player: PlayerState, rngState: number) {
   try {
@@ -166,8 +210,54 @@ export function restorePrevious(): boolean {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Pending decisions: the event or result you were looking at when the tab closed.
+// ---------------------------------------------------------------------------
+
+const PENDING_KEY = "lifeline-pending-v1";
+
+type StoredNotice = Extract<Notice, { kind: "info" }> | { id: string; kind: "event"; eventId: string };
+
+/** Remember unanswered notices next to the save, so reloading mid-year doesn't silently swallow a decision. */
+export function savePending(player: PlayerState, notices: Notice[]) {
+  try {
+    if (notices.length === 0) {
+      localStorage.removeItem(PENDING_KEY);
+      return;
+    }
+    const stored: StoredNotice[] = [];
+    for (const n of notices) {
+      if (n.kind === "info") stored.push(n);
+      // Events carry functions, so store their id; one-off generated events can't be rebuilt and are dropped.
+      else if (EVENT_BY_ID[n.event.id]?.title === n.event.title) stored.push({ id: n.id, kind: "event", eventId: n.event.id });
+    }
+    localStorage.setItem(PENDING_KEY, JSON.stringify({ playerId: player.id, age: player.age, notices: stored }));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** Notices saved for this exact moment of this life (same person, same age), or none. */
+export function loadPending(player: PlayerState): Notice[] {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw) as { playerId?: string; age?: number; notices?: StoredNotice[] };
+    if (data.playerId !== player.id || data.age !== player.age || !Array.isArray(data.notices)) return [];
+    const out: Notice[] = [];
+    for (const n of data.notices) {
+      if (n?.kind === "info" && typeof n.id === "string" && typeof n.title === "string") out.push(n);
+      else if (n?.kind === "event" && EVENT_BY_ID[n.eventId]) out.push({ id: n.id, kind: "event", event: EVENT_BY_ID[n.eventId] });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export function clearSave() {
   try {
+    localStorage.removeItem(PENDING_KEY);
     localStorage.removeItem(KEY);
     localStorage.removeItem(PREV_KEY);
     lastSaved = null;

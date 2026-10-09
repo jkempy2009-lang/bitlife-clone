@@ -3,24 +3,27 @@
 import { inDebtCrisis, bankruptcyBlocker, fileBankruptcy, moveBackIn, netRent, rentOut } from "@/engine/property";
 import { repayStudentLoan } from "@/engine/studentLoans";
 import { MoveAbroad } from "./WorldPanels";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useGame } from "@/context/GameStateContext";
 import { buyCar, buyHouse, carInventory, houseInventory, maxLoan, renovate, repayLoan, sellCar, sellHouse, takeLoan } from "@/engine/assets";
 import { CAR_LOAN_RATE, CAR_LOAN_YEARS, MORTGAGE_RATE, MORTGAGE_YEARS } from "@/data/assetsCatalog";
 import { money } from "@/lib/format";
 import { SAVINGS_LEVELS, contributionFor, drawdownFor, withdrawRetirement, setSavingsLevel } from "@/engine/retirement";
 import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, TooYoung } from "./ui";
+import { useSection } from "@/lib/nav";
 import { INVESTMENTS, RELOCATE_ABROAD, RELOCATE_DOMESTIC, LIFESTYLES, RENT_TIERS, divest, invest, portfolioValue, livesWithParents, relocate, setLifestyle, setRentTier, toggleFamilyHome } from "@/engine/world";
 
 type Panel = "cars" | "homes" | "living" | "invest" | "bank";
+const PANELS: readonly Panel[] = ["cars", "homes", "living", "invest", "bank"];
 
 export default function AssetsTab() {
   const { player } = useGame();
-  const [panel, setPanel] = useState<Panel>("cars");
+  const [panel, setPanel] = useSection<Panel>("assets", PANELS, "cars");
   if (player.age < 16) return <TooYoung>Cars and houses can wait. Come back when you're 16 (or inherit a castle).</TooYoung>;
   return (
     <div>
       <Segmented<Panel>
+        label="Asset sections"
         value={panel}
         onChange={setPanel}
         options={[

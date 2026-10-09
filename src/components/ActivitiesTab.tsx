@@ -30,18 +30,21 @@ import type { Vices } from "@/types/game.types";
 import { CRIMES, crimeMeta } from "@/data/crimes";
 import { blackjackClear, blackjackDeal, blackjackHit, blackjackStand, handValue, type Card as PlayingCard } from "@/engine/blackjack";
 import { money } from "@/lib/format";
+import { useSection } from "@/lib/nav";
 import { Button, Card, MiniBar, Pill, Segmented, SectionTitle, StatBar, TooYoung } from "./ui";
 import ViolencePanel from "./ViolencePanel";
 
 type Panel = "medical" | "wellness" | "hobbies" | "casino" | "crime" | "surgery" | "leisure";
+const PANELS: readonly Panel[] = ["medical", "wellness", "hobbies", "casino", "crime", "surgery", "leisure"];
 
 export default function ActivitiesTab() {
   const { player } = useGame();
-  const [panel, setPanel] = useState<Panel>("wellness");
+  const [panel, setPanel] = useSection<Panel>("activities", PANELS, "wellness");
   if (player.age < 6) return <TooYoung>You're too little for activities. Enjoy being a kid, and ask your parents for a cookie.</TooYoung>;
   return (
     <div>
       <Segmented<Panel>
+        label="Activity sections"
         value={panel}
         onChange={setPanel}
         options={[

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useGame } from "@/context/GameStateContext";
 import { COUNTRIES } from "@/data/countries";
 import type { NewLifeOptions } from "@/engine/state";
+import { saveSummary, subscribeSave } from "@/engine/save";
+import { money } from "@/lib/format";
 import { Button } from "./ui";
 import HallOfLives, { useHall } from "./HallOfLives";
 import { ACHIEVEMENTS } from "@/data/achievements";
@@ -34,6 +36,7 @@ export default function StartScreen() {
   const [challenging, setChallenging] = useState(false);
   const [showHall, setShowHall] = useState(false);
   const hall = useHall();
+  const saved = useSyncExternalStore(subscribeSave, saveSummary, () => null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [gender, setGender] = useState<NonNullable<NewLifeOptions["gender"]>>("random");
@@ -86,8 +89,13 @@ export default function StartScreen() {
         ) : !designing ? (
           <div className="flex flex-col gap-3">
             {hasSave && (
-              <Button variant="primary" className="py-3.5 text-base" onClick={continueSave}>
+              <Button variant="primary" className="py-3 text-base" onClick={continueSave}>
                 ▶ Continue Your Life
+                {saved && (
+                  <span className="block text-xs font-normal text-emerald-100">
+                    {saved.name}, {saved.alive ? `age ${saved.age}` : `died at ${saved.age}`} · {saved.title} · Gen {saved.generation} · {money(saved.netWorth)}
+                  </span>
+                )}
               </Button>
             )}
             <Button variant={hasSave ? "secondary" : "primary"} className="py-3.5 text-base" onClick={() => newGame({ scenario: "random" })}>
@@ -103,7 +111,7 @@ export default function StartScreen() {
               🏆 Hall of Lives · {hall.achievements.length}/{ACHIEVEMENTS.length}
             </Button>
             {hasSave && (
-              <button type="button" className="mt-1 text-xs text-slate-500 underline" onClick={deleteSave}>
+              <button type="button" className="mt-1 py-2 text-xs text-slate-400 underline" onClick={() => { if (confirm("Delete your saved life for good? This can't be undone. Export a backup from Settings first if you might want it.")) deleteSave(); }}>
                 Delete saved game
               </button>
             )}
