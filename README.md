@@ -33,7 +33,7 @@ Your game autosaves to `localStorage` (no backend). Use the gear icon to export/
   explicit, adults only.
 - **Darker paths:** murder (five methods, cover-ups, detectives, cold cases, death row where it exists),
   assault, blackmail, arson, kidnapping, fraud, smuggling, tax evasion.
-- **Legacy:** tombstone, epitaph, life chart, continue as your child (estate tax), plus a Hall of Lives and 50+
+- **Legacy:** tombstone, epitaph, life chart, continue as your child after death (estate tax) or **hand your life to a child while you're alive** (any time; a reigning sovereign keeps the crown, which still passes by birth order), a family tree and dynasty view (line of succession, name clout, family trust, wills, raising an heir), plus a Hall of Lives and 50+
   achievements that persist across characters. Copy your life story as plain text from the tombstone.
 - **Commitments are exclusive:** you can't run a business and hold a job, sign a record deal while employed, or study full time
   while working. Students take part-time jobs; evening courses (certificates) fit around work. Effort (coast / steady / grind),
@@ -43,8 +43,28 @@ Your game autosaves to `localStorage` (no backend). Use the gear icon to export/
   experiences with partners and lovers; learn what each person enjoys and where their limits are by talking; open or polyamorous
   agreements. Everyone involved is an adult and a willing participant, and text is suggestive.
 - **Quality of life:** a "past year" strip on the dashboard, milestone notices at key ages, contextual tips,
-  **Skip** (fast-forward up to 10 years until something happens), text-size and reduce-motion settings,
+  **Skip 10 years** (autopilot makes the decisions cautiously and shows a recap; it stops for death, a trial or prison), text-size and reduce-motion settings,
   a rolling one-year backup save with crash recovery, and offline play (service worker, production build).
+
+## Depth systems (recent)
+
+- **Work and money:** burnout, annual reviews, promotion tracks, sector slumps and booms, layoff choices, unemployment benefit and a
+  thin safety net, student loans, renting out property, distress and bankruptcy.
+- **The world:** country- and era-specific events (pandemics, wars, recessions, disasters), healthcare that differs by country,
+  treatment plans for chronic illness, school life (clubs, bullying, tutoring), visa routes and citizenship.
+- **People:** shared memories and grievances, values and compatibility, counselling, separation and custody, in-laws, friendship arcs.
+- **Business:** key people with loyalty and equity, rivals and market shifts, investors and a board, stepping back to chair.
+- **Fame:** band members with grievances, tour pace, rights disputes and catalogue sales; TV, stage and franchises for actors; sponsors,
+  national teams, rivalries and academies for athletes.
+- **Politics:** a legislature where laws move national indicators, executive orders and repeals.
+- **Names:** large per-country name pools with immigrant-family surnames.
+- **Player help:** a contextual guide, glossary and life journal; pending decisions survive a reload.
+
+## Testing
+
+`npm test` runs ~490 Vitest tests, including multi-seed fuzz bots (`fuzz.test.ts`, `depth.fuzz.test.ts`) that check invariants
+(bounded stats, unique relative ids, one sovereign, one full-time commitment) and a fixture save from before the depth work
+(`__tests__/fixtures`) to keep old saves loading. Use the NEUTRAL talents helper in tests to avoid seed-brittle assertions.
 
 ## Architecture
 
