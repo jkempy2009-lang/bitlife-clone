@@ -1,5 +1,6 @@
 "use client";
 
+import { careerStatus, sabbaticalBlocker, takeSabbatical, takeVacation, vacationCost } from "@/engine/careerLife";
 import { useState } from "react";
 import { useGame } from "@/context/GameStateContext";
 import {
@@ -269,6 +270,19 @@ function CorporateCareer() {
             <div className="text-lg font-bold">{job.title}{job.partTime ? " (part-time)" : ""}</div>
             <div className="text-sm text-slate-400">{job.company} · {Math.round(p.stats.yearsWorked)} years worked in total</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-emerald-300">{money(job.salary)}<span className="text-sm font-normal text-slate-400"> / year</span></div>
+            {(() => {
+              const st = careerStatus(p);
+              return (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <StatBar label={`Burnout (${st.level})`} value={st.burnout} color="red" />
+                  <div className="flex flex-wrap gap-1.5 text-xs text-slate-400">
+                    <span>Sector: {st.sector} {st.mood ? `· ${st.mood}` : ""}</span>
+                    <span>· Layoff risk {Math.round(st.risk * 100)}%</span>
+                    {st.atCeiling && <span className="text-amber-300">· At the pay ceiling for this role</span>}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="mt-3">
               <StatBar label={job.partTime ? "Performance (no promotions while part-time)" : "Performance (85+ earns a promotion offer)"} value={job.performance} color="green" />
             </div>
@@ -289,6 +303,8 @@ function CorporateCareer() {
                 <Button variant="secondary" onClick={() => act((pl) => goFullTime(pl))}>⏱️ Go Full-Time</Button>
               )}
               <Button variant="ghost" onClick={() => act((pl) => quitJob(pl))} disabled={job.lineId === "athlete"}>Quit Job</Button>
+              <Button variant="secondary" disabled={p.bankBalance < vacationCost(p) || (p.annual.vacation ?? 0) >= 1} onClick={() => act((pl) => takeVacation(pl))}>🏝️ Holiday ({money(vacationCost(p))})</Button>
+              <Button variant="secondary" disabled={!!sabbaticalBlocker(p)} title={sabbaticalBlocker(p) ?? "A year off: no salary, burnout falls hard, you keep your desk"} onClick={() => act((pl) => takeSabbatical(pl))}>🛌 Sabbatical</Button>
               {p.age >= 60 && (
                 <Button variant="gold" className="col-span-2" onClick={() => act((pl) => retire(pl))}>🏖️ Retire (pension ≈ {money(pensionFor(p))}/yr)</Button>
               )}

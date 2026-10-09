@@ -46,7 +46,7 @@ export const DISEASE_CATALOG: DiseaseTemplate[] = [
   { id: "hiv", name: "HIV", severity: "chronic", incurable: true, happinessImpact: 4, healthImpact: 3, minAge: 14, baseChance: 0 },
   { id: "malaria", name: "Malaria", severity: "mild", happinessImpact: 5, healthImpact: 11, minAge: 0, baseChance: 0.03, infectious: true, regional: { africa: 8, south_asia: 1.6, latin_america: 0.8 }, elsewhere: 0 },
   { id: "waterborne", name: "Typhoid & Waterborne Illness", severity: "mild", happinessImpact: 4, healthImpact: 8, minAge: 0, baseChance: 0.02, infectious: true, regional: { africa: 4, south_asia: 4, latin_america: 1.5 }, elsewhere: 0.15 },
-  { id: "tuberculosis", name: "Tuberculosis", severity: "chronic", happinessImpact: 4, healthImpact: 5, minAge: 5, baseChance: 0.003, infectious: true, regional: { africa: 8, south_asia: 8, latin_america: 2, east_asia: 1.5 }, elsewhere: 0.1 },
+  { id: "tuberculosis", name: "Tuberculosis", severity: "chronic", happinessImpact: 4, healthImpact: 5, minAge: 5, baseChance: 0.003, infectious: true, regional: { africa: 3, south_asia: 3, latin_america: 1, east_asia: 0.8 }, elsewhere: 0.05 },
   { id: "pandemic_virus", name: "Pandemic Virus", severity: "mild", happinessImpact: 6, healthImpact: 13, minAge: 0, baseChance: 0.14, infectious: true, gate: "pandemic" },
   { id: "cancer", name: "Cancer", severity: "fatal", happinessImpact: 8, healthImpact: 10, minAge: 25, baseChance: 0.0016, fatalYears: [2, 6] },
   { id: "kidney_failure", name: "Kidney Failure", severity: "fatal", happinessImpact: 5, healthImpact: 8, minAge: 35, baseChance: 0.0015, fatalYears: [2, 5] },

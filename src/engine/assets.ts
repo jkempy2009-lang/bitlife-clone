@@ -15,6 +15,8 @@ import {
 } from "@/data/assetsCatalog";
 import { qualifyingIncome } from "./household";
 import { addLog, changeStat, clone } from "./state";
+import { bankruptcyBlocker } from "./property";
+import { IDR_SHARE, IDR_THRESHOLD } from "./studentLoans";
 
 // ---------------------------------------------------------------------------
 // Inventory (deterministic per year so refreshing can't reroll the lot)
@@ -74,6 +76,8 @@ export function buyCar(p0: PlayerState, listing: CarListing, financed: boolean, 
   let down = price;
   let loan = 0;
   if (financed) {
+    const bk = bankruptcyBlocker(p);
+    if (bk) return { player: p0, notices: [info("Loan Denied", bk, "bad")] };
     if (p.creditScore < 550) {
       return { player: p0, notices: [info("Loan Denied", "Your credit score is too low for a car loan.", "bad")] };
     }
@@ -123,13 +127,15 @@ export function buyHouse(p0: PlayerState, listing: HouseListing, financed: boole
   let down = price;
   let loan = 0;
   if (financed) {
+    const bk = bankruptcyBlocker(p);
+    if (bk) return { player: p0, notices: [info("Mortgage Denied", bk, "bad")] };
     if (p.creditScore < 600) {
       return { player: p0, notices: [info("Mortgage Denied", "Your credit score is too low for a mortgage (600 needed).", "bad")] };
     }
     down = Math.round(price * 0.2);
     loan = price - down;
     const payment = annualPayment(loan, MORTGAGE_RATE, MORTGAGE_YEARS);
-    const income = qualifyingIncome(p);
+    const income = lendableIncome(p);
     if (income > 0 ? payment > income * 0.6 : p.bankBalance < price * 0.5) {
       return { player: p0, notices: [info("Mortgage Denied", "The bank doesn't believe you can afford the payments.", "bad")] };
     }
@@ -193,10 +199,18 @@ export function renovate(p0: PlayerState, propId: string): ActionResult {
 // Bank loans
 // ---------------------------------------------------------------------------
 
+/** Income a lender counts after your student loan repayments (they come first). */
+export function lendableIncome(p: PlayerState): number {
+  const income = qualifyingIncome(p);
+  const owed = p.finance?.studentLoan ?? 0;
+  const repay = owed > 0 && p.education.stage === "None" ? Math.min(owed, Math.max(0, (income - IDR_THRESHOLD) * IDR_SHARE)) : 0;
+  return Math.max(0, Math.round(income - repay));
+}
+
 export function maxLoan(p: PlayerState): number {
-  if (p.age < 18 || p.creditScore < 500) return 0;
-  const income = qualifyingIncome(p) + (p.royalRank !== "none" ? 400_000 : 0);
-  const capacity = Math.max(2_000, income * 1.5 + p.bankBalance * 0.2) * ((p.creditScore - 400) / 450);
+  if (p.age < 18 || p.creditScore < 500 || bankruptcyBlocker(p)) return 0;
+  const income = lendableIncome(p) + (p.royalRank !== "none" ? 400_000 : 0);
+  const capacity = Math.max(2_000, income * 1.5 + p.bankBalance * 0.2 - (p.finance?.studentLoan ?? 0) * 0.5) * ((p.creditScore - 400) / 450);
   return Math.max(0, Math.round((capacity - p.outstandingLoans) / 500) * 500);
 }
 

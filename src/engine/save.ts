@@ -9,6 +9,7 @@ import { hydrateDynasty } from "./dynastyState";
 import { hydrateWorld } from "./worldEvents";
 import { hydrateSchool } from "./school";
 import { hydrateImmigration } from "./visa";
+import { hydrateCareerMoney } from "./careerState";
 
 const KEY = "lifeline-save-v1";
 const PREV_KEY = "lifeline-save-prev";
@@ -104,6 +105,7 @@ export function hydrate(p: PlayerState): PlayerState {
     intimacy: p.intimacy ?? { ageAuto: true, ageMin: 18, ageMax: 60, genders: [], interests: ["sensual", "playful"] },
     retirementSavings: p.retirementSavings ?? 0,
     savingsLevel: p.savingsLevel ?? 1,
+    ...hydrateCareerMoney(p),
     royal: p.royal ?? (p.royalRank === "none" ? null : { crown: p.royalRank === "King" || p.royalRank === "Queen" ? "self" : "parent", hrh: true, peerage: null, line: p.royalRank === "King" || p.royalRank === "Queen" ? 0 : 1 }),
     court: hydrateCourt(p.court, p),
     dynasty: hydrateDynasty(p),

@@ -15,6 +15,7 @@ import { newRoyalLife, royalStyleText } from "./royalty";
 import { newAthleteState } from "./athleteState";
 import { newDynasty } from "./dynastyState";
 import { newCourt, realmNamesFor } from "./courtState";
+import { freshCareer, freshFinance } from "./careerState";
 import { freshJustice, freshMob, freshSpy, freshStatecraft } from "./justiceState";
 import { newActing, newCeleb, newInfluencer, newMusic } from "./creativeState";
 import { freshWorld } from "./worldEvents";
@@ -57,7 +58,7 @@ export function netWorth(p: PlayerState): number {
   const props = p.properties.reduce((s, x) => s + x.currentValue - x.mortgageBalance, 0);
   const cars = p.vehicles.reduce((s, x) => s + x.currentValue - x.loanBalance, 0);
   const portfolio = Object.values(p.investments).reduce((sum, h) => sum + h.value, 0);
-  return Math.round(p.bankBalance + props + cars + portfolio + (p.business?.value ?? 0) + p.retirementSavings - p.outstandingLoans);
+  return Math.round(p.bankBalance + props + cars + portfolio + (p.business?.value ?? 0) + p.retirementSavings + (p.finance?.rothSavings ?? 0) - p.outstandingLoans - (p.finance?.studentLoan ?? 0));
 }
 
 export const isRoyal = (p: PlayerState) => p.royalRank !== "none";
@@ -347,6 +348,8 @@ export function createNewPlayer(opts: NewLifeOptions, rng: Rng): PlayerState {
     pension: 0,
     retirementSavings: 0,
     savingsLevel: 1,
+    career: freshCareer(),
+    finance: freshFinance(),
     relatives,
     properties: [],
     vehicles: [],

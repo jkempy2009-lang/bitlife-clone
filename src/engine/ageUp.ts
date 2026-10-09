@@ -34,7 +34,10 @@ import { settleNpcEstate } from "./estate";
 import { processCourt, royalFinance } from "./court";
 import { contributionFor, drawdownFor, growRetirement } from "./retirement";
 import { addDisease, selectEvents } from "./events";
-import { convertToFullTime, maybeCoup, pensionFor, promotionEvent } from "./career";
+import { convertToFullTime, maybeCoup } from "./career";
+import { careerYearStart, processJobYear, unemploymentBenefit, welfareIncome } from "./careerLife";
+import { payTuition, processStudentLoan } from "./studentLoans";
+import { carryingCost, processDistress, processRentals, takeRent } from "./property";
 import { checkAchievements } from "./achievements";
 import { checkChallenge } from "./challenges";
 import { processVices } from "./vices";
@@ -47,11 +50,11 @@ import { hobbyIncome, processHobbies } from "./hobbies";
 import { processAthlete, processBusiness } from "./paths";
 import { processCreative } from "./creative";
 import { creativeFameFloor, processCelebrity } from "./celebrity";
-import { EFFORT_STUDY, applyEffortCosts, effortPerformanceDelta } from "./occupation";
+import { EFFORT_STUDY, applyEffortCosts } from "./occupation";
 import { applyHabitEffects, applyMoodEffects, habitCost, illnessCosts, riskMultiplier } from "./health";
 import { SHARED_LIVING_FACTOR, SPOUSE_TAX, childSupportDue, marriedPartner, spouseIncome } from "./household";
-import { LIFESTYLES, RENT_TIERS, livesWithParents, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, layoffChance, processInvestments } from "./world";
-import { advanceWorld, worldHousingShift, worldLayoff, worldPriceLevel, worldTaxFactor } from "./worldEvents";
+import { LIFESTYLES, RENT_TIERS, livesWithParents, BASE_LIVING, CHILD_COST, advanceClimate, housingCost, housingIndex, processInvestments } from "./world";
+import { advanceWorld, worldHousingShift, worldPriceLevel, worldTaxFactor } from "./worldEvents";
 import { diseaseExposure, mortalityMultiplier } from "./demography";
 import { deathPhrase, diseaseToll, palliativeFarewell, processTreatment, slowsCountdown } from "./treatment";
 import { processSchoolYear } from "./school";
@@ -181,7 +184,7 @@ function processSocial(p: PlayerState, rng: Rng, notices: Notices) {
 // Assets
 // ---------------------------------------------------------------------------
 
-function processAssets(p: PlayerState, rng: Rng) {
+function processAssets(p: PlayerState, rng: Rng, notices: Notices) {
   const marketIndex = housingIndex(p.economy.climate, rng) + worldHousingShift(p);
   if (p.properties.length > 0) {
     addLog(p, `The housing market ${marketIndex >= 0 ? "rose" : "fell"} ${(Math.abs(marketIndex) * 100).toFixed(1)}% this year.`);
@@ -214,8 +217,10 @@ function processAssets(p: PlayerState, rng: Rng) {
       }
     }
     p.bankBalance -= Math.round(h.originalValue * (1 - h.condition / 100) * 0.02);
+    p.bankBalance -= carryingCost(h.currentValue); // property tax and insurance
     if (h.condition > 20) h.condition -= 4;
   }
+  processRentals(p, rng, notices);
 }
 
 // ---------------------------------------------------------------------------
@@ -224,19 +229,18 @@ function processAssets(p: PlayerState, rng: Rng) {
 
 function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   let gross = 0;
-  if (p.currentJob && !p.isInPrison) gross += p.currentJob.salary;
+  if (p.currentJob && !p.isInPrison && !p.career.onLeave) gross += p.currentJob.salary;
   if (p.pension > 0) gross += p.pension;
   gross += processCreative(p, rng, notices); // creator, music and screen income
   gross += hobbyIncome(p);
+  gross += takeRent(p);
   processInvestments(p, rng, notices);
   const profit = processBusiness(p, rng, notices);
   if (profit > 0) gross += profit;
   else p.bankBalance += profit;
 
   const adult = p.age >= 18;
-  if (adult && p.age < 65 && !p.currentJob && !isRoyal(p) && !p.isInPrison && !p.music.signed && p.pension === 0 && !marriedPartner(p)) {
-    gross += 16_000;
-  }
+  gross += unemploymentBenefit(p) + welfareIncome(p); // laid-off workers' insurance, then a means-tested safety net
   // Royal funding (Sovereign Grant, allowances) is tax exempt; duchy and estate income is private and taxed like any other.
   const fin = isRoyal(p) ? royalFinance(p) : null;
   const allowance = fin ? fin.allowance : 0;
@@ -286,7 +290,8 @@ function processFinance(p: PlayerState, rng: Rng, notices: Notices) {
   const certTuition = p.education.stage === "Certificate" ? (CERT_BY_ID[p.education.major ?? ""]?.tuition ?? 0) : 0;
   const fullTuition = prog ? prog.tuition : certTuition;
   const tuition = fullTuition && !p.isInPrison ? Math.round(fullTuition * (1 - (p.education.scholarship ?? 0))) : 0;
-  p.bankBalance -= tuition;
+  processStudentLoan(p, gross, notices);
+  payTuition(p, tuition);
 
   if (p.bankBalance > 0) p.bankBalance = Math.round(p.bankBalance * 1.015);
 
@@ -469,53 +474,14 @@ function processCareer(p: PlayerState, rng: Rng, notices: Notices) {
   processPolitics(p, rng, notices);
   processMob(p, rng, notices);
   processSpy(p, rng, notices);
+  careerYearStart(p, rng, notices);
   const job = p.currentJob;
   if (!job || p.isInPrison) return;
   p.stats.yearsWorked += job.partTime ? 0.5 : 1;
   p.careerYears[job.lineId] = (p.careerYears[job.lineId] ?? 0) + (job.partTime ? 0.5 : 1);
   // Elected officials, mobsters and agents answer to voters, bosses and handlers, not managers; athletes are driven by processAthlete.
   if (["politics", "crime", "spy"].includes(CAREER_BY_ID[job.lineId]?.pack ?? "") || job.lineId === "athlete") return;
-  job.performance = clamp(job.performance + effortPerformanceDelta(job.partTime ? "steady" : p.effort, rng) + Math.round((p.smarts - 50) / 25));
-  if (job.performance < 20 && rng.chance(0.4)) {
-    const body = `You were fired from your job as a ${job.title} for poor performance.`;
-    p.currentJob = null;
-    changeStat(p, "happiness", -10);
-    addLog(p, body);
-    notices.push(info("You're Fired", body, "bad"));
-    return;
-  }
-  if (rng.chance(layoffChance(p.economy.climate) + worldLayoff(p))) {
-    const body = `${job.company} downsized and let you go. You received a small severance package.`;
-    p.currentJob = null;
-    p.bankBalance += Math.round(job.salary * 0.15);
-    changeStat(p, "happiness", -8);
-    addLog(p, body);
-    notices.push(info("Laid Off", body, "bad"));
-    return;
-  }
-  if (job.performance >= 50) {
-    const line = CAREER_BY_ID[job.lineId];
-    const cap = line ? line.ladder[line.ladder.length - 1].salary * 1.6 : Infinity;
-    // Annual raise tracks performance and the economy: ~1% for adequate work, up to ~5% for stars.
-    const climate = p.economy.climate === "boom" ? 1.3 : p.economy.climate === "recession" ? 0.4 : 1;
-    const rate = (0.01 + Math.max(0, job.performance - 50) / 1000) * climate;
-    job.salary = Math.min(Math.round(job.salary * (1 + rate)), Math.round(cap));
-  }
-  p.annualSalary = job.salary;
-  if (p.age >= 75) {
-    p.pension = pensionFor(p);
-    addLog(p, `You retired from your job as a ${job.title} at age ${p.age}. Your pension is ${money(p.pension)} a year.`);
-    p.currentJob = null;
-    p.annualSalary = 0;
-    return;
-  }
-  job.yearsInRole = (job.yearsInRole ?? 0) + 1;
-  // Promotions need standout performance, time in the role, and an opening: rarer at the top and in a recession.
-  const openingChance = (p.economy.climate === "boom" ? 0.55 : p.economy.climate === "recession" ? 0.2 : 0.4) * Math.max(0.3, 1 - 0.15 * job.tier) * (1 + (p.talents.leadership - 50) / 150);
-  if (!job.partTime && job.performance > 85 && job.yearsInRole >= 3 + job.tier && rng.chance(openingChance)) {
-    const ev = promotionEvent(p);
-    if (ev) notices.push({ kind: "event", event: ev });
-  }
+  processJobYear(p, rng, notices); // performance, burnout, layoffs, review, raise, promotion offer (careerLife.ts)
 }
 
 // ---------------------------------------------------------------------------
@@ -622,8 +588,9 @@ export function ageUp(p0: PlayerState, rng: Rng): ActionResult {
   processTemper(p, rng, notices);
   processChildren(p, rng, notices);
   processIntimacy(p, prevAnnual, rng, notices);
-  processAssets(p, rng); // 3. asset economics
+  processAssets(p, rng, notices); // 3. asset economics
   processFinance(p, rng, notices); // 4. financial balance sheet
+  processDistress(p, notices); // collections, repossession, foreclosure, forced bankruptcy
   processHobbies(p, prevAnnual, notices);
   processVices(p, rng, notices);
   processMedical(p, rng, notices); // 5. medical & disease progression

@@ -1,5 +1,7 @@
 "use client";
 
+import { inDebtCrisis, bankruptcyBlocker, fileBankruptcy, moveBackIn, netRent, rentOut } from "@/engine/property";
+import { repayStudentLoan } from "@/engine/studentLoans";
 import { MoveAbroad } from "./WorldPanels";
 import { useMemo, useState } from "react";
 import { useGame } from "@/context/GameStateContext";
@@ -33,7 +35,12 @@ export default function AssetsTab() {
       {panel === "homes" && <Homes />}
       {panel === "living" && <Living />}
       {panel === "invest" && <Invest />}
-      {panel === "bank" && <Bank />}
+      {panel === "bank" && (
+        <>
+          <Bank />
+          <DebtCard />
+        </>
+      )}
     </div>
   );
 }
@@ -109,6 +116,34 @@ function Living() {
       </Card>
       <MoveAbroad p={p} />
     </div>
+  );
+}
+
+function DebtCard() {
+  const { player: p, act } = useGame();
+  const loan = p.finance?.studentLoan ?? 0;
+  if (loan <= 0 && !inDebtCrisis(p)) return null;
+  return (
+    <>
+      <SectionTitle>Debt</SectionTitle>
+      <Card>
+        {loan > 0 && (
+          <>
+            <div className="text-sm">Student loan: <strong>{money(loan)}</strong> <span className="text-xs text-slate-400">(4.5% interest; repayments scale with income)</span></div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <Button variant="secondary" disabled={p.bankBalance < 1000} onClick={() => act((pl) => repayStudentLoan(pl, Math.min(5_000, pl.bankBalance)))}>Pay {money(Math.min(5_000, Math.max(0, p.bankBalance)))}</Button>
+              <Button variant="secondary" disabled={p.bankBalance < loan} onClick={() => act((pl) => repayStudentLoan(pl, loan))}>Clear it</Button>
+            </div>
+          </>
+        )}
+        {inDebtCrisis(p) && (
+          <div className="mt-3">
+            <p className="mb-2 text-xs text-rose-300">You're in serious debt. Collections are coming. Bankruptcy wipes most debts but wrecks your credit for years.</p>
+            <Button variant="secondary" disabled={!!bankruptcyBlocker(p)} title={bankruptcyBlocker(p) ?? ""} onClick={() => act((pl) => fileBankruptcy(pl))}>⚖️ File for bankruptcy</Button>
+          </div>
+        )}
+      </Card>
+    </>
   );
 }
 
@@ -259,6 +294,9 @@ function Homes() {
                   🔨 Renovate ({money(h.currentValue * 0.1)})
                 </Button>
                 <Button variant="ghost" onClick={() => act((pl) => sellHouse(pl, h.id))}>Sell</Button>
+                <Button variant="secondary" className="col-span-2" onClick={() => act((pl) => (h.rentedOut ? moveBackIn(pl, h.id) : rentOut(pl, h.id)))}>
+                  {h.rentedOut ? "🏠 Move back in" : `🔑 Rent it out (~${money(netRent(h))}/yr after fees)`}
+                </Button>
               </div>
             </Card>
           ))}

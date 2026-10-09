@@ -3,6 +3,9 @@
  * Everything inside `PlayerState` is plain JSON so it can be cloned and persisted safely.
  */
 
+import type { CareerLife, FinanceLife } from "./careerMoney.types";
+export type * from "./careerMoney.types";
+
 export type StatKey = "happiness" | "health" | "smarts" | "looks";
 export type Severity = "mild" | "chronic" | "fatal";
 
@@ -182,6 +185,8 @@ export interface Property {
   remainingTerm: number;
   mortgageBalance: number;
   archetypeId: string;
+  /** Let to tenants: earns rent, but isn't your home. */
+  rentedOut?: boolean;
 }
 
 export interface Vehicle {
@@ -238,6 +243,8 @@ export interface EducationState {
   degrees: string[];
   /** Fraction of tuition covered (0–1). Lost if grades slip. */
   scholarship?: number;
+  /** How tuition is paid: from cash (default) or a student loan. */
+  funding?: "cash" | "loan";
 }
 
 export interface Skills {
@@ -1370,6 +1377,10 @@ export interface PlayerState {
   retirementSavings: number;
   /** Share of pay saved: index into SAVINGS_LEVELS (0 none … 3 high). */
   savingsLevel: number;
+  /** Working life: burnout, sector cycles, unemployment spells. */
+  career: CareerLife;
+  /** Personal finance: student loan, Roth account, insolvency. */
+  finance: FinanceLife;
 
   // Social graph
   relatives: Relative[];

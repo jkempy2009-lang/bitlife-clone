@@ -12,6 +12,8 @@ import {
 import { addLog, changeStat, clone, hasAnyDegree, hasFlag, isRoyal, setFlag } from "./state";
 import { hiringModifier } from "./world";
 import { jobMarketShift } from "./visa";
+import { careerHiringModifier, payCeiling } from "./careerPay";
+import { STUDENT_LOAN_RATE, defaultFunding, netTuition } from "./studentLoans";
 import { careerBlocker, hiringPenalty } from "./justice";
 import { PART_TIME_FACTOR, blockerFor, isStudyingFullTime, partTimeFriendly } from "./occupation";
 import { CERT_BY_ID } from "@/data/certificates";
@@ -36,7 +38,7 @@ export function makeJob(line: CareerLine, tier: number, rng: Rng): Job {
   };
 }
 
-function recordCareerPeak(p: PlayerState) {
+export function recordCareerPeak(p: PlayerState) {
   const j = p.currentJob;
   if (!j || j.salary <= p.stats.highestSalary) return;
   p.stats.highestSalary = j.salary;
@@ -57,7 +59,15 @@ export interface Eligibility {
 export function startingTier(p: PlayerState, line: CareerLine): number {
   if (line.pack) return 0;
   const exp = p.careerYears[line.id] ?? 0;
-  return Math.min(line.ladder.length - 1, exp >= 12 ? 3 : exp >= 8 ? 2 : exp >= 4 ? 1 : 0);
+  const byExperience = exp >= 12 ? 3 : exp >= 8 ? 2 : exp >= 4 ? 1 : 0;
+  return Math.min(line.ladder.length - 1, Math.max(byExperience, graduateEntryTier(p, line)));
+}
+
+/** A Master's degree gets you hired a rung up in office careers (those that take a bachelor's or a master's). */
+export function graduateEntryTier(p: PlayerState, line: CareerLine): number {
+  if (line.pack || line.ladder.length < 4 || !p.education.degrees.includes("masters")) return 0;
+  const degrees = line.requirements.degrees ?? [];
+  return degrees.some((d) => d === "bachelor" || d.startsWith("bachelor:") || d === "masters") ? 1 : 0;
 }
 
 export function jobEligibility(p: PlayerState, line: CareerLine): Eligibility {
@@ -135,7 +145,7 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   const referred = p.flags.includes("referral");
   if (referred) p.flags = p.flags.filter((f) => f !== "referral");
   const chance = clamp(
-    0.55 + (referred ? 0.2 : 0) + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - hiringPenalty(p) + hiringModifier(p.economy.climate) + jobMarketShift(p),
+    0.55 + (referred ? 0.2 : 0) + (p.smarts - line.requirements.minSmarts) / 200 + (p.looks - 50) / 400 + Math.min(0.25, exp * 0.03) - hiringPenalty(p) + hiringModifier(p.economy.climate) + jobMarketShift(p) + careerHiringModifier(p, line),
     0.15,
     0.95,
   );
@@ -157,6 +167,8 @@ export function applyForJob(p0: PlayerState, lineId: string, rng: Rng): ActionRe
   }
   p.currentJob = job;
   p.annualSalary = job.salary;
+  p.career.gapYears = 0;
+  p.career.benefitYears = 0;
   if (line.pack === "actor") {
     if (!p.specialCareers.includes("actor")) p.specialCareers.push("actor");
     if (p.specialCareerPath === "none") p.specialCareerPath = "actor";
@@ -181,7 +193,8 @@ export function workHarder(p0: PlayerState, rng: Rng): ActionResult {
   p.currentJob.performance = clamp(p.currentJob.performance + gain);
   changeStat(p, "happiness", -2);
   changeStat(p, "health", -1);
-  const body = `You worked extra hard this year. Performance +${gain}.`;
+  p.career.burnout = clamp(p.career.burnout + 8);
+  const body = `You worked extra hard this year. Performance +${gain}, but the long hours add to your burnout.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Hard Work", body, tone: "good" }] };
 }
@@ -194,14 +207,18 @@ export function askForRaise(p0: PlayerState, rng: Rng): ActionResult {
   if ((p.annual.raise ?? 0) >= 1) {
     return { player: p0, notices: [{ kind: "info", title: "Once Is Enough", body: "You already made your case this year.", tone: "neutral" }] };
   }
+  const ceiling = payCeiling(CAREER_BY_ID[job.lineId], job.tier, { partTime: job.partTime, track: p.career.track });
+  if (job.salary >= ceiling) {
+    return { player: p0, notices: [{ kind: "info", title: "Top of the Pay Band", body: `You're already at the top of the pay band for a ${job.title} (about ${money(ceiling)}). Only a promotion, or a better employer, moves it.`, tone: "neutral" }] };
+  }
   p.annual.raise = 1;
   const chance = clamp(0.1 + (job.performance - 50) / 100 + (p.skills.charisma - 30) / 400 + (p.talents.speaking - 50) / 500 + (p.economy.climate === "boom" ? 0.1 : p.economy.climate === "recession" ? -0.15 : 0), 0.03, 0.8);
   if (rng.chance(chance)) {
     const pct = rng.int(6, 14);
-    job.salary = Math.round(job.salary * (1 + pct / 100));
+    job.salary = Math.min(Math.round(job.salary * (1 + pct / 100)), ceiling);
     p.annualSalary = job.salary;
     changeStat(p, "happiness", 6);
-    const body = `Your boss agreed: a ${pct}% raise to ${money(job.salary)}.`;
+    const body = `Your boss agreed: a raise to ${money(job.salary)}${job.salary >= ceiling ? ", the top of the band for your grade" : ""}.`;
     addLog(p, body);
     return { player: p, notices: [{ kind: "info", title: "Raise Granted", body, tone: "good" }] };
   }
@@ -218,6 +235,7 @@ export function quitJob(p0: PlayerState): ActionResult {
   const body = `You quit your job as a ${p.currentJob.title}.`;
   p.currentJob = null;
   p.annualSalary = 0;
+  p.career.onLeave = false;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "You Quit", body, tone: "neutral" }] };
 }
@@ -295,32 +313,6 @@ export function promoteJob(p: PlayerState): boolean {
   return true;
 }
 
-export function promotionEvent(p: PlayerState): LifeEvent | null {
-  const j = p.currentJob;
-  if (!j) return null;
-  const line = CAREER_BY_ID[j.lineId];
-  if (!line || line.pack === "politics" || j.tier >= line.ladder.length - 1) return null;
-  const next = line.ladder[j.tier + 1];
-  return {
-    id: `promo_${j.id}_${p.year}`,
-    title: "Promotion Opportunity!",
-    description: `Your outstanding performance has been noticed. Management wants to promote you to ${next.title} (about ${money(next.salary)} a year).`,
-    minAge: 0,
-    maxAge: 200,
-    category: "career",
-    options: [
-      {
-        text: `Accept the promotion to ${next.title}`,
-        effects: { logText: `You were promoted to ${next.title}!`, promote: true, happinessDelta: 10 },
-      },
-      {
-        text: "Decline and stay put",
-        effects: { logText: `You turned down a promotion to ${next.title}.`, happinessDelta: 1, performanceDelta: -10 },
-      },
-    ],
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Education
 // ---------------------------------------------------------------------------
@@ -348,7 +340,8 @@ export function dropOut(p0: PlayerState): ActionResult {
   p.education.yearsLeft = 0;
   p.education.major = null;
   changeStat(p, "happiness", -3);
-  const body = `You dropped out of ${was === "HighSchool" ? "high school" : was.replace(/([A-Z])/g, " $1").trim().toLowerCase()}.`;
+  const debt = p.finance.studentLoan;
+  const body = `You dropped out of ${was === "HighSchool" ? "high school" : was.replace(/([A-Z])/g, " $1").trim().toLowerCase()}.${debt > 0 ? ` The ${money(debt)} you borrowed doesn't go away: you'll start repaying it from your earnings, with no degree to show for it.` : ""}`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Dropped Out", body, tone: "bad" }] };
 }
@@ -358,6 +351,7 @@ export function enrollProgram(
   stage: Extract<EducationStage, "University" | "MedicalSchool" | "LawSchool" | "Masters">,
   major: string | null,
   rng: Rng,
+  fund?: "cash" | "loan",
 ): ActionResult {
   const p = clone(p0);
   const prog = PROGRAMS[stage];
@@ -388,13 +382,14 @@ export function enrollProgram(
   p.education.scholarship = p.education.grades >= 93 ? 1 : p.education.grades >= 85 ? 0.5 : p.education.grades >= 78 ? 0.25 : 0;
   const majorName = UNIVERSITY_MAJORS.find((m) => m.id === major)?.name;
   const sch = p.education.scholarship ?? 0;
-  const body = `You were accepted into ${prog.label}${majorName ? ` to study ${majorName}` : ""}! Tuition is ${money(prog.tuition)} a year${sch > 0 ? `, and your grades earned a ${Math.round(sch * 100)}% scholarship` : ""}.`;
+  p.education.funding = fund ?? defaultFunding(p, netTuition(prog.tuition, sch));
+  const body = `You were accepted into ${prog.label}${majorName ? ` to study ${majorName}` : ""}! Tuition is ${money(prog.tuition)} a year${sch > 0 ? `, and your grades earned a ${Math.round(sch * 100)}% scholarship` : ""}. You'll ${p.education.funding === "loan" ? `borrow it as a student loan (${(STUDENT_LOAN_RATE * 100).toFixed(1)}% interest, repaid from your earnings after you finish)` : "pay it from your savings"}.`;
   addLog(p, body);
   return { player: p, notices: [{ kind: "info", title: "Accepted!", body, tone: "good" }] };
 }
 
 /** Evening / short vocational course. Works alongside a job. */
-export function enrollCertificate(p0: PlayerState, certId: string, rng: Rng): ActionResult {
+export function enrollCertificate(p0: PlayerState, certId: string, rng: Rng, fund?: "cash" | "loan"): ActionResult {
   const p = clone(p0);
   const cert = CERT_BY_ID[certId];
   const reject = (body: string): ActionResult => ({ player: p0, notices: [{ kind: "info", title: "Can't Enrol", body, tone: "bad" }] });
@@ -411,6 +406,7 @@ export function enrollCertificate(p0: PlayerState, certId: string, rng: Rng): Ac
   p.education.yearsLeft = cert.years;
   p.education.major = cert.id;
   p.education.scholarship = 0;
+  p.education.funding = fund ?? defaultFunding(p, cert.tuition);
   const body = `You enrolled in the ${cert.name} (${cert.years} year${cert.years > 1 ? "s" : ""}, ${money(cert.tuition)} a year). Classes fit around work.`;
   addLog(p, body);
   void rng;

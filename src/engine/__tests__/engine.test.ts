@@ -1,3 +1,4 @@
+import { applyForJob } from "../career";
 import { NEUTRAL } from "./helpers/neutral";
 import { describe, expect, it } from "vitest";
 import { makeRng } from "@/lib/rng";
@@ -28,6 +29,8 @@ function simulateLife(seed: number): PlayerState {
       const r = resolveTrial(p, "public", rng);
       p = r.player;
     }
+    // An ordinary adult keeps a job: the safety net for the jobless is deliberately thin, so a bot that never works is not a typical life.
+    if (!p.currentJob && p.age >= 18 && p.age < 65 && !p.business) p = applyForJob(p, "fast_food", rng).player;
     const res = ageUp(p, rng);
     p = res.player;
     const queue = [...(res.notices ?? [])] as Notice[];

@@ -195,7 +195,7 @@ export const livesWithParents = (p: PlayerState) =>
   p.flags.includes("lives_with_parents") && p.relatives.some((r) => r.relation === "Parent" && r.alive);
 
 export function housingCost(p: PlayerState): number {
-  if (p.properties.length > 0) return OWNED_HOUSING;
+  if (p.properties.some((h) => !h.rentedOut)) return OWNED_HOUSING;
   if (livesWithParents(p)) return FAMILY_HOME_CONTRIBUTION;
   return RENT_TIERS[p.residence.rentTier].rent;
 }
